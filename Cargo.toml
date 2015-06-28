@@ -1,0 +1,12 @@
+[package]
+
+name = "grpc"
+version = "0.0.1"
+
+[dependencies.protobuf]
+git = "http://github.com/stepancheg/rust-protobuf"
+
+[[bin]]
+
+name = "protoc-gen-grpc-rust"
+test = false
