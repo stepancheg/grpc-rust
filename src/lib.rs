@@ -1,3 +1,3 @@
 extern crate protobuf;
 
-mod codegen;
+pub mod codegen;

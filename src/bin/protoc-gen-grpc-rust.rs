@@ -1,14 +1,7 @@
-extern crate protobuf;
+extern crate grpc;
 
-use protobuf::compiler_plugin;
-use protobuf::descriptor::*;
-
-pub fn gen(file_descriptors: &[FileDescriptorProto], files_to_generate: &[String])
-        -> Vec<compiler_plugin::GenResult>
-{
-    Vec::new()
-}
+use grpc::codegen;
 
 fn main() {
-    compiler_plugin::plugin_main(gen);
+    codegen::protoc_gen_grpc_rust_main();
 }
