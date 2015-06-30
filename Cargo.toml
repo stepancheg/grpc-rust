@@ -5,8 +5,9 @@ version = "0.0.1"
 
 [dependencies.protobuf]
 git = "http://github.com/stepancheg/rust-protobuf"
+#path = "../rust-protobuf"
 
 [[bin]]
 
-name = "protoc-gen-grpc-rust"
+name = "protoc-gen-rust-grpc"
 test = false
