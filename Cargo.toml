@@ -3,9 +3,13 @@
 name = "grpc"
 version = "0.0.1"
 
+[dependencies]
+
+solicit = "*"
+
 [dependencies.protobuf]
-git = "http://github.com/stepancheg/rust-protobuf"
-#path = "../rust-protobuf"
+#git = "http://github.com/stepancheg/rust-protobuf"
+path = "../rust-protobuf"
 
 [[bin]]
 
