@@ -21,25 +21,30 @@ struct GrpcStream {
 
 impl Stream for GrpcStream {
     fn new(stream_id: StreamId) -> Self {
+        println!("hooray! new stream {}", stream_id);
         GrpcStream {
             default_stream: DefaultStream::new(stream_id)
         }
     }
 
-    fn new_data_chunk(&mut self, data: &[u8]) {
-        self.default_stream.new_data_chunk(data)
-    }
-
     fn set_headers(&mut self, headers: Vec<Header>) {
+        println!("hooray! headers: {:?}", headers);
         self.default_stream.set_headers(headers)
     }
 
+    fn new_data_chunk(&mut self, data: &[u8]) {
+        println!("hooray! data: {:?}", data);
+        self.default_stream.new_data_chunk(data)
+    }
+
     fn set_state(&mut self, state: StreamState) {
+        println!("set_state: {:?}", state);
         self.default_stream.set_state(state)
     }
 
     fn get_data_chunk(&mut self, buf: &mut [u8]) -> Result<StreamDataChunk, StreamDataError> {
-        self.default_stream.get_data_chunk(buf)
+        panic!("get_data_chunk should not be called");
+        //self.default_stream.get_data_chunk(buf)
     }
 
     fn id(&self) -> StreamId {
@@ -51,12 +56,22 @@ impl Stream for GrpcStream {
     }
 }
 
+/*
 struct GrpcSessionState {
-    default_state: DefaultSessionState<GrpcStream>,
+    default_state: DefaultSessionState,
 }
 
+impl GrpcSessionState {
+    fn new() -> Self {
+        GrpcSessionState {
+            default_state: DefaultSessionState::new(),
+        }
+    }
+}
+*/
+
 struct GrpcServerConnection {
-    server_conn: ServerConnection<TcpStream, TcpStream>,
+    server_conn: ServerConnection<TcpStream, TcpStream, DefaultSessionState<GrpcStream>>,
 }
 
 impl GrpcServerConnection {
@@ -68,7 +83,7 @@ impl GrpcServerConnection {
         }
 
         let conn = HttpConnection::<TcpStream, TcpStream>::with_stream(stream, HttpScheme::Http);
-        let mut server_conn: ServerConnection<TcpStream, TcpStream> = ServerConnection::with_connection(conn, DefaultSessionState::new());
+        let mut server_conn = ServerConnection::with_connection(conn, DefaultSessionState::new());
 
         let mut r = GrpcServerConnection {
             server_conn: server_conn,
@@ -79,7 +94,16 @@ impl GrpcServerConnection {
     }
 
     fn run(&mut self) {
-        panic!();
+        loop {
+            let r = self.server_conn.handle_next_frame();
+            match r {
+                e @ Err(..) => {
+                    println!("{:?}", e);
+                    return;
+                }
+                _ => {},
+            }
+        }
     }
 }
 
