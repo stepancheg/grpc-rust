@@ -15,3 +15,8 @@ path = "../rust-protobuf"
 
 name = "protoc-gen-rust-grpc"
 test = false
+
+[[bin]]
+
+name = "temp-server"
+test = false

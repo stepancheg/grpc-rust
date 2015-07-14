@@ -3,5 +3,5 @@ extern crate solicit;
 
 pub mod codegen;
 
-mod server;
+pub mod server;
 mod client;
