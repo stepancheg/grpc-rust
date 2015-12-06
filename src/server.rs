@@ -2,33 +2,39 @@ use std::net::TcpListener;
 use std::net::TcpStream;
 
 use solicit::server::SimpleServer;
+use solicit::http::server::StreamFactory;
+use solicit::http::server::ServerConnection;
 use solicit::http::HttpScheme;
 use solicit::http::StreamId;
 use solicit::http::Header;
+use solicit::http::HttpResult;
 use solicit::http::connection::HttpConnection;
 use solicit::http::session::DefaultSessionState;
 use solicit::http::session::DefaultStream;
 use solicit::http::session::Stream;
+use solicit::http::session::Server;
 use solicit::http::session::StreamState;
 use solicit::http::session::StreamDataChunk;
 use solicit::http::session::StreamDataError;
 use solicit::http::transport::TransportStream;
-use solicit::http::server::ServerConnection;
+use solicit::http::transport::TransportReceiveFrame;
 
 struct GrpcStream {
     default_stream: DefaultStream,
 }
 
-impl Stream for GrpcStream {
-    fn new(stream_id: StreamId) -> Self {
-        println!("hooray! new stream {}", stream_id);
+impl GrpcStream {
+    fn with_id(stream_id: StreamId) -> Self {
+        println!("new stream {}", stream_id);
         GrpcStream {
-            default_stream: DefaultStream::new(stream_id)
+            default_stream: DefaultStream::with_id(stream_id)
         }
     }
+}
 
+impl Stream for GrpcStream {
     fn set_headers(&mut self, headers: Vec<Header>) {
-        println!("hooray! headers: {:?}", headers);
+        println!("headers: {:?}", headers);
         self.default_stream.set_headers(headers)
     }
 
@@ -39,16 +45,13 @@ impl Stream for GrpcStream {
 
     fn set_state(&mut self, state: StreamState) {
         println!("set_state: {:?}", state);
-        self.default_stream.set_state(state)
+        self.default_stream.set_state(state);
+        println!("{:?}", self.default_stream.body);
     }
 
     fn get_data_chunk(&mut self, buf: &mut [u8]) -> Result<StreamDataChunk, StreamDataError> {
         panic!("get_data_chunk should not be called");
         //self.default_stream.get_data_chunk(buf)
-    }
-
-    fn id(&self) -> StreamId {
-        self.default_stream.id()
     }
 
     fn state(&self) -> StreamState {
@@ -70,8 +73,20 @@ impl GrpcSessionState {
 }
 */
 
+struct GrpcStreamFactory;
+
+impl StreamFactory for GrpcStreamFactory {
+	type Stream = GrpcStream;
+	
+	fn create(&mut self, id: StreamId) -> GrpcStream {
+		GrpcStream::with_id(id)
+	}
+}
+
 struct GrpcServerConnection {
-    server_conn: ServerConnection<TcpStream, TcpStream, DefaultSessionState<GrpcStream>>,
+    server_conn: ServerConnection<GrpcStreamFactory, DefaultSessionState<Server, GrpcStream>>,
+    receiver: TcpStream,
+    sender: TcpStream,
 }
 
 impl GrpcServerConnection {
@@ -82,20 +97,35 @@ impl GrpcServerConnection {
             panic!();
         }
 
-        let conn = HttpConnection::<TcpStream, TcpStream>::with_stream(stream, HttpScheme::Http);
-        let mut server_conn = ServerConnection::with_connection(conn, DefaultSessionState::new());
+        let conn = HttpConnection::new(HttpScheme::Http);
+        let mut server_conn = ServerConnection::with_connection(conn, DefaultSessionState::<Server, _>::new(), GrpcStreamFactory);
 
+		let mut xx: TcpStream = stream.try_split().unwrap();
         let mut r = GrpcServerConnection {
             server_conn: server_conn,
+            receiver: xx,
+            sender: stream,
         };
 
-        r.server_conn.init().unwrap();
+        //r.server_conn.init().unwrap();
         r
+    }
+
+    fn handle_next(&mut self) -> HttpResult<()> {
+        try!(self.server_conn.handle_next_frame(
+            &mut TransportReceiveFrame::new(&mut self.receiver),
+            &mut self.sender));
+        //let responses = try!(self.handle_requests());
+        //try!(self.prepare_responses(responses));
+        //try!(self.flush_streams());
+        //try!(self.reap_streams());
+
+        Ok(())
     }
 
     fn run(&mut self) {
         loop {
-            let r = self.server_conn.handle_next_frame();
+            let r = self.handle_next();
             match r {
                 e @ Err(..) => {
                     println!("{:?}", e);

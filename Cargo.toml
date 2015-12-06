@@ -3,9 +3,8 @@
 name = "grpc"
 version = "0.0.1"
 
-[dependencies]
-
-solicit = "*"
+[dependencies.solicit]
+git = "http://github.com/mlalic/solicit.git"
 
 [dependencies.protobuf]
 #git = "http://github.com/stepancheg/rust-protobuf"
