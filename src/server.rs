@@ -1,5 +1,6 @@
 use std::net::TcpListener;
 use std::net::TcpStream;
+use std::fmt;
 
 use solicit::server::SimpleServer;
 use solicit::http::server::StreamFactory;
@@ -32,9 +33,37 @@ impl GrpcStream {
     }
 }
 
+struct BsDebug<'a>(&'a [u8]);
+
+impl<'a> fmt::Debug for BsDebug<'a> {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        try!(write!(fmt, "b\""));
+        let u8a: &[u8] = self.0;
+        for &c in u8a {
+            // ASCII printable
+            if c >= 0x20 && c < 0x7f {
+                try!(write!(fmt, "{}", c as char));
+            } else {
+                try!(write!(fmt, "\\x{:02x}", c));
+            }
+        }
+        try!(write!(fmt, "\""));
+    	Ok(())
+    }
+}
+
+struct HeaderDebug<'a>(&'a Header<'a, 'a>);
+
+impl<'a> fmt::Debug for HeaderDebug<'a> {
+	fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+	    write!(fmt, "Header {{ name: {:?}, value: {:?} }}",
+	    	BsDebug(self.0.name()), BsDebug(self.0.value()))
+	}
+} 
+
 impl Stream for GrpcStream {
     fn set_headers(&mut self, headers: Vec<Header>) {
-        println!("headers: {:?}", headers);
+        println!("headers: {:?}", headers.iter().map(|h| HeaderDebug(h)).collect::<Vec<_>>());
         self.default_stream.set_headers(headers)
     }
 
@@ -46,7 +75,7 @@ impl Stream for GrpcStream {
     fn set_state(&mut self, state: StreamState) {
         println!("set_state: {:?}", state);
         self.default_stream.set_state(state);
-        println!("{:?}", self.default_stream.body);
+        println!("{:?}", BsDebug(&self.default_stream.body));
     }
 
     fn get_data_chunk(&mut self, buf: &mut [u8]) -> Result<StreamDataChunk, StreamDataError> {
