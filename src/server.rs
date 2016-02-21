@@ -10,6 +10,8 @@ use solicit::http::StreamId;
 use solicit::http::Header;
 use solicit::http::HttpResult;
 use solicit::http::connection::HttpConnection;
+use solicit::http::connection::SendStatus;
+use solicit::http::session::SessionState;
 use solicit::http::session::DefaultSessionState;
 use solicit::http::session::DefaultStream;
 use solicit::http::session::Stream;
@@ -21,6 +23,7 @@ use solicit::http::transport::TransportStream;
 use solicit::http::transport::TransportReceiveFrame;
 
 use grpc;
+use method::ServerServiceDefinition;
 
 struct BsDebug<'a>(&'a [u8]);
 
@@ -53,6 +56,8 @@ impl<'a> fmt::Debug for HeaderDebug<'a> {
 struct GrpcStream {
     default_stream: DefaultStream,
     buf: Vec<u8>,
+    service_definition: ServerServiceDefinition,
+    path: String,
 }
 
 impl GrpcStream {
@@ -61,26 +66,34 @@ impl GrpcStream {
         GrpcStream {
             default_stream: DefaultStream::with_id(stream_id),
             buf: Vec::new(),
+            service_definition: ServerServiceDefinition::new(Vec::new()),
+            path: String::new(),
         }
     }
 
-    fn process_buf(&mut self) {
+    fn process_buf(&mut self) -> Option<Vec<u8>> {
         loop {
-            let pos = match grpc::parse_frame(&self.buf) {
+            let (r, pos) = match grpc::parse_frame(&self.buf) {
                 Some((frame, pos)) => {
-                    println!("frame: {:?}", BsDebug(frame));
-                    pos
+                    let r = self.service_definition.handle_method(&self.path, frame);
+                    (r, pos)
                 }
-                None => return,
+                None => return None,
             };
 
             self.buf.drain(..pos);
+            return Some(r);
         }
     }
 }
 
 impl Stream for GrpcStream {
     fn set_headers(&mut self, headers: Vec<Header>) {
+        for h in &headers {
+            if h.name() == b":path" {
+                self.path = String::from_utf8(h.value().to_owned()).unwrap();
+            }
+        }
         println!("headers: {:?}", headers.iter().map(|h| HeaderDebug(h)).collect::<Vec<_>>());
         self.default_stream.set_headers(headers)
     }
@@ -161,14 +174,26 @@ impl GrpcServerConnection {
         r
     }
 
+    fn flush_streams(&mut self) -> HttpResult<()> {
+        while let SendStatus::Sent = try!(self.server_conn.send_next_data(&mut self.sender)) {}
+
+        Ok(())
+    }
+
+    fn reap_streams(&mut self) {
+        // Moves the streams out of the state and then drops them
+        let _ = self.server_conn.state.get_closed();
+    }
+
     fn handle_next(&mut self) -> HttpResult<()> {
         try!(self.server_conn.handle_next_frame(
             &mut TransportReceiveFrame::new(&mut self.receiver),
             &mut self.sender));
         //let responses = try!(self.handle_requests());
         //try!(self.prepare_responses(responses));
-        //try!(self.flush_streams());
-        //try!(self.reap_streams());
+
+        try!(self.flush_streams());
+        self.reap_streams();
 
         Ok(())
     }

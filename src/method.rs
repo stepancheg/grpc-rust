@@ -29,21 +29,27 @@ impl<Req, Resp> MethodHandlerDispatch for MethodHandlerDispatchImpl<Req, Resp> {
     }
 }
 
-struct ServerMethod {
+pub struct ServerMethod {
     name: String,
     dispatch: Box<MethodHandlerDispatch>,
 }
 
-struct ServerServiceDefinition {
+pub struct ServerServiceDefinition {
     methods: Vec<ServerMethod>,
 }
 
 impl ServerServiceDefinition {
-    fn handle_method(&self, name: &str, message: &[u8]) -> Vec<u8> {
+    pub fn new(methods: Vec<ServerMethod>) -> ServerServiceDefinition {
+        ServerServiceDefinition {
+            methods: methods,
+        }
+    }
+
+    pub fn handle_method(&self, name: &str, message: &[u8]) -> Vec<u8> {
         self.methods.iter()
             .filter(|m| m.name == name)
             .next()
-            .unwrap()
+            .expect(&format!("unknown method: {}", name))
             .dispatch
             .on_message(message)
     }
