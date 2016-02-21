@@ -20,18 +20,7 @@ use solicit::http::session::StreamDataError;
 use solicit::http::transport::TransportStream;
 use solicit::http::transport::TransportReceiveFrame;
 
-struct GrpcStream {
-    default_stream: DefaultStream,
-}
-
-impl GrpcStream {
-    fn with_id(stream_id: StreamId) -> Self {
-        println!("new stream {}", stream_id);
-        GrpcStream {
-            default_stream: DefaultStream::with_id(stream_id)
-        }
-    }
-}
+use grpc;
 
 struct BsDebug<'a>(&'a [u8]);
 
@@ -59,7 +48,36 @@ impl<'a> fmt::Debug for HeaderDebug<'a> {
 	    write!(fmt, "Header {{ name: {:?}, value: {:?} }}",
 	    	BsDebug(self.0.name()), BsDebug(self.0.value()))
 	}
-} 
+}
+
+struct GrpcStream {
+    default_stream: DefaultStream,
+    buf: Vec<u8>,
+}
+
+impl GrpcStream {
+    fn with_id(stream_id: StreamId) -> Self {
+        println!("new stream {}", stream_id);
+        GrpcStream {
+            default_stream: DefaultStream::with_id(stream_id),
+            buf: Vec::new(),
+        }
+    }
+
+    fn process_buf(&mut self) {
+        loop {
+            let pos = match grpc::parse_frame(&self.buf) {
+                Some((frame, pos)) => {
+                    println!("frame: {:?}", BsDebug(frame));
+                    pos
+                }
+                None => return,
+            };
+
+            self.buf.drain(..pos);
+        }
+    }
+}
 
 impl Stream for GrpcStream {
     fn set_headers(&mut self, headers: Vec<Header>) {
@@ -69,13 +87,16 @@ impl Stream for GrpcStream {
 
     fn new_data_chunk(&mut self, data: &[u8]) {
         println!("hooray! data: {:?}", data);
+        self.buf.extend(data);
+        self.process_buf();
+        println!("{:?}", grpc::parse_frame(data));
         self.default_stream.new_data_chunk(data)
     }
 
     fn set_state(&mut self, state: StreamState) {
         println!("set_state: {:?}", state);
         self.default_stream.set_state(state);
-        println!("{:?}", BsDebug(&self.default_stream.body));
+        println!("s: {:?}", BsDebug(&self.default_stream.body));
     }
 
     fn get_data_chunk(&mut self, buf: &mut [u8]) -> Result<StreamDataChunk, StreamDataError> {
@@ -106,7 +127,7 @@ struct GrpcStreamFactory;
 
 impl StreamFactory for GrpcStreamFactory {
 	type Stream = GrpcStream;
-	
+
 	fn create(&mut self, id: StreamId) -> GrpcStream {
 		GrpcStream::with_id(id)
 	}

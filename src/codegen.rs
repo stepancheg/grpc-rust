@@ -14,7 +14,7 @@ pub fn gen(file_descriptors: &[FileDescriptorProto], files_to_generate: &[String
 
     for file_name in files_to_generate {
         let file = files_map[&file_name[..]];
-        let base = protobuf::codegen::proto_path_to_rust_base(file.get_name());
+        let base = protobuf::proto_path_to_rust_mod(file.get_name());
 
         if file.get_service().is_empty() {
             continue;
