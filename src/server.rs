@@ -10,6 +10,7 @@ use solicit::http::StreamId;
 use solicit::http::Header;
 use solicit::http::HttpResult;
 use solicit::http::connection::HttpConnection;
+use solicit::http::connection::EndStream;
 use solicit::http::connection::SendStatus;
 use solicit::http::session::SessionState;
 use solicit::http::session::DefaultSessionState;
@@ -56,6 +57,7 @@ impl<'a> fmt::Debug for HeaderDebug<'a> {
 struct GrpcStream {
     default_stream: DefaultStream,
     buf: Vec<u8>,
+    resp: Vec<Vec<u8>>,
     service_definition: ServerServiceDefinition,
     path: String,
 }
@@ -66,23 +68,24 @@ impl GrpcStream {
         GrpcStream {
             default_stream: DefaultStream::with_id(stream_id),
             buf: Vec::new(),
+            resp: Vec::new(),
             service_definition: ServerServiceDefinition::new(Vec::new()),
             path: String::new(),
         }
     }
 
-    fn process_buf(&mut self) -> Option<Vec<u8>> {
+    fn process_buf(&mut self) {
         loop {
             let (r, pos) = match grpc::parse_frame(&self.buf) {
                 Some((frame, pos)) => {
                     let r = self.service_definition.handle_method(&self.path, frame);
                     (r, pos)
                 }
-                None => return None,
+                None => return,
             };
 
             self.buf.drain(..pos);
-            return Some(r);
+            self.resp.push(r);
         }
     }
 }
@@ -173,6 +176,30 @@ impl GrpcServerConnection {
         //r.server_conn.init().unwrap();
         r
     }
+    
+    fn handle_requests(&mut self) -> HttpResult<Vec<(StreamId, Vec<u8>)>> {
+        Ok(self.server_conn.state.iter().flat_map(|(&id, s)| {
+            if s.resp.is_empty() {
+                None
+            } else {
+                Some((id, s.resp[0].clone()))
+            }        
+        }).collect())
+    }
+    
+    fn prepare_responses(&mut self, responses: Vec<(StreamId, Vec<u8>)>) -> HttpResult<()> {
+        for r in responses {
+            try!(self.server_conn.start_response(
+                Vec::new(),
+                r.0,
+                EndStream::No,
+                &mut self.sender    
+            ));
+            let mut stream = self.server_conn.state.get_stream_mut(r.0).unwrap();
+            stream.default_stream.set_full_data(r.1);
+        }
+        Ok(())
+    }
 
     fn flush_streams(&mut self) -> HttpResult<()> {
         while let SendStatus::Sent = try!(self.server_conn.send_next_data(&mut self.sender)) {}
@@ -189,8 +216,10 @@ impl GrpcServerConnection {
         try!(self.server_conn.handle_next_frame(
             &mut TransportReceiveFrame::new(&mut self.receiver),
             &mut self.sender));
-        //let responses = try!(self.handle_requests());
-        //try!(self.prepare_responses(responses));
+        
+        let responses = try!(self.handle_requests());
+
+		try!(self.prepare_responses(responses));
 
         try!(self.flush_streams());
         self.reap_streams();

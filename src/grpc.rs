@@ -1,4 +1,5 @@
 use std::ptr;
+use std::mem;
 
 // return message and size consumed
 pub fn parse_frame(stream: &[u8]) -> Option<(&[u8], usize)> {
@@ -22,6 +23,15 @@ pub fn parse_frame(stream: &[u8]) -> Option<(&[u8], usize)> {
     }
 
     Some((&stream[header_len..end], end))
+}
+
+pub fn write_frame(stream: &mut Vec<u8>, frame: &[u8]) {
+	stream.push(0); // compressed flag
+	let len_raw: [u8; 4] = unsafe {
+	    mem::transmute((frame.len() as u32).to_be())
+	};
+	stream.extend(&len_raw);
+	stream.extend(frame);
 }
 
 #[cfg(test)]
