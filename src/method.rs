@@ -1,5 +1,6 @@
 use marshall::*;
 
+
 struct MethodDescriptor<Req, Resp> {
     name: String,
     input_streaming: bool,

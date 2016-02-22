@@ -5,13 +5,16 @@ use std::fmt;
 use solicit::server::SimpleServer;
 use solicit::http::server::StreamFactory;
 use solicit::http::server::ServerConnection;
+use solicit::http::server::ServerSession;
 use solicit::http::HttpScheme;
 use solicit::http::StreamId;
 use solicit::http::Header;
 use solicit::http::HttpResult;
+use solicit::http::priority::SimplePrioritizer;
 use solicit::http::connection::HttpConnection;
 use solicit::http::connection::EndStream;
 use solicit::http::connection::SendStatus;
+use solicit::http::connection::SendFrame;
 use solicit::http::session::SessionState;
 use solicit::http::session::DefaultSessionState;
 use solicit::http::session::DefaultStream;
@@ -57,7 +60,7 @@ impl<'a> fmt::Debug for HeaderDebug<'a> {
 struct GrpcStream {
     default_stream: DefaultStream,
     buf: Vec<u8>,
-    resp: Vec<Vec<u8>>,
+    resp: Vec<u8>,
     service_definition: ServerServiceDefinition,
     path: String,
 }
@@ -85,7 +88,7 @@ impl GrpcStream {
             };
 
             self.buf.drain(..pos);
-            self.resp.push(r);
+            self.resp.extend(r);
         }
     }
 }
@@ -150,7 +153,9 @@ impl StreamFactory for GrpcStreamFactory {
 }
 
 struct GrpcServerConnection {
-    server_conn: ServerConnection<GrpcStreamFactory, DefaultSessionState<Server, GrpcStream>>,
+    conn: HttpConnection,
+    factory: GrpcStreamFactory,
+    state: DefaultSessionState<Server, GrpcStream>,
     receiver: TcpStream,
     sender: TcpStream,
 }
@@ -164,13 +169,14 @@ impl GrpcServerConnection {
         }
 
         let conn = HttpConnection::new(HttpScheme::Http);
-        let mut server_conn = ServerConnection::with_connection(conn, DefaultSessionState::<Server, _>::new(), GrpcStreamFactory);
 
 		let mut xx: TcpStream = stream.try_split().unwrap();
         let mut r = GrpcServerConnection {
-            server_conn: server_conn,
+            conn: conn,
+            state: DefaultSessionState::<Server, _>::new(),
             receiver: xx,
             sender: stream,
+            factory: GrpcStreamFactory,
         };
 
         //r.server_conn.init().unwrap();
@@ -178,44 +184,71 @@ impl GrpcServerConnection {
     }
     
     fn handle_requests(&mut self) -> HttpResult<Vec<(StreamId, Vec<u8>)>> {
-        Ok(self.server_conn.state.iter().flat_map(|(&id, s)| {
+        Ok(self.state.iter().flat_map(|(&id, s)| {
             if s.resp.is_empty() {
                 None
             } else {
-                Some((id, s.resp[0].clone()))
+                Some((id, s.resp.clone()))
             }        
         }).collect())
     }
     
+    pub fn send_headers<'n, 'v>(
+            &mut self,
+            headers: Vec<Header<'n, 'v>>,
+            stream_id: StreamId,
+            end_stream: EndStream)
+            -> HttpResult<()>
+    {
+        self.conn.sender(&mut self.sender).send_headers(
+            headers,
+            stream_id,
+            end_stream)
+    }
+
     fn prepare_responses(&mut self, responses: Vec<(StreamId, Vec<u8>)>) -> HttpResult<()> {
         for r in responses {
-            try!(self.server_conn.start_response(
+            try!(self.send_headers(
                 Vec::new(),
                 r.0,
-                EndStream::No,
-                &mut self.sender    
+                EndStream::No
             ));
-            let mut stream = self.server_conn.state.get_stream_mut(r.0).unwrap();
+            let mut stream = self.state.get_stream_mut(r.0).unwrap();
             stream.default_stream.set_full_data(r.1);
         }
         Ok(())
     }
 
+    fn send_next_data(&mut self) -> HttpResult<SendStatus> {
+        const MAX_CHUNK_SIZE: usize = 8 * 1024;
+        let mut buf = [0; MAX_CHUNK_SIZE];
+
+        // TODO: Additionally account for the flow control windows.
+        let mut prioritizer = SimplePrioritizer::new(&mut self.state, &mut buf);
+
+        self.conn.sender(&mut self.sender).send_next_data(&mut prioritizer)
+    }
+
     fn flush_streams(&mut self) -> HttpResult<()> {
-        while let SendStatus::Sent = try!(self.server_conn.send_next_data(&mut self.sender)) {}
+        while let SendStatus::Sent = try!(self.send_next_data()) {}
 
         Ok(())
     }
 
     fn reap_streams(&mut self) {
         // Moves the streams out of the state and then drops them
-        let _ = self.server_conn.state.get_closed();
+        let closed = self.state.get_closed();
+        println!("closed: {:?}", closed.iter().map(|s| s.default_stream.stream_id).collect::<Vec<_>>());
+    }
+
+    pub fn handle_next_frame(&mut self) -> HttpResult<()> {
+        let mut rx = TransportReceiveFrame::new(&mut self.receiver);
+        let mut session = ServerSession::new(&mut self.state, &mut self.factory, &mut self.sender);
+        self.conn.handle_next_frame(&mut rx, &mut session)
     }
 
     fn handle_next(&mut self) -> HttpResult<()> {
-        try!(self.server_conn.handle_next_frame(
-            &mut TransportReceiveFrame::new(&mut self.receiver),
-            &mut self.sender));
+        try!(self.handle_next_frame());
         
         let responses = try!(self.handle_requests());
 
