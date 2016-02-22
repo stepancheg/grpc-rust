@@ -116,8 +116,8 @@ impl Stream for GrpcStream {
     }
 
     fn get_data_chunk(&mut self, buf: &mut [u8]) -> Result<StreamDataChunk, StreamDataError> {
-        panic!("get_data_chunk should not be called");
-        //self.default_stream.get_data_chunk(buf)
+        println!("get_data_chunk");
+        self.default_stream.get_data_chunk(buf)
     }
 
     fn state(&self) -> StreamState {

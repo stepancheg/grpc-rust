@@ -1,6 +1,6 @@
 use std::marker;
 
-use method::Marshaller;
+use marshall::Marshaller;
 
 use protobuf::Message;
 use protobuf::MessageStatic;
