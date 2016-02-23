@@ -1,6 +1,8 @@
 use std::net::TcpListener;
 use std::net::TcpStream;
 use std::fmt;
+use std::io::Cursor;
+use std::io::Read;
 
 use solicit::server::SimpleServer;
 use solicit::http::server::StreamFactory;
@@ -9,6 +11,7 @@ use solicit::http::server::ServerSession;
 use solicit::http::HttpScheme;
 use solicit::http::StreamId;
 use solicit::http::Header;
+use solicit::http::OwnedHeader;
 use solicit::http::HttpResult;
 use solicit::http::priority::SimplePrioritizer;
 use solicit::http::connection::HttpConnection;
@@ -58,7 +61,12 @@ impl<'a> fmt::Debug for HeaderDebug<'a> {
 }
 
 struct GrpcStream {
-    default_stream: DefaultStream,
+    stream_id: Option<StreamId>,
+    headers: Option<Vec<Header<'static, 'static>>>,
+    body: Vec<u8>,
+    state: StreamState,
+    data: Option<Cursor<Vec<u8>>>,
+
     buf: Vec<u8>,
     resp: Vec<u8>,
     service_definition: ServerServiceDefinition,
@@ -69,7 +77,11 @@ impl GrpcStream {
     fn with_id(stream_id: StreamId) -> Self {
         println!("new stream {}", stream_id);
         GrpcStream {
-            default_stream: DefaultStream::with_id(stream_id),
+            stream_id: Some(stream_id),
+            headers: None,
+            body: Vec::new(),
+            state: StreamState::Open,
+            data: None,
             buf: Vec::new(),
             resp: Vec::new(),
             service_definition: ServerServiceDefinition::new(Vec::new()),
@@ -101,7 +113,10 @@ impl Stream for GrpcStream {
             }
         }
         println!("headers: {:?}", headers.iter().map(|h| HeaderDebug(h)).collect::<Vec<_>>());
-        self.default_stream.set_headers(headers)
+        self.headers = Some(headers.into_iter().map(|h| {
+            let owned: OwnedHeader = h.into();
+            owned.into()
+        }).collect());
     }
 
     fn new_data_chunk(&mut self, data: &[u8]) {
@@ -109,22 +124,45 @@ impl Stream for GrpcStream {
         self.buf.extend(data);
         self.process_buf();
         println!("{:?}", grpc::parse_frame(data));
-        self.default_stream.new_data_chunk(data)
+        self.body.extend(data.to_vec().into_iter());
     }
 
     fn set_state(&mut self, state: StreamState) {
         println!("set_state: {:?}", state);
-        self.default_stream.set_state(state);
-        println!("s: {:?}", BsDebug(&self.default_stream.body));
+        self.state = state;
+        println!("s: {:?}", BsDebug(&self.body));
     }
 
     fn get_data_chunk(&mut self, buf: &mut [u8]) -> Result<StreamDataChunk, StreamDataError> {
         println!("get_data_chunk");
-        self.default_stream.get_data_chunk(buf)
+        if self.is_closed_local() {
+            return Err(StreamDataError::Closed);
+        }
+        let chunk = match self.data.as_mut() {
+            // No data associated to the stream, but it's open => nothing available for writing
+            None => StreamDataChunk::Unavailable,
+            Some(d) =>  {
+                // For the `Vec`-backed reader, this should never fail, so unwrapping is
+                // fine.
+                let read = d.read(buf).unwrap();
+                if (d.position() as usize) == d.get_ref().len() {
+                    StreamDataChunk::Last(read)
+                } else {
+                    StreamDataChunk::Chunk(read)
+                }
+            }
+        };
+        // Transition the stream state to locally closed if we've extracted the final data chunk.
+        match chunk {
+            StreamDataChunk::Last(_) => self.close_local(),
+            _ => {},
+        };
+
+        Ok(chunk)
     }
 
     fn state(&self) -> StreamState {
-        self.default_stream.state()
+        self.state
     }
 }
 
@@ -163,7 +201,8 @@ struct GrpcServerConnection {
 impl GrpcServerConnection {
     fn new(mut stream: TcpStream) -> GrpcServerConnection {
         let mut preface = [0; 24];
-        stream.read_exact(&mut preface).unwrap();
+
+        (&mut stream as &mut Read).read_exact(&mut preface).unwrap();
         if &preface != b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n" {
             panic!();
         }
@@ -214,7 +253,7 @@ impl GrpcServerConnection {
                 EndStream::No
             ));
             let mut stream = self.state.get_stream_mut(r.0).unwrap();
-            stream.default_stream.set_full_data(r.1);
+            stream.data = Some(Cursor::new(r.1));
         }
         Ok(())
     }
@@ -238,7 +277,7 @@ impl GrpcServerConnection {
     fn reap_streams(&mut self) {
         // Moves the streams out of the state and then drops them
         let closed = self.state.get_closed();
-        println!("closed: {:?}", closed.iter().map(|s| s.default_stream.stream_id).collect::<Vec<_>>());
+        println!("closed: {:?}", closed.iter().map(|s| s.stream_id).collect::<Vec<_>>());
     }
 
     pub fn handle_next_frame(&mut self) -> HttpResult<()> {
