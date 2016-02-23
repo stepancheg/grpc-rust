@@ -3,6 +3,7 @@ use std::net::TcpStream;
 use std::fmt;
 use std::io::Cursor;
 use std::io::Read;
+use std::convert::From;
 
 use solicit::server::SimpleServer;
 use solicit::http::server::StreamFactory;
@@ -11,6 +12,7 @@ use solicit::http::server::ServerSession;
 use solicit::http::HttpScheme;
 use solicit::http::StreamId;
 use solicit::http::Header;
+use solicit::http::HeaderPart;
 use solicit::http::OwnedHeader;
 use solicit::http::HttpResult;
 use solicit::http::priority::SimplePrioritizer;
@@ -18,6 +20,7 @@ use solicit::http::connection::HttpConnection;
 use solicit::http::connection::EndStream;
 use solicit::http::connection::SendStatus;
 use solicit::http::connection::SendFrame;
+use solicit::http::connection::DataChunk;
 use solicit::http::session::SessionState;
 use solicit::http::session::DefaultSessionState;
 use solicit::http::session::DefaultStream;
@@ -235,11 +238,21 @@ impl GrpcServerConnection {
     fn prepare_responses(&mut self, responses: Vec<(StreamId, Vec<u8>)>) -> HttpResult<()> {
         for r in responses {
             try!(self.conn.sender(&mut self.sender).send_headers(
-                Vec::new(),
+                vec![
+                	Header::new(b":status", b"200"),
+                	Header::new(&b"content-type"[..], &b"application/grpc"[..]),
+                ],
                 r.0,
                 EndStream::No));
-            let mut stream = self.state.get_stream_mut(r.0).unwrap();
-            stream.data = Some(Cursor::new(r.1));
+            
+            try!(self.conn.sender(&mut self.sender).send_data(DataChunk::new_borrowed(&r.1[..], r.0, EndStream::No)));
+            
+            try!(self.conn.sender(&mut self.sender).send_headers(
+                vec![
+                	Header::new(&b"grpc-status"[..], b"0"),
+                ],
+                r.0,
+                EndStream::Yes));
         }
         Ok(())
     }
