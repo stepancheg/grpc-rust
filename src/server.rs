@@ -232,26 +232,12 @@ impl GrpcServerConnection {
         }).collect())
     }
     
-    pub fn send_headers<'n, 'v>(
-            &mut self,
-            headers: Vec<Header<'n, 'v>>,
-            stream_id: StreamId,
-            end_stream: EndStream)
-            -> HttpResult<()>
-    {
-        self.conn.sender(&mut self.sender).send_headers(
-            headers,
-            stream_id,
-            end_stream)
-    }
-
     fn prepare_responses(&mut self, responses: Vec<(StreamId, Vec<u8>)>) -> HttpResult<()> {
         for r in responses {
-            try!(self.send_headers(
+            try!(self.conn.sender(&mut self.sender).send_headers(
                 Vec::new(),
                 r.0,
-                EndStream::No
-            ));
+                EndStream::No));
             let mut stream = self.state.get_stream_mut(r.0).unwrap();
             stream.data = Some(Cursor::new(r.1));
         }
