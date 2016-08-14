@@ -70,8 +70,8 @@ struct GrpcStream {
     state: StreamState,
     data: Option<Cursor<Vec<u8>>>,
 
-    buf: Vec<u8>,
-    resp: Vec<u8>,
+    req_buf: Vec<u8>,
+    resp_buf: Vec<u8>,
     service_definition: ServerServiceDefinition,
     path: String,
 }
@@ -85,8 +85,8 @@ impl GrpcStream {
             body: Vec::new(),
             state: StreamState::Open,
             data: None,
-            buf: Vec::new(),
-            resp: Vec::new(),
+            req_buf: Vec::new(),
+            resp_buf: Vec::new(),
             service_definition: ServerServiceDefinition::new(Vec::new()),
             path: String::new(),
         }
@@ -94,7 +94,7 @@ impl GrpcStream {
 
     fn process_buf(&mut self) {
         loop {
-            let (r, pos) = match grpc::parse_frame(&self.buf) {
+            let (r, pos) = match grpc::parse_frame(&self.req_buf) {
                 Some((frame, pos)) => {
                     let r = self.service_definition.handle_method(&self.path, frame);
                     (r, pos)
@@ -102,8 +102,8 @@ impl GrpcStream {
                 None => return,
             };
 
-            self.buf.drain(..pos);
-            self.resp.extend(r);
+            self.req_buf.drain(..pos);
+            grpc::write_frame(&mut self.resp_buf, &r);
         }
     }
 }
@@ -123,11 +123,9 @@ impl Stream for GrpcStream {
     }
 
     fn new_data_chunk(&mut self, data: &[u8]) {
-        println!("hooray! data: {:?}", data);
-        self.buf.extend(data);
+        println!("hooray! data chunk: {:?} in stream {:?}", data, self.stream_id);
+        self.req_buf.extend(data);
         self.process_buf();
-        println!("{:?}", grpc::parse_frame(data));
-        self.body.extend(data.to_vec().into_iter());
     }
 
     fn set_state(&mut self, state: StreamState) {

@@ -17,6 +17,7 @@ struct MethodHandlerEcho;
 
 impl<A> MethodHandler<A, A> for MethodHandlerEcho {
     fn handle(&self, req: A) -> A {
+        println!("handle echo");
         req
     }
 } 
@@ -78,12 +79,14 @@ impl ServerServiceDefinition {
         }
     }
 
-    pub fn handle_method(&self, name: &str, message: &[u8]) -> Vec<u8> {
+    pub fn find_method(&self, name: &str) -> &ServerMethod {
         self.methods.iter()
             .filter(|m| m.name == name)
             .next()
             .expect(&format!("unknown method: {}", name))
-            .dispatch
-            .on_message(message)
+    }
+
+    pub fn handle_method(&self, name: &str, message: &[u8]) -> Vec<u8> {
+        self.find_method(name).dispatch.on_message(message)
     }
 }
