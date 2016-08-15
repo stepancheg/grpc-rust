@@ -3,6 +3,28 @@ use std::collections::HashMap;
 use protobuf;
 use protobuf::compiler_plugin;
 use protobuf::descriptor::*;
+use protobuf::code_writer::CodeWriter;
+
+fn gen_file(file: &FileDescriptorProto) -> Option<compiler_plugin::GenResult> {
+    if file.get_service().is_empty() {
+        return None;
+    }
+
+    let base = protobuf::proto_path_to_rust_mod(file.get_name());
+
+    let mut v = Vec::new();
+    {
+        let mut w = CodeWriter::new(&mut v);
+        w.write_generated();
+        w.write_line("");
+        w.write_line("// XXX\n");
+    }
+
+    Some(compiler_plugin::GenResult {
+        name: base + "_grpc.rs",
+        content: v,
+    })
+}
 
 pub fn gen(file_descriptors: &[FileDescriptorProto], files_to_generate: &[String])
         -> Vec<compiler_plugin::GenResult>
@@ -14,16 +36,12 @@ pub fn gen(file_descriptors: &[FileDescriptorProto], files_to_generate: &[String
 
     for file_name in files_to_generate {
         let file = files_map[&file_name[..]];
-        let base = protobuf::proto_path_to_rust_mod(file.get_name());
 
         if file.get_service().is_empty() {
             continue;
         }
 
-        results.push(compiler_plugin::GenResult {
-            name: base + "_grpc.rs",
-            content: "// XXX\n".to_string().into_bytes(),
-        });
+        results.extend(gen_file(file).into_iter());
     }
 
     results

@@ -19,3 +19,8 @@ test = false
 
 name = "temp-server"
 test = false
+
+[workspace]
+members = [
+    "route-guide",
+]

@@ -225,10 +225,10 @@ impl GrpcServerConnection {
     
     fn handle_requests(&mut self) -> HttpResult<Vec<(StreamId, Vec<u8>)>> {
         Ok(self.state.iter().flat_map(|(&id, s)| {
-            if s.resp.is_empty() {
+            if s.resp_buf.is_empty() {
                 None
             } else {
-                Some((id, s.resp.clone()))
+                Some((id, s.resp_buf.clone()))
             }        
         }).collect())
     }

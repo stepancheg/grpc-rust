@@ -1,0 +1,10 @@
+[package]
+name = "route-guide"
+version = "0.1.0"
+authors = ["Stepan Koltsov <stepan.koltsov@gmail.com>"]
+
+[dependencies.grpc]
+path = ".."
+
+[dependencies.protobuf]
+path = "../../rust-protobuf"
