@@ -19,3 +19,6 @@
 
 // XXX
 
+
+pub trait RouteGuide {
+}
