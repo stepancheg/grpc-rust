@@ -22,5 +22,5 @@ test = false
 
 [workspace]
 members = [
-    "route-guide",
+    "grpc-examples",
 ]

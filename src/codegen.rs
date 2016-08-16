@@ -6,20 +6,118 @@ use protobuf::code_writer::CodeWriter;
 use protobuf::descriptor::*;
 use protobuf::descriptorx::*;
 
+struct MethodGen<'a> {
+    proto: &'a MethodDescriptorProto,
+    root_scope: &'a RootScope<'a>,
+}
+
+impl<'a> MethodGen<'a> {
+    fn new(proto: &'a MethodDescriptorProto, root_scope: &'a RootScope<'a>) -> MethodGen<'a> {
+        MethodGen {
+            proto: proto,
+            root_scope: root_scope,
+        }
+    }
+
+    fn sig(&self) -> String {
+        let input = self.root_scope.find_message(self.proto.get_input_type()).rust_fq_name();
+        let output = self.root_scope.find_message(self.proto.get_output_type()).rust_fq_name();
+
+        format!("{}(&self, p: super::{}) -> super::{}", self.proto.get_name(), input, output)
+    }
+
+    fn write_intf(&self, w: &mut CodeWriter) {
+        w.fn_def(&self.sig())
+    }
+
+    fn write_client(&self, w: &mut CodeWriter) {
+        let input = self.root_scope.find_message(self.proto.get_input_type()).rust_fq_name();
+        let output = self.root_scope.find_message(self.proto.get_output_type()).rust_fq_name();
+
+        w.def_fn(&self.sig(), |w| {
+            w.todo("not yet");
+        });
+    }
+}
+
 struct ServiceGen<'a> {
     proto: &'a ServiceDescriptorProto,
+    root_scope: &'a RootScope<'a>,
+    methods: Vec<MethodGen<'a>>,
 }
 
 impl<'a> ServiceGen<'a> {
     fn new(proto: &'a ServiceDescriptorProto, root_scope: &'a RootScope) -> ServiceGen<'a> {
         ServiceGen {
             proto: proto,
+            root_scope: root_scope,
+            methods: proto.get_method().into_iter().map(|m| MethodGen::new(m, root_scope)).collect()
         }
     }
 
-    fn write(&self, w: &mut CodeWriter) {
-        w.pub_trait(self.proto.get_name(), |w| {
+    fn intf_name(&self) -> &str {
+        self.proto.get_name()
+    }
+
+    fn client_name(&self) -> String {
+        format!("{}Client", self.proto.get_name())
+    }
+
+    fn server_name(&self) -> String {
+        format!("{}Server", self.proto.get_name())
+    }
+
+    fn write_intf(&self, w: &mut CodeWriter) {
+        w.pub_trait(&self.intf_name(), |w| {
+            for (i, method) in self.methods.iter().enumerate() {
+                if i != 0 {
+                    w.write_line("");
+                }
+
+                method.write_intf(w);
+            }
         });
+    }
+
+    fn write_client(&self, w: &mut CodeWriter) {
+        w.pub_struct(&self.client_name(), |w| {
+        });
+
+        w.write_line("");
+
+        w.impl_for_block(self.intf_name(), &self.client_name(), |w| {
+            for (i, method) in self.methods.iter().enumerate() {
+                if i != 0 {
+                    w.write_line("");
+                }
+
+                method.write_client(w);
+            }
+        });
+    }
+
+    fn write_server(&self, w: &mut CodeWriter) {
+        w.pub_struct(&self.server_name(), |w| {
+            w.field_decl("h", &format!("Box<{}>", self.intf_name()));
+        });
+
+        w.write_line("");
+
+        w.impl_self_block(&self.server_name(), |w| {
+            w.pub_fn(format!("new(h: Box<{}>) -> {}", self.intf_name(), self.server_name()), |w| {
+                w.expr_block(self.server_name(), |w| {
+                    w.field_entry("h", "h");
+                });
+            });
+        });
+    }
+
+    fn write(&self, w: &mut CodeWriter) {
+        self.write_intf(w);
+        w.write_line("");
+        self.write_client(w);
+        w.write_line("");
+        self.write_server(w);
     }
 }
 
@@ -39,7 +137,6 @@ fn gen_file(
         let mut w = CodeWriter::new(&mut v);
         w.write_generated();
         w.write_line("");
-        w.write_line("// XXX\n");
 
         for service in file.get_service() {
             w.write_line("");
