@@ -1,26 +1,36 @@
 use marshall::*;
 
 
-struct MethodDescriptor<Req, Resp> {
-    name: String,
-    input_streaming: bool,
-    output_streaming: bool,
-    req_marshaller: Box<Marshaller<Req>>,
-    resp_marshaller: Box<Marshaller<Resp>>,
+pub struct MethodDescriptor<Req, Resp> {
+    pub name: String,
+    pub input_streaming: bool,
+    pub output_streaming: bool,
+    pub req_marshaller: Box<Marshaller<Req>>,
+    pub resp_marshaller: Box<Marshaller<Resp>>,
 }
 
-trait MethodHandler<Req, Resp> {
+pub trait MethodHandler<Req, Resp> {
     fn handle(&self, req: Req) -> Resp;
 }
 
-struct MethodHandlerEcho;
+pub struct MethodHandlerEcho;
 
 impl<A> MethodHandler<A, A> for MethodHandlerEcho {
     fn handle(&self, req: A) -> A {
         println!("handle echo");
         req
     }
-} 
+}
+
+struct MethodHandlerFn<F> {
+    f: F
+}
+
+impl<Req, Resp, F : Fn(Req) -> Resp> MethodHandler<Req, Resp> for MethodHandlerFn<F> {
+    fn handle(&self, req: Req) -> Resp {
+        (self.f)(req)
+    }
+}
 
 trait MethodHandlerDispatch {
     fn on_message(&self, message: &[u8]) -> Vec<u8>;
@@ -45,7 +55,7 @@ pub struct ServerMethod {
 }
 
 impl ServerMethod {
-    fn new<Req : 'static, Resp : 'static>(method: MethodDescriptor<Req, Resp>, handler: Box<MethodHandler<Req, Resp>>) -> ServerMethod {
+    pub fn new<Req : 'static, Resp : 'static>(method: MethodDescriptor<Req, Resp>, handler: Box<MethodHandler<Req, Resp>>) -> ServerMethod {
         ServerMethod {
             name: method.name.clone(),
             dispatch: Box::new(MethodHandlerDispatchImpl {

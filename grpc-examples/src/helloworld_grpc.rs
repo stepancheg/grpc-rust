@@ -36,9 +36,23 @@ pub struct GreeterServer {
 }
 
 impl GreeterServer {
-    pub fn new(h: Box<Greeter>) -> GreeterServer {
+    pub fn new<H : Greeter + 'static>(h: H) -> GreeterServer {
+        ::grpc::method::ServerServiceDefinition::new(
+            vec![
+                ::grpc::method::ServerMethod::new(
+                    ::grpc::method::MethodDescriptor {
+                        name: "/helloworld.Greeter/SayHello".to_string(),
+                        input_streaming: false,
+                        output_streaming: false,
+                        req_marshaller: Box::new(::grpc::marshall::MarshallerBytes),
+                        resp_marshaller: Box::new(::grpc::marshall::MarshallerBytes),
+                    },
+                    Box::new(::grpc::method::MethodHandlerEcho),
+                ),
+            ],
+        );
         GreeterServer {
-            h: h,
+            h: Box::new(h),
         }
     }
 }

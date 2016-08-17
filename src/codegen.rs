@@ -44,14 +44,16 @@ struct ServiceGen<'a> {
     proto: &'a ServiceDescriptorProto,
     root_scope: &'a RootScope<'a>,
     methods: Vec<MethodGen<'a>>,
+    package: String,
 }
 
 impl<'a> ServiceGen<'a> {
-    fn new(proto: &'a ServiceDescriptorProto, root_scope: &'a RootScope) -> ServiceGen<'a> {
+    fn new(proto: &'a ServiceDescriptorProto, file: &FileDescriptorProto, root_scope: &'a RootScope) -> ServiceGen<'a> {
         ServiceGen {
             proto: proto,
             root_scope: root_scope,
-            methods: proto.get_method().into_iter().map(|m| MethodGen::new(m, root_scope)).collect()
+            methods: proto.get_method().into_iter().map(|m| MethodGen::new(m, root_scope)).collect(),
+            package: file.get_package().to_string(),
         }
     }
 
@@ -96,6 +98,10 @@ impl<'a> ServiceGen<'a> {
         });
     }
 
+    fn service_path(&self) -> String {
+        format!("/{}.{}", self.package, self.proto.get_name())
+    }
+
     fn write_server(&self, w: &mut CodeWriter) {
         w.pub_struct(&self.server_name(), |w| {
             w.field_decl("h", &format!("Box<{}>", self.intf_name()));
@@ -104,9 +110,26 @@ impl<'a> ServiceGen<'a> {
         w.write_line("");
 
         w.impl_self_block(&self.server_name(), |w| {
-            w.pub_fn(format!("new(h: Box<{}>) -> {}", self.intf_name(), self.server_name()), |w| {
+            w.pub_fn(format!("new<H : {} + 'static>(h: H) -> {}", self.intf_name(), self.server_name()), |w| {
+                w.block("::grpc::method::ServerServiceDefinition::new(", ");", |w| {
+                    w.block("vec![", "],", |w| {
+                        for method in &self.methods {
+                            w.block("::grpc::method::ServerMethod::new(", "),", |w| {
+                                w.block("::grpc::method::MethodDescriptor {", "},", |w| {
+                                    w.field_entry("name", format!("\"{}/{}\".to_string()", self.service_path(), method.proto.get_name()));
+                                    w.field_entry("input_streaming", "false"); // TODO
+                                    w.field_entry("output_streaming", "false"); // TODO
+                                    w.field_entry("req_marshaller", "Box::new(::grpc::marshall::MarshallerBytes)"); // TODO
+                                    w.field_entry("resp_marshaller", "Box::new(::grpc::marshall::MarshallerBytes)"); // TODO
+                                });
+                                w.write_line("Box::new(::grpc::method::MethodHandlerEcho),");
+                            });
+                        }
+                    });
+                });
+
                 w.expr_block(self.server_name(), |w| {
-                    w.field_entry("h", "h");
+                    w.field_entry("h", "Box::new(h)");
                 });
             });
         });
@@ -140,7 +163,7 @@ fn gen_file(
 
         for service in file.get_service() {
             w.write_line("");
-            ServiceGen::new(service, root_scope).write(&mut w);
+            ServiceGen::new(service, file, root_scope).write(&mut w);
         }
     }
 
