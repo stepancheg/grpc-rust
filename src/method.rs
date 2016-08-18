@@ -22,8 +22,19 @@ impl<A> MethodHandler<A, A> for MethodHandlerEcho {
     }
 }
 
-struct MethodHandlerFn<F> {
+pub struct MethodHandlerFn<F> {
     f: F
+}
+
+impl<F> MethodHandlerFn<F> {
+    pub fn new<Req, Resp>(f: F)
+        -> Self
+        where F : Fn(Req) -> Resp
+    {
+        MethodHandlerFn {
+            f: f,
+        }
+    }
 }
 
 impl<Req, Resp, F : Fn(Req) -> Resp> MethodHandler<Req, Resp> for MethodHandlerFn<F> {
@@ -55,12 +66,12 @@ pub struct ServerMethod {
 }
 
 impl ServerMethod {
-    pub fn new<Req : 'static, Resp : 'static>(method: MethodDescriptor<Req, Resp>, handler: Box<MethodHandler<Req, Resp>>) -> ServerMethod {
+    pub fn new<Req : 'static, Resp : 'static, H : MethodHandler<Req, Resp> + 'static>(method: MethodDescriptor<Req, Resp>, handler: H) -> ServerMethod {
         ServerMethod {
             name: method.name.clone(),
             dispatch: Box::new(MethodHandlerDispatchImpl {
                 desc: method,
-                method_handler: handler,    
+                method_handler: Box::new(handler),
             }),
         }
     }
@@ -72,18 +83,6 @@ pub struct ServerServiceDefinition {
 
 impl ServerServiceDefinition {
     pub fn new(mut methods: Vec<ServerMethod>) -> ServerServiceDefinition {
-        methods.push(
-            ServerMethod::new(
-                MethodDescriptor {
-                    name: "/helloworld.Greeter/SayHello".to_owned(),
-                    input_streaming: false,
-                    output_streaming: false,
-                    req_marshaller: Box::new(MarshallerBytes),
-                    resp_marshaller: Box::new(MarshallerBytes),
-                },
-                Box::new(MethodHandlerEcho)
-            )
-        );
         ServerServiceDefinition {
             methods: methods,
         }

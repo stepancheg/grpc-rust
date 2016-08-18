@@ -104,14 +104,15 @@ impl<'a> ServiceGen<'a> {
 
     fn write_server(&self, w: &mut CodeWriter) {
         w.pub_struct(&self.server_name(), |w| {
-            w.field_decl("h", &format!("Box<{}>", self.intf_name()));
+            w.field_decl("server", "::grpc::server::GrpcServer");
         });
 
         w.write_line("");
 
         w.impl_self_block(&self.server_name(), |w| {
             w.pub_fn(format!("new<H : {} + 'static>(h: H) -> {}", self.intf_name(), self.server_name()), |w| {
-                w.block("::grpc::method::ServerServiceDefinition::new(", ");", |w| {
+                w.write_line("let handler_arc = ::std::sync::Arc::new(h);");
+                w.block("let service_definition = ::std::sync::Arc::new(::grpc::method::ServerServiceDefinition::new(", "));", |w| {
                     w.block("vec![", "],", |w| {
                         for method in &self.methods {
                             w.block("::grpc::method::ServerMethod::new(", "),", |w| {
@@ -119,18 +120,27 @@ impl<'a> ServiceGen<'a> {
                                     w.field_entry("name", format!("\"{}/{}\".to_string()", self.service_path(), method.proto.get_name()));
                                     w.field_entry("input_streaming", "false"); // TODO
                                     w.field_entry("output_streaming", "false"); // TODO
-                                    w.field_entry("req_marshaller", "Box::new(::grpc::marshall::MarshallerBytes)"); // TODO
-                                    w.field_entry("resp_marshaller", "Box::new(::grpc::marshall::MarshallerBytes)"); // TODO
+                                    w.field_entry("req_marshaller", "Box::new(::grpc::grpc_protobuf::MarshallerProtobuf)");
+                                    w.field_entry("resp_marshaller", "Box::new(::grpc::grpc_protobuf::MarshallerProtobuf)");
                                 });
-                                w.write_line("Box::new(::grpc::method::MethodHandlerEcho),");
+                                w.block("{", "},", |w| {
+                                    w.write_line("let handler_copy = handler_arc.clone();");
+                                    w.write_line(format!("::grpc::method::MethodHandlerFn::new(move |p| handler_copy.{}(p))", method.proto.get_name()));
+                                });
                             });
                         }
                     });
                 });
 
                 w.expr_block(self.server_name(), |w| {
-                    w.field_entry("h", "Box::new(h)");
+                    w.field_entry("server", "::grpc::server::GrpcServer::new(service_definition)");
                 });
+            });
+
+            w.write_line("");
+
+            w.pub_fn("run(&mut self)", |w| {
+                w.write_line("self.server.run()")
             });
         });
     }

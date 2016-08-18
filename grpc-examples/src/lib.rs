@@ -1,5 +1,5 @@
 extern crate protobuf;
 extern crate grpc;
 
-mod helloworld;
-mod helloworld_grpc;
+pub mod helloworld;
+pub mod helloworld_grpc;

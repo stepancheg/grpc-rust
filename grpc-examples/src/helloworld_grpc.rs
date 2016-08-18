@@ -32,27 +32,35 @@ impl Greeter for GreeterClient {
 }
 
 pub struct GreeterServer {
-    h: Box<Greeter>,
+    server: ::grpc::server::GrpcServer,
 }
 
 impl GreeterServer {
     pub fn new<H : Greeter + 'static>(h: H) -> GreeterServer {
-        ::grpc::method::ServerServiceDefinition::new(
+        let handler_arc = ::std::sync::Arc::new(h);
+        let service_definition = ::std::sync::Arc::new(::grpc::method::ServerServiceDefinition::new(
             vec![
                 ::grpc::method::ServerMethod::new(
                     ::grpc::method::MethodDescriptor {
                         name: "/helloworld.Greeter/SayHello".to_string(),
                         input_streaming: false,
                         output_streaming: false,
-                        req_marshaller: Box::new(::grpc::marshall::MarshallerBytes),
-                        resp_marshaller: Box::new(::grpc::marshall::MarshallerBytes),
+                        req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+                        resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
                     },
-                    Box::new(::grpc::method::MethodHandlerEcho),
+                    {
+                        let handler_copy = handler_arc.clone();
+                        ::grpc::method::MethodHandlerFn::new(move |p| handler_copy.SayHello(p))
+                    },
                 ),
             ],
-        );
+        ));
         GreeterServer {
-            h: Box::new(h),
+            server: ::grpc::server::GrpcServer::new(service_definition),
         }
+    }
+
+    pub fn run(&mut self) {
+        self.server.run()
     }
 }

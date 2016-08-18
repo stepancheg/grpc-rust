@@ -6,9 +6,9 @@ use protobuf::Message;
 use protobuf::MessageStatic;
 use protobuf::CodedInputStream;
 
-pub struct ProtobufMarshaller;
+pub struct MarshallerProtobuf;
 
-impl<M : Message + MessageStatic> Marshaller<M> for ProtobufMarshaller {
+impl<M : Message + MessageStatic> Marshaller<M> for MarshallerProtobuf {
     fn write(&self, m: &M) -> Vec<u8> {
         m.write_to_bytes().unwrap()
     }
