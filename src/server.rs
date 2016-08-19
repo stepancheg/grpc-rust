@@ -5,6 +5,7 @@ use std::io::Cursor;
 use std::io::Read;
 use std::convert::From;
 use std::sync::Arc;
+use std::thread;
 
 use solicit::server::SimpleServer;
 use solicit::http::server::StreamFactory;
@@ -331,7 +332,10 @@ impl GrpcServer {
     pub fn run(&mut self) {
         for mut stream in self.listener.incoming().map(|s| s.unwrap()) {
             println!("client connected!");
-            GrpcServerConnection::new(stream, self.service_definition.clone()).run();
+            let service_definition = self.service_definition.clone();
+            thread::spawn(|| {
+                GrpcServerConnection::new(stream, service_definition).run();
+            });
         }
     }
 }

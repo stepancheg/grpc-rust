@@ -36,7 +36,7 @@ pub struct GreeterServer {
 }
 
 impl GreeterServer {
-    pub fn new<H : Greeter + 'static>(h: H) -> GreeterServer {
+    pub fn new<H : Greeter + 'static + Sync + Send>(h: H) -> GreeterServer {
         let handler_arc = ::std::sync::Arc::new(h);
         let service_definition = ::std::sync::Arc::new(::grpc::method::ServerServiceDefinition::new(
             vec![

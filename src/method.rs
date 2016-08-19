@@ -5,8 +5,8 @@ pub struct MethodDescriptor<Req, Resp> {
     pub name: String,
     pub input_streaming: bool,
     pub output_streaming: bool,
-    pub req_marshaller: Box<Marshaller<Req>>,
-    pub resp_marshaller: Box<Marshaller<Resp>>,
+    pub req_marshaller: Box<Marshaller<Req> + Sync + Send>,
+    pub resp_marshaller: Box<Marshaller<Resp> + Sync + Send>,
 }
 
 pub trait MethodHandler<Req, Resp> {
@@ -49,7 +49,7 @@ trait MethodHandlerDispatch {
 
 struct MethodHandlerDispatchImpl<Req, Resp> {
     desc: MethodDescriptor<Req, Resp>,
-    method_handler: Box<MethodHandler<Req, Resp>>,
+    method_handler: Box<MethodHandler<Req, Resp> + Sync + Send>,
 }
 
 impl<Req, Resp> MethodHandlerDispatch for MethodHandlerDispatchImpl<Req, Resp> {
@@ -62,11 +62,11 @@ impl<Req, Resp> MethodHandlerDispatch for MethodHandlerDispatchImpl<Req, Resp> {
 
 pub struct ServerMethod {
     name: String,
-    dispatch: Box<MethodHandlerDispatch>,
+    dispatch: Box<MethodHandlerDispatch + Sync + Send>,
 }
 
 impl ServerMethod {
-    pub fn new<Req : 'static, Resp : 'static, H : MethodHandler<Req, Resp> + 'static>(method: MethodDescriptor<Req, Resp>, handler: H) -> ServerMethod {
+    pub fn new<Req : 'static, Resp : 'static, H : MethodHandler<Req, Resp> + 'static + Sync + Send>(method: MethodDescriptor<Req, Resp>, handler: H) -> ServerMethod {
         ServerMethod {
             name: method.name.clone(),
             dispatch: Box::new(MethodHandlerDispatchImpl {

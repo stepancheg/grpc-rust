@@ -110,7 +110,7 @@ impl<'a> ServiceGen<'a> {
         w.write_line("");
 
         w.impl_self_block(&self.server_name(), |w| {
-            w.pub_fn(format!("new<H : {} + 'static>(h: H) -> {}", self.intf_name(), self.server_name()), |w| {
+            w.pub_fn(format!("new<H : {} + 'static + Sync + Send>(h: H) -> {}", self.intf_name(), self.server_name()), |w| {
                 w.write_line("let handler_arc = ::std::sync::Arc::new(h);");
                 w.block("let service_definition = ::std::sync::Arc::new(::grpc::method::ServerServiceDefinition::new(", "));", |w| {
                     w.block("vec![", "],", |w| {
