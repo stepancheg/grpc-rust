@@ -23,11 +23,27 @@ pub trait Greeter {
 }
 
 pub struct GreeterClient {
+    grpc_client: ::std::cell::RefCell<::grpc::client::GrpcClient>,
+}
+
+impl GreeterClient {
+    pub fn new(host: &str, port: u16) -> Self {
+        GreeterClient {
+            grpc_client: ::std::cell::RefCell::new(::grpc::client::GrpcClient::new(host, port)),
+        }
+    }
 }
 
 impl Greeter for GreeterClient {
     fn SayHello(&self, p: super::helloworld::HelloRequest) -> super::helloworld::HelloReply {
-        panic!("TODO: not yet");
+        let method: ::grpc::method::MethodDescriptor<super::helloworld::HelloRequest, super::helloworld::HelloReply> = ::grpc::method::MethodDescriptor {
+            name: "/helloworld.Greeter/SayHello".to_string(),
+            input_streaming: false,
+            output_streaming: false,
+            req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+            resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+        };
+        self.grpc_client.borrow_mut().call(p, method)
     }
 }
 

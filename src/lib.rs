@@ -4,7 +4,7 @@ extern crate solicit;
 pub mod codegen;
 
 pub mod server;
-mod client;
+pub mod client;
 mod grpc;
 pub mod method;
 pub mod grpc_protobuf;

@@ -8,22 +8,30 @@ use protobuf::descriptorx::*;
 
 struct MethodGen<'a> {
     proto: &'a MethodDescriptorProto,
+    service_path: String,
     root_scope: &'a RootScope<'a>,
 }
 
 impl<'a> MethodGen<'a> {
-    fn new(proto: &'a MethodDescriptorProto, root_scope: &'a RootScope<'a>) -> MethodGen<'a> {
+    fn new(proto: &'a MethodDescriptorProto, service_path: String, root_scope: &'a RootScope<'a>) -> MethodGen<'a> {
         MethodGen {
             proto: proto,
+            service_path: service_path,
             root_scope: root_scope,
         }
     }
 
-    fn sig(&self) -> String {
-        let input = self.root_scope.find_message(self.proto.get_input_type()).rust_fq_name();
-        let output = self.root_scope.find_message(self.proto.get_output_type()).rust_fq_name();
+    fn input(&self) -> String {
+        format!("super::{}", self.root_scope.find_message(self.proto.get_input_type()).rust_fq_name())
+    }
 
-        format!("{}(&self, p: super::{}) -> super::{}", self.proto.get_name(), input, output)
+    fn output(&self) -> String {
+        format!("super::{}", self.root_scope.find_message(self.proto.get_output_type()).rust_fq_name())
+    }
+
+    fn sig(&self) -> String {
+        format!("{}(&self, p: {}) -> {}",
+            self.proto.get_name(), self.input(), self.output())
     }
 
     fn write_intf(&self, w: &mut CodeWriter) {
@@ -35,7 +43,20 @@ impl<'a> MethodGen<'a> {
         let output = self.root_scope.find_message(self.proto.get_output_type()).rust_fq_name();
 
         w.def_fn(&self.sig(), |w| {
-            w.todo("not yet");
+            self.write_method_descriptor(w,
+                &format!("let method: ::grpc::method::MethodDescriptor<{}, {}> = ", self.input(), self.output()),
+                ";");
+            w.write_line("self.grpc_client.borrow_mut().call(p, method)")
+        });
+    }
+
+    fn write_method_descriptor(&self, w: &mut CodeWriter, before: &str, after: &str) {
+        w.block(format!("{}{}", before, "::grpc::method::MethodDescriptor {"), format!("{}{}", "}", after), |w| {
+            w.field_entry("name", format!("\"{}/{}\".to_string()", self.service_path, self.proto.get_name()));
+            w.field_entry("input_streaming", "false"); // TODO
+            w.field_entry("output_streaming", "false"); // TODO
+            w.field_entry("req_marshaller", "Box::new(::grpc::grpc_protobuf::MarshallerProtobuf)");
+            w.field_entry("resp_marshaller", "Box::new(::grpc::grpc_protobuf::MarshallerProtobuf)");
         });
     }
 }
@@ -44,15 +65,22 @@ struct ServiceGen<'a> {
     proto: &'a ServiceDescriptorProto,
     root_scope: &'a RootScope<'a>,
     methods: Vec<MethodGen<'a>>,
+    service_path: String,
     package: String,
 }
 
 impl<'a> ServiceGen<'a> {
     fn new(proto: &'a ServiceDescriptorProto, file: &FileDescriptorProto, root_scope: &'a RootScope) -> ServiceGen<'a> {
+        let service_path = format!("/{}.{}", file.get_package(), proto.get_name());
+        let methods = proto.get_method().into_iter()
+            .map(|m| MethodGen::new(m, service_path.clone(), root_scope))
+            .collect();
+
         ServiceGen {
             proto: proto,
             root_scope: root_scope,
-            methods: proto.get_method().into_iter().map(|m| MethodGen::new(m, root_scope)).collect(),
+            methods: methods,
+            service_path: service_path,
             package: file.get_package().to_string(),
         }
     }
@@ -83,6 +111,17 @@ impl<'a> ServiceGen<'a> {
 
     fn write_client(&self, w: &mut CodeWriter) {
         w.pub_struct(&self.client_name(), |w| {
+            w.field_decl("grpc_client", "::std::cell::RefCell<::grpc::client::GrpcClient>");
+        });
+
+        w.write_line("");
+
+        w.impl_self_block(&self.client_name(), |w| {
+            w.pub_fn("new(host: &str, port: u16) -> Self", |w| {
+                w.expr_block("GreeterClient", |w| {
+                    w.field_entry("grpc_client", "::std::cell::RefCell::new(::grpc::client::GrpcClient::new(host, port))");
+                });
+            });
         });
 
         w.write_line("");
@@ -96,10 +135,6 @@ impl<'a> ServiceGen<'a> {
                 method.write_client(w);
             }
         });
-    }
-
-    fn service_path(&self) -> String {
-        format!("/{}.{}", self.package, self.proto.get_name())
     }
 
     fn write_server(&self, w: &mut CodeWriter) {
@@ -116,13 +151,7 @@ impl<'a> ServiceGen<'a> {
                     w.block("vec![", "],", |w| {
                         for method in &self.methods {
                             w.block("::grpc::method::ServerMethod::new(", "),", |w| {
-                                w.block("::grpc::method::MethodDescriptor {", "},", |w| {
-                                    w.field_entry("name", format!("\"{}/{}\".to_string()", self.service_path(), method.proto.get_name()));
-                                    w.field_entry("input_streaming", "false"); // TODO
-                                    w.field_entry("output_streaming", "false"); // TODO
-                                    w.field_entry("req_marshaller", "Box::new(::grpc::grpc_protobuf::MarshallerProtobuf)");
-                                    w.field_entry("resp_marshaller", "Box::new(::grpc::grpc_protobuf::MarshallerProtobuf)");
-                                });
+                                method.write_method_descriptor(w, "", ",");
                                 w.block("{", "},", |w| {
                                     w.write_line("let handler_copy = handler_arc.clone();");
                                     w.write_line(format!("::grpc::method::MethodHandlerFn::new(move |p| handler_copy.{}(p))", method.proto.get_name()));

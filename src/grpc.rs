@@ -25,6 +25,13 @@ pub fn parse_frame(stream: &[u8]) -> Option<(&[u8], usize)> {
     Some((&stream[header_len..end], end))
 }
 
+pub fn parse_frame_completely(stream: &[u8]) -> Option<&[u8]> {
+    match parse_frame(stream) {
+        Some((bytes, pos)) if pos == stream.len() => Some(bytes),
+        _ => None,
+    }
+}
+
 pub fn write_frame(stream: &mut Vec<u8>, frame: &[u8]) {
 	stream.push(0); // compressed flag
 	let len_raw: [u8; 4] = unsafe {
