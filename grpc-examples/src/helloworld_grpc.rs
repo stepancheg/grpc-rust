@@ -46,8 +46,8 @@ impl Greeter for GreeterClient {
     fn SayHello(&self, p: super::helloworld::HelloRequest) -> super::helloworld::HelloReply {
         let method: ::grpc::method::MethodDescriptor<super::helloworld::HelloRequest, super::helloworld::HelloReply> = ::grpc::method::MethodDescriptor {
             name: "/helloworld.Greeter/SayHello".to_string(),
-            input_streaming: false,
-            output_streaming: false,
+            client_streaming: false,
+            server_streaming: false,
             req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
             resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
         };
@@ -73,8 +73,8 @@ impl GreeterAsync for GreeterAsyncClient {
     fn SayHello(&self, p: super::helloworld::HelloRequest) -> ::grpc::futures_grpc::GrpcFuture<super::helloworld::HelloReply> {
         let method: ::grpc::method::MethodDescriptor<super::helloworld::HelloRequest, super::helloworld::HelloReply> = ::grpc::method::MethodDescriptor {
             name: "/helloworld.Greeter/SayHello".to_string(),
-            input_streaming: false,
-            output_streaming: false,
+            client_streaming: false,
+            server_streaming: false,
             req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
             resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
         };
@@ -96,8 +96,8 @@ impl GreeterServer {
                 ::grpc::method::ServerMethod::new(
                     ::grpc::method::MethodDescriptor {
                         name: "/helloworld.Greeter/SayHello".to_string(),
-                        input_streaming: false,
-                        output_streaming: false,
+                        client_streaming: false,
+                        server_streaming: false,
                         req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
                         resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
                     },

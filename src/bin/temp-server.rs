@@ -14,8 +14,8 @@ fn main() {
             ServerMethod::new(
                 MethodDescriptor {
                     name: "/helloworld.Greeter/SayHello".to_owned(),
-                    input_streaming: false,
-                    output_streaming: false,
+                    client_streaming: false,
+                    server_streaming: false,
                     req_marshaller: Box::new(MarshallerBytes),
                     resp_marshaller: Box::new(MarshallerBytes),
                 },

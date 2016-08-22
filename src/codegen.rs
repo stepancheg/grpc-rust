@@ -75,8 +75,8 @@ impl<'a> MethodGen<'a> {
     fn write_method_descriptor(&self, w: &mut CodeWriter, before: &str, after: &str) {
         w.block(format!("{}{}", before, "::grpc::method::MethodDescriptor {"), format!("{}{}", "}", after), |w| {
             w.field_entry("name", format!("\"{}/{}\".to_string()", self.service_path, self.proto.get_name()));
-            w.field_entry("input_streaming", "false"); // TODO
-            w.field_entry("output_streaming", "false"); // TODO
+            w.field_entry("client_streaming", if self.proto.get_client_streaming() { "true" } else { "false" });
+            w.field_entry("server_streaming", if self.proto.get_server_streaming() { "true" } else { "false" });
             w.field_entry("req_marshaller", "Box::new(::grpc::grpc_protobuf::MarshallerProtobuf)");
             w.field_entry("resp_marshaller", "Box::new(::grpc::grpc_protobuf::MarshallerProtobuf)");
         });
