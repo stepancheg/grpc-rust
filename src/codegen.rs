@@ -30,7 +30,7 @@ impl<'a> MethodGen<'a> {
     }
 
     fn sync_sig(&self) -> String {
-        format!("{}(&self, p: {}) -> {}",
+        format!("{}(&self, p: {}) -> ::grpc::result::GrpcResult<{}>",
             self.proto.get_name(), self.input(), self.output())
     }
 

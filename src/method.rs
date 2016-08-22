@@ -1,5 +1,7 @@
 use marshall::*;
 
+use result::GrpcResult;
+
 
 pub struct MethodDescriptor<Req, Resp> {
     pub name: String,
@@ -10,15 +12,15 @@ pub struct MethodDescriptor<Req, Resp> {
 }
 
 pub trait MethodHandler<Req, Resp> {
-    fn handle(&self, req: Req) -> Resp;
+    fn handle(&self, req: Req) -> GrpcResult<Resp>;
 }
 
 pub struct MethodHandlerEcho;
 
 impl<A> MethodHandler<A, A> for MethodHandlerEcho {
-    fn handle(&self, req: A) -> A {
+    fn handle(&self, req: A) -> GrpcResult<A> {
         println!("handle echo");
-        req
+        Ok(req)
     }
 }
 
@@ -29,7 +31,7 @@ pub struct MethodHandlerFn<F> {
 impl<F> MethodHandlerFn<F> {
     pub fn new<Req, Resp>(f: F)
         -> Self
-        where F : Fn(Req) -> Resp
+        where F : Fn(Req) -> GrpcResult<Resp>
     {
         MethodHandlerFn {
             f: f,
@@ -37,14 +39,14 @@ impl<F> MethodHandlerFn<F> {
     }
 }
 
-impl<Req, Resp, F : Fn(Req) -> Resp> MethodHandler<Req, Resp> for MethodHandlerFn<F> {
-    fn handle(&self, req: Req) -> Resp {
+impl<Req, Resp, F : Fn(Req) -> GrpcResult<Resp>> MethodHandler<Req, Resp> for MethodHandlerFn<F> {
+    fn handle(&self, req: Req) -> GrpcResult<Resp> {
         (self.f)(req)
     }
 }
 
 trait MethodHandlerDispatch {
-    fn on_message(&self, message: &[u8]) -> Vec<u8>;
+    fn on_message(&self, message: &[u8]) -> GrpcResult<Vec<u8>>;
 }
 
 struct MethodHandlerDispatchImpl<Req, Resp> {
@@ -53,10 +55,10 @@ struct MethodHandlerDispatchImpl<Req, Resp> {
 }
 
 impl<Req, Resp> MethodHandlerDispatch for MethodHandlerDispatchImpl<Req, Resp> {
-    fn on_message(&self, message: &[u8]) -> Vec<u8> {
+    fn on_message(&self, message: &[u8]) -> GrpcResult<Vec<u8>> {
         let req = self.desc.req_marshaller.read(message);
-        let resp = self.method_handler.handle(req);
-        self.desc.resp_marshaller.write(&resp)
+        let resp = try!(self.method_handler.handle(req));
+        Ok(self.desc.resp_marshaller.write(&resp))
     }
 }
 
@@ -95,7 +97,7 @@ impl ServerServiceDefinition {
             .expect(&format!("unknown method: {}", name))
     }
 
-    pub fn handle_method(&self, name: &str, message: &[u8]) -> Vec<u8> {
+    pub fn handle_method(&self, name: &str, message: &[u8]) -> GrpcResult<Vec<u8>> {
         self.find_method(name).dispatch.on_message(message)
     }
 }

@@ -98,7 +98,7 @@ impl GrpcStream {
         loop {
             let (r, pos) = match grpc::parse_frame(&self.req_buf) {
                 Some((frame, pos)) => {
-                    let r = self.service_definition.handle_method(&self.path, frame);
+                    let r = self.service_definition.handle_method(&self.path, frame).unwrap();
                     (r, pos)
                 }
                 None => return,

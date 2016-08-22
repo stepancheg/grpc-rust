@@ -25,6 +25,8 @@ use method::MethodDescriptor;
 use grpc::write_frame;
 use grpc::parse_frame;
 use grpc::parse_frame_completely;
+use result::GrpcResult;
+
 
 pub struct GrpcClient {
     host: String,
@@ -121,7 +123,7 @@ impl GrpcClient {
         }
     }
 
-    pub fn call<Req, Resp>(&mut self, req: Req, method: MethodDescriptor<Req, Resp>) -> Resp {
+    pub fn call<Req, Resp>(&mut self, req: Req, method: MethodDescriptor<Req, Resp>) -> GrpcResult<Resp> {
         let req_serialized = method.req_marshaller.write(&req);
 
         let mut http_req_body = Vec::new();
@@ -140,6 +142,6 @@ impl GrpcClient {
 
         let resp_serialized = parse_frame_completely(&http_response.body).unwrap();
 
-        method.resp_marshaller.read(resp_serialized)
+        Ok(method.resp_marshaller.read(resp_serialized))
     }
 }

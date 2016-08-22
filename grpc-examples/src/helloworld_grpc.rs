@@ -21,7 +21,7 @@
 // interface
 
 pub trait Greeter {
-    fn SayHello(&self, p: super::helloworld::HelloRequest) -> super::helloworld::HelloReply;
+    fn SayHello(&self, p: super::helloworld::HelloRequest) -> ::grpc::result::GrpcResult<super::helloworld::HelloReply>;
 }
 
 pub trait GreeterAsync {
@@ -43,7 +43,7 @@ impl GreeterClient {
 }
 
 impl Greeter for GreeterClient {
-    fn SayHello(&self, p: super::helloworld::HelloRequest) -> super::helloworld::HelloReply {
+    fn SayHello(&self, p: super::helloworld::HelloRequest) -> ::grpc::result::GrpcResult<super::helloworld::HelloReply> {
         let method: ::grpc::method::MethodDescriptor<super::helloworld::HelloRequest, super::helloworld::HelloReply> = ::grpc::method::MethodDescriptor {
             name: "/helloworld.Greeter/SayHello".to_string(),
             client_streaming: false,
