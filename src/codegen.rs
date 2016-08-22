@@ -29,24 +29,46 @@ impl<'a> MethodGen<'a> {
         format!("super::{}", self.root_scope.find_message(self.proto.get_output_type()).rust_fq_name())
     }
 
-    fn sig(&self) -> String {
+    fn sync_sig(&self) -> String {
         format!("{}(&self, p: {}) -> {}",
             self.proto.get_name(), self.input(), self.output())
     }
 
-    fn write_intf(&self, w: &mut CodeWriter) {
-        w.fn_def(&self.sig())
+    fn async_sig(&self) -> String {
+        // TODO: streams
+        format!("{}(&self, p: {}) -> ::grpc::futures_grpc::GrpcFuture<{}>",
+            self.proto.get_name(), self.input(), self.output())
     }
 
-    fn write_client(&self, w: &mut CodeWriter) {
+    fn write_sync_intf(&self, w: &mut CodeWriter) {
+        w.fn_def(&self.sync_sig())
+    }
+
+    fn write_async_intf(&self, w: &mut CodeWriter) {
+        w.fn_def(&self.async_sig())
+    }
+
+    fn write_sync_client(&self, w: &mut CodeWriter) {
         let input = self.root_scope.find_message(self.proto.get_input_type()).rust_fq_name();
         let output = self.root_scope.find_message(self.proto.get_output_type()).rust_fq_name();
 
-        w.def_fn(&self.sig(), |w| {
+        w.def_fn(&self.sync_sig(), |w| {
             self.write_method_descriptor(w,
                 &format!("let method: ::grpc::method::MethodDescriptor<{}, {}> = ", self.input(), self.output()),
                 ";");
             w.write_line("self.grpc_client.borrow_mut().call(p, method)")
+        });
+    }
+
+    fn write_async_client(&self, w: &mut CodeWriter) {
+        let input = self.root_scope.find_message(self.proto.get_input_type()).rust_fq_name();
+        let output = self.root_scope.find_message(self.proto.get_output_type()).rust_fq_name();
+
+        w.def_fn(&self.async_sig(), |w| {
+            self.write_method_descriptor(w,
+                &format!("let method: ::grpc::method::MethodDescriptor<{}, {}> = ", self.input(), self.output()),
+                ";");
+            w.write_line("self.grpc_client_async.call(p, method)")
         });
     }
 
@@ -85,40 +107,66 @@ impl<'a> ServiceGen<'a> {
         }
     }
 
-    fn intf_name(&self) -> &str {
+    // name of synchronous interface
+    fn sync_intf_name(&self) -> &str {
         self.proto.get_name()
     }
 
-    fn client_name(&self) -> String {
-        format!("{}Client", self.proto.get_name())
+    // name of asynchronous interface
+    fn async_intf_name(&self) -> String {
+        format!("{}Async", self.sync_intf_name())
     }
 
-    fn server_name(&self) -> String {
-        format!("{}Server", self.proto.get_name())
+    fn sync_client_name(&self) -> String {
+        format!("{}Client", self.sync_intf_name())
     }
 
-    fn write_intf(&self, w: &mut CodeWriter) {
-        w.pub_trait(&self.intf_name(), |w| {
+    fn sync_server_name(&self) -> String {
+        format!("{}Server", self.sync_intf_name())
+    }
+
+    fn async_client_name(&self) -> String {
+        format!("{}Client", self.async_intf_name())
+    }
+
+    fn async_server_name(&self) -> String {
+        format!("{}Server", self.async_intf_name())
+    }
+
+    fn write_sync_intf(&self, w: &mut CodeWriter) {
+        w.pub_trait(&self.sync_intf_name(), |w| {
             for (i, method) in self.methods.iter().enumerate() {
                 if i != 0 {
                     w.write_line("");
                 }
 
-                method.write_intf(w);
+                method.write_sync_intf(w);
             }
         });
     }
 
-    fn write_client(&self, w: &mut CodeWriter) {
-        w.pub_struct(&self.client_name(), |w| {
+    fn write_async_intf(&self, w: &mut CodeWriter) {
+        w.pub_trait(&self.async_intf_name(), |w| {
+            for (i, method) in self.methods.iter().enumerate() {
+                if i != 0 {
+                    w.write_line("");
+                }
+
+                method.write_async_intf(w);
+            }
+        });
+    }
+
+    fn write_sync_client(&self, w: &mut CodeWriter) {
+        w.pub_struct(&self.sync_client_name(), |w| {
             w.field_decl("grpc_client", "::std::cell::RefCell<::grpc::client::GrpcClient>");
         });
 
         w.write_line("");
 
-        w.impl_self_block(&self.client_name(), |w| {
+        w.impl_self_block(&self.sync_client_name(), |w| {
             w.pub_fn("new(host: &str, port: u16) -> Self", |w| {
-                w.expr_block("GreeterClient", |w| {
+                w.expr_block(&self.sync_client_name(), |w| {
                     w.field_entry("grpc_client", "::std::cell::RefCell::new(::grpc::client::GrpcClient::new(host, port))");
                 });
             });
@@ -126,26 +174,54 @@ impl<'a> ServiceGen<'a> {
 
         w.write_line("");
 
-        w.impl_for_block(self.intf_name(), &self.client_name(), |w| {
+        w.impl_for_block(self.sync_intf_name(), &self.sync_client_name(), |w| {
             for (i, method) in self.methods.iter().enumerate() {
                 if i != 0 {
                     w.write_line("");
                 }
 
-                method.write_client(w);
+                method.write_sync_client(w);
+            }
+        });
+    }
+
+    fn write_async_client(&self, w: &mut CodeWriter) {
+        w.pub_struct(&self.async_client_name(), |w| {
+            w.field_decl("grpc_client_async", "::grpc::client_async::GrpcClientAsync");
+        });
+
+        w.write_line("");
+
+        w.impl_self_block(&self.async_client_name(), |w| {
+            w.pub_fn("new(host: &str, port: u16) -> Self", |w| {
+                w.expr_block(&self.async_client_name(), |w| {
+                    w.field_entry("grpc_client_async", "::grpc::client_async::GrpcClientAsync::new(host, port)");
+                });
+            });
+        });
+
+        w.write_line("");
+
+        w.impl_for_block(self.async_intf_name(), &self.async_client_name(), |w| {
+            for (i, method) in self.methods.iter().enumerate() {
+                if i != 0 {
+                    w.write_line("");
+                }
+
+                method.write_async_client(w);
             }
         });
     }
 
     fn write_server(&self, w: &mut CodeWriter) {
-        w.pub_struct(&self.server_name(), |w| {
+        w.pub_struct(&self.sync_server_name(), |w| {
             w.field_decl("server", "::grpc::server::GrpcServer");
         });
 
         w.write_line("");
 
-        w.impl_self_block(&self.server_name(), |w| {
-            w.pub_fn(format!("new<H : {} + 'static + Sync + Send>(h: H) -> {}", self.intf_name(), self.server_name()), |w| {
+        w.impl_self_block(&self.sync_server_name(), |w| {
+            w.pub_fn(format!("new<H : {} + 'static + Sync + Send>(h: H) -> {}", self.sync_intf_name(), self.sync_server_name()), |w| {
                 w.write_line("let handler_arc = ::std::sync::Arc::new(h);");
                 w.block("let service_definition = ::std::sync::Arc::new(::grpc::method::ServerServiceDefinition::new(", "));", |w| {
                     w.block("vec![", "],", |w| {
@@ -161,7 +237,7 @@ impl<'a> ServiceGen<'a> {
                     });
                 });
 
-                w.expr_block(self.server_name(), |w| {
+                w.expr_block(self.sync_server_name(), |w| {
                     w.field_entry("server", "::grpc::server::GrpcServer::new(service_definition)");
                 });
             });
@@ -175,9 +251,21 @@ impl<'a> ServiceGen<'a> {
     }
 
     fn write(&self, w: &mut CodeWriter) {
-        self.write_intf(w);
+        w.comment("interface");
         w.write_line("");
-        self.write_client(w);
+        self.write_sync_intf(w);
+        w.write_line("");
+        self.write_async_intf(w);
+        w.write_line("");
+        w.comment("sync client");
+        w.write_line("");
+        self.write_sync_client(w);
+        w.write_line("");
+        w.comment("async client");
+        w.write_line("");
+        self.write_async_client(w);
+        w.write_line("");
+        w.comment("sync server");
         w.write_line("");
         self.write_server(w);
     }

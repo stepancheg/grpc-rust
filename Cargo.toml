@@ -3,12 +3,12 @@
 name = "grpc"
 version = "0.0.1"
 
-[dependencies.solicit]
-git = "http://github.com/mlalic/solicit.git"
-
-[dependencies.protobuf]
-#git = "http://github.com/stepancheg/rust-protobuf"
-path = "../rust-protobuf"
+[dependencies]
+solicit     = { git = "http://github.com/mlalic/solicit.git" }
+protobuf    = { path = "../rust-protobuf" }
+#               git = "http://github.com/stepancheg/rust-protobuf"
+futures     = { git = "https://github.com/alexcrichton/futures-rs" }
+futures-mio = { git = "https://github.com/alexcrichton/futures-rs" }
 
 [[bin]]
 
