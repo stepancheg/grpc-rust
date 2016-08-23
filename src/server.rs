@@ -324,7 +324,7 @@ pub struct GrpcServer {
 impl GrpcServer {
     pub fn new(service_definition: Arc<ServerServiceDefinition>) -> GrpcServer {
         GrpcServer {
-            listener: TcpListener::bind("127.0.0.1:50051").unwrap(),
+            listener: TcpListener::bind("[::1]:50051").unwrap(),
             service_definition: service_definition,
         }
     }

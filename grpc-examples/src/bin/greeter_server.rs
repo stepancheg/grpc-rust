@@ -12,6 +12,7 @@ impl Greeter for GreeterImpl {
     fn SayHello(&self, req: HelloRequest) -> GrpcResult<HelloReply> {
         let mut r = HelloReply::new();
         let name = if req.get_name().is_empty() { "world" } else { req.get_name() };
+        println!("greeting request from {}", name);
         r.set_message(format!("Hello {}", name));
         Ok(r)
     }

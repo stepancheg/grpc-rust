@@ -6,5 +6,6 @@ authors = ["Stepan Koltsov <stepan.koltsov@gmail.com>"]
 [dependencies.grpc]
 path = ".."
 
-[dependencies.protobuf]
-path = "../../rust-protobuf"
+[dependencies]
+protobuf    = { path = "../../rust-protobuf" }
+futures     = { git = "https://github.com/alexcrichton/futures-rs" }

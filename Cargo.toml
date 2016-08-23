@@ -8,6 +8,7 @@ solicit     = { git = "http://github.com/mlalic/solicit.git" }
 protobuf    = { path = "../rust-protobuf" }
 #               git = "http://github.com/stepancheg/rust-protobuf"
 futures     = { git = "https://github.com/alexcrichton/futures-rs" }
+futures-io =  { git = "https://github.com/alexcrichton/futures-rs" }
 futures-mio = { git = "https://github.com/alexcrichton/futures-rs" }
 
 [[bin]]

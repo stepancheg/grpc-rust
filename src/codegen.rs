@@ -159,7 +159,7 @@ impl<'a> ServiceGen<'a> {
 
     fn write_sync_client(&self, w: &mut CodeWriter) {
         w.pub_struct(&self.sync_client_name(), |w| {
-            w.field_decl("grpc_client", "::std::cell::RefCell<::grpc::client::GrpcClient>");
+            w.field_decl("grpc_client", "::std::cell::RefCell<::grpc::client_sync::GrpcClient>");
         });
 
         w.write_line("");
@@ -167,7 +167,7 @@ impl<'a> ServiceGen<'a> {
         w.impl_self_block(&self.sync_client_name(), |w| {
             w.pub_fn("new(host: &str, port: u16) -> Self", |w| {
                 w.expr_block(&self.sync_client_name(), |w| {
-                    w.field_entry("grpc_client", "::std::cell::RefCell::new(::grpc::client::GrpcClient::new(host, port))");
+                    w.field_entry("grpc_client", "::std::cell::RefCell::new(::grpc::client_sync::GrpcClient::new(host, port))");
                 });
             });
         });

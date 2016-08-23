@@ -31,13 +31,13 @@ pub trait GreeterAsync {
 // sync client
 
 pub struct GreeterClient {
-    grpc_client: ::std::cell::RefCell<::grpc::client::GrpcClient>,
+    grpc_client: ::std::cell::RefCell<::grpc::client_sync::GrpcClient>,
 }
 
 impl GreeterClient {
     pub fn new(host: &str, port: u16) -> Self {
         GreeterClient {
-            grpc_client: ::std::cell::RefCell::new(::grpc::client::GrpcClient::new(host, port)),
+            grpc_client: ::std::cell::RefCell::new(::grpc::client_sync::GrpcClient::new(host, port)),
         }
     }
 }
