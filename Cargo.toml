@@ -2,6 +2,10 @@
 
 name = "grpc"
 version = "0.0.1"
+description = "Rust implementation of gRPC"
+repository = "https://github.com/stepancheg/grpc-rust"
+readme = "README.md"
+keywords = ["grpc"]
 
 [dependencies]
 solicit     = { git = "http://github.com/mlalic/solicit.git" }
