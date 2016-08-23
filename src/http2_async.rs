@@ -1,5 +1,6 @@
 use std::io;
 use std::io::Read;
+use std::io::Write;
 
 use futures::Future;
 use futures::failed;
@@ -13,6 +14,7 @@ use futures_mio::TcpStream;
 use solicit::http::frame::RawFrame;
 use solicit::http::connection::HttpFrame;
 use solicit::http::frame::unpack_header;
+use solicit::http::transport::TransportStream;
 
 use result::GrpcError;
 
@@ -63,6 +65,7 @@ pub fn initial(conn: TcpStream) -> GrpcFuture<TcpStream> {
 
     let write_preface = write_all(conn, preface).map_err(|_| GrpcError::Other);
 
+    /*
     let settings = write_preface.and_then(|(conn, _)| {
         recv_raw_frame(conn)
     });
@@ -75,6 +78,38 @@ pub fn initial(conn: TcpStream) -> GrpcFuture<TcpStream> {
 
         conn
     });
+    */
+
+    let done = write_preface.map(|(conn, _)| conn);
 
     done.boxed()
+}
+
+// https://github.com/mlalic/solicit/pull/31
+pub struct VecAsTransportStream(pub Vec<u8>);
+
+impl Read for VecAsTransportStream {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        unimplemented!()
+    }
+}
+
+impl Write for VecAsTransportStream {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.0.write(buf)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+impl TransportStream for VecAsTransportStream {
+    fn try_split(&self) -> io::Result<Self> {
+        unimplemented!()
+    }
+
+    fn close(&mut self) -> io::Result<()> {
+        Ok(())
+    }
 }

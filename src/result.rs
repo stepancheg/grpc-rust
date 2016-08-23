@@ -8,3 +8,10 @@ pub enum GrpcError {
 }
 
 pub type GrpcResult<T> = Result<T, GrpcError>;
+
+
+impl From<io::Error> for GrpcError {
+    fn from(err: io::Error) -> Self {
+        GrpcError::Io(err)
+    }
+}

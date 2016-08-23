@@ -89,7 +89,7 @@ impl GrpcClient {
             -> HttpResult<StreamId>
     {
         let stream = self.new_stream(method, path, extras, body);
-        let stream_id = try!(self.conn.start_request(stream, &mut self.receiver));
+        let stream_id = try!(self.conn.start_request(stream, &mut self.sender));
         self.conn.state.get_stream_mut(stream_id).unwrap().stream_id = Some(stream_id);
 
         while let SendStatus::Sent = try!(self.conn.send_next_data(&mut self.sender)) {

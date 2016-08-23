@@ -1,8 +1,10 @@
+use std::io;
 use std::thread;
 use std::net::SocketAddr;
 use std::net::ToSocketAddrs;
 use std::iter::repeat;
 use std::cell::RefCell;
+use std::sync::Mutex;
 
 use futures::Future;
 use futures::stream;
@@ -17,6 +19,7 @@ use futures::task::TaskData;
 use futures::done;
 use futures::empty;
 
+use futures_io;
 use futures_io::write_all;
 use futures_io::TaskIo;
 use futures_io::TaskIoRead;
@@ -55,8 +58,12 @@ use channel_sync_sender::channel_sync_sender;
 use method::MethodDescriptor;
 use result::GrpcError;
 
+use futuresx::*;
+
+use grpc::*;
 use http2_async::*;
 use io_misc::*;
+use misc::*;
 
 
 pub struct GrpcClientAsync {
@@ -121,6 +128,8 @@ struct ReadWriteSharedState {
     conn: ClientConnection,
 }
 
+unsafe impl Sync for ReadWriteSharedState {}
+
 impl ReadWriteSharedState {
     fn new_stream<'n, 'v>(
         &self,
@@ -142,9 +151,7 @@ impl ReadWriteSharedState {
             Header::new(b":authority", self.host.clone().into_bytes()),
             Header::new(b":scheme", self.conn.scheme().as_bytes().to_vec()),
         ];
-        // The clone is lightweight if the original Header was just borrowing something; it's a
-        // deep copy if it was already owned. Consider requiring that this method gets an iterator
-        // of Headers...
+
         headers.extend(extras.iter().cloned());
 
         RequestStream {
@@ -154,52 +161,46 @@ impl ReadWriteSharedState {
     }
 }
 
-fn run_read(read: TaskIoRead<TcpStream>, shared: TaskData<RefCell<ReadWriteSharedState>>) -> GrpcFuture<()> {
+fn run_read(read: TaskIoRead<TcpStream>, shared: TaskDataMutex<ReadWriteSharedState>) -> GrpcFuture<()> {
     empty().boxed()
 }
 
 fn run_write(
     write: TaskIoWrite<TcpStream>,
-    shared: TaskData<RefCell<ReadWriteSharedState>>,
+    shared: TaskDataMutex<ReadWriteSharedState>,
     rx: Receiver<Box<CallRequest>, GrpcError>)
         -> GrpcFuture<()>
 {
-    // TODO: somewhat weird
-    let shareds = stream::iter(repeat(shared).map(|s| Ok(s)));;
-    let stream = rx.zip(shareds).and_then(|(req, shared)| {
-        let stream_id = shared.with(|shared| {
-            let stream = shared.borrow().new_stream(
+    println!("run_write");
+
+    let stream = rx.fold((write, shared), |(write, shared), req| {
+        println!("got req");
+
+        let buf = shared.with(|shared| {
+            let mut body = Vec::new();
+            write_frame(&mut body, &req.write_req());
+            let stream = shared.new_stream(
                 b"POST",
                 req.method_name().as_bytes(),
                 &[],
-                Some(req.write_req()));
-            let stream_id = shared.borrow_mut().conn.state.insert_outgoing(stream.stream);
+                Some(body));
 
-            //let headers_fragment = shared.borrow_mut().conn.conn
-            //                           .encoder
-            //                           .encode(stream.headers.into().iter().map(|h| (h.name(), h.value())));
-            // For now, sending header fragments larger than 16kB is not supported
-            // (i.e. the encoded representation cannot be split into CONTINUATION
-            // frames).
-//            let mut frame = HeadersFrame::new(headers_fragment, stream_id);
-//            frame.set_flag(HeadersFlag::EndHeaders);
-//
-//            if end_stream == EndStream::Yes {
-//                frame.set_flag(HeadersFlag::EndStream);
-//            }
+            let mut buf = VecAsTransportStream(Vec::new());
 
-            stream_id;
+            let stream_id = shared.conn.start_request(stream, &mut buf).unwrap();
+            while let SendStatus::Sent = shared.conn.send_next_data(&mut buf).unwrap() {
+            }
+
+            buf.0
         });
 
-        // TODO: I AM HERE
-        //self.conn.sender(sender).send_headers(req.headers, stream_id, end_stream)
-        //shared.borrow_mut().conn.state.get_stream_mut(stream_id).unwrap().stream_id = Some(stream_id);
-        //while let SendStatus::Sent = try!(self.conn.send_next_data(&mut self.sender)) {
-        //}
+        println!("write_all {:?}", BsDebug(&buf));
 
-        empty::<(), GrpcError>()
+        futures_io::write_all(write, buf)
+            .map(|(write, _)| (write, shared))
+            .map(|x| { println!("written"); x })
     });
-    stream.fold((), |_, _| done::<(), GrpcError>(Ok(()))).boxed()
+    stream.map(|_| ()).boxed()
 }
 
 fn run_event_loop(socket_addr: SocketAddr, rx: Receiver<Box<CallRequest>, GrpcError>) {
@@ -217,11 +218,12 @@ fn run_event_loop(socket_addr: SocketAddr, rx: Receiver<Box<CallRequest>, GrpcEr
 
         let conn = ClientConnection::with_connection(conn, state);
 
-        let shared_for_read = TaskData::new(RefCell::new(ReadWriteSharedState {
+        let shared_for_read = TaskDataMutex::new(ReadWriteSharedState {
             host: "localhost".to_string(), // TODO
             conn: conn,
-        }));
+        });
         let shared_for_write = shared_for_read.clone();
+        println!("about to run_write+run_read");
         run_read(read, shared_for_read)
             .join(run_write(write, shared_for_write, rx))
                 .map_err(|e| io_error_other("todo"))
