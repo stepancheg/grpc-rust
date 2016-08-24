@@ -44,7 +44,7 @@ impl GreeterClient {
 
 impl Greeter for GreeterClient {
     fn SayHello(&self, p: super::helloworld::HelloRequest) -> ::grpc::result::GrpcResult<super::helloworld::HelloReply> {
-        ::grpc::futuresx::wait2(self.async_client.SayHello(p))
+        ::futures::Future::wait(self.async_client.SayHello(p))
     }
 }
 
@@ -82,7 +82,7 @@ pub struct GreeterServer {
 }
 
 impl GreeterServer {
-    pub fn new<H : Greeter + 'static + Sync + Send>(h: H) -> GreeterServer {
+    pub fn new<H : Greeter + 'static + Sync + Send>(h: H) -> Self {
         let handler_arc = ::std::sync::Arc::new(h);
         let service_definition = ::std::sync::Arc::new(::grpc::method::ServerServiceDefinition::new(
             vec![
@@ -108,5 +108,15 @@ impl GreeterServer {
 
     pub fn run(&mut self) {
         self.server.run()
+    }
+}
+
+pub struct GreeterAsyncServer {
+}
+
+impl GreeterAsyncServer {
+    pub fn new<H : GreeterAsync + 'static + Sync + Send>(h: H) -> Self {
+        GreeterAsyncServer {
+        }
     }
 }

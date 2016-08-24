@@ -49,18 +49,13 @@ impl<'a> MethodGen<'a> {
     }
 
     fn write_sync_client(&self, w: &mut CodeWriter) {
-        let input = self.root_scope.find_message(self.proto.get_input_type()).rust_fq_name();
-        let output = self.root_scope.find_message(self.proto.get_output_type()).rust_fq_name();
-
         w.def_fn(&self.sync_sig(), |w| {
-            w.write_line(&format!("::grpc::futuresx::wait2(self.async_client.{}(p))", self.proto.get_name()));
+            // https://github.com/alexcrichton/futures-rs/issues/97
+            w.write_line(&format!("::futures::Future::wait(self.async_client.{}(p))", self.proto.get_name()));
         });
     }
 
     fn write_async_client(&self, w: &mut CodeWriter) {
-        let input = self.root_scope.find_message(self.proto.get_input_type()).rust_fq_name();
-        let output = self.root_scope.find_message(self.proto.get_output_type()).rust_fq_name();
-
         w.def_fn(&self.async_sig(), |w| {
             self.write_method_descriptor(w,
                 &format!("let method: ::grpc::method::MethodDescriptor<{}, {}> = ", self.input(), self.output()),
@@ -210,7 +205,7 @@ impl<'a> ServiceGen<'a> {
         });
     }
 
-    fn write_server(&self, w: &mut CodeWriter) {
+    fn write_sync_server(&self, w: &mut CodeWriter) {
         w.pub_struct(&self.sync_server_name(), |w| {
             w.field_decl("server", "::grpc::server::GrpcServer");
         });
@@ -218,7 +213,7 @@ impl<'a> ServiceGen<'a> {
         w.write_line("");
 
         w.impl_self_block(&self.sync_server_name(), |w| {
-            w.pub_fn(format!("new<H : {} + 'static + Sync + Send>(h: H) -> {}", self.sync_intf_name(), self.sync_server_name()), |w| {
+            w.pub_fn(format!("new<H : {} + 'static + Sync + Send>(h: H) -> Self", self.sync_intf_name()), |w| {
                 w.write_line("let handler_arc = ::std::sync::Arc::new(h);");
                 w.block("let service_definition = ::std::sync::Arc::new(::grpc::method::ServerServiceDefinition::new(", "));", |w| {
                     w.block("vec![", "],", |w| {
@@ -247,6 +242,20 @@ impl<'a> ServiceGen<'a> {
         });
     }
 
+    fn write_async_server(&self, w: &mut CodeWriter) {
+        w.pub_struct(&self.async_server_name(), |w| {
+        });
+
+        w.write_line("");
+
+        w.impl_self_block(&self.async_server_name(), |w| {
+            w.pub_fn(format!("new<H : {} + 'static + Sync + Send>(h: H) -> Self", self.async_intf_name()), |w| {
+                w.expr_block(self.async_server_name(), |w| {
+                });
+            });
+        });
+    }
+
     fn write(&self, w: &mut CodeWriter) {
         w.comment("interface");
         w.write_line("");
@@ -264,7 +273,9 @@ impl<'a> ServiceGen<'a> {
         w.write_line("");
         w.comment("sync server");
         w.write_line("");
-        self.write_server(w);
+        self.write_sync_server(w);
+        w.write_line("");
+        self.write_async_server(w);
     }
 }
 

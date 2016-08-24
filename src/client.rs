@@ -1,10 +1,7 @@
-use std::io;
 use std::thread;
 use std::net::SocketAddr;
 use std::net::ToSocketAddrs;
 use std::iter::repeat;
-use std::cell::RefCell;
-use std::sync::Mutex;
 
 use futures::Future;
 use futures::stream;
@@ -13,11 +10,7 @@ use futures::stream::channel;
 use futures::stream::Sender;
 use futures::stream::Receiver;
 use futures::oneshot;
-use futures::Oneshot;
 use futures::Complete;
-use futures::task::TaskData;
-use futures::done;
-use futures::empty;
 
 use futures_io;
 use futures_io::write_all;
@@ -67,6 +60,7 @@ use futuresx::*;
 
 use grpc::*;
 use http2_async::*;
+use solicit_misc::*;
 use io_misc::*;
 use misc::*;
 

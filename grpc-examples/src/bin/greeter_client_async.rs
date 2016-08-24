@@ -2,13 +2,10 @@ extern crate grpc_examples;
 extern crate grpc;
 extern crate futures;
 
-use grpc::futures_grpc::GrpcFuture;
-
 use grpc_examples::helloworld_grpc::*;
 use grpc_examples::helloworld::*;
 
-use futures::BoxFuture;
-use futures::Future;
+use futures::Future as _Future;
 
 use std::env;
 

@@ -1,11 +1,9 @@
 use std::io;
 use std::io::Read;
 use std::io::Write;
-use std::mem;
 
 use futures::Future;
 use futures::BoxFuture;
-use futures::failed;
 
 use futures::stream::Stream;
 use futures::stream::BoxStream;
@@ -14,7 +12,6 @@ use futures_io::read_exact;
 use futures_io::write_all;
 use futures_mio::TcpStream;
 
-use solicit::http::HttpResult;
 use solicit::http::HttpError;
 use solicit::http::frame::RawFrame;
 use solicit::http::frame::FrameIR;
@@ -22,11 +19,6 @@ use solicit::http::frame::unpack_header;
 use solicit::http::frame::settings::SettingsFrame;
 use solicit::http::frame::settings::HttpSetting;
 use solicit::http::connection::HttpFrame;
-use solicit::http::connection::ReceiveFrame;
-use solicit::http::connection::SendFrame;
-use solicit::http::transport::TransportStream;
-
-use io_misc::*;
 
 
 pub type HttpFuture<T> = BoxFuture<T, HttpError>;
@@ -118,42 +110,3 @@ pub fn initial(conn: TcpStream) -> HttpFuture<TcpStream> {
     done.boxed()
 }
 
-
-pub struct OnceReceiveFrame {
-    raw_frame: RawFrame<'static>,
-    used: bool,
-}
-
-impl OnceReceiveFrame {
-    pub fn new(raw_frame: RawFrame<'static>) -> OnceReceiveFrame {
-        OnceReceiveFrame {
-            raw_frame: raw_frame,
-            used: false,
-        }
-    }
-}
-
-impl ReceiveFrame for OnceReceiveFrame {
-    fn recv_frame(&mut self) -> HttpResult<HttpFrame> {
-        assert!(!self.used);
-        self.used = true;
-        let r = HttpFrame::from_raw(&self.raw_frame);
-        if let Some(f) = r.as_ref().ok() {
-        }
-        r
-    }
-}
-
-pub struct VecSendFrame(pub Vec<u8>);
-
-impl SendFrame for VecSendFrame {
-    fn send_frame<F : FrameIR>(&mut self, frame: F) -> HttpResult<()> {
-        let pos = self.0.len();
-        let mut cursor = io::Cursor::new(mem::replace(&mut self.0, Vec::new()));
-        cursor.set_position(pos as u64);
-        try!(frame.serialize_into(&mut cursor));
-        self.0 = cursor.into_inner();
-
-        Ok(())
-    }
-}

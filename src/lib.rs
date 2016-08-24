@@ -19,3 +19,4 @@ mod http2_async;
 mod io_misc;
 pub mod futuresx;
 mod misc;
+mod solicit_misc;

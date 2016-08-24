@@ -37,16 +37,9 @@ use solicit::http::transport::TransportReceiveFrame;
 use grpc;
 use method::ServerServiceDefinition;
 
+use solicit_misc::*;
 use misc::*;
 
-struct HeaderDebug<'a>(&'a Header<'a, 'a>);
-
-impl<'a> fmt::Debug for HeaderDebug<'a> {
-	fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-	    write!(fmt, "Header {{ name: {:?}, value: {:?} }}",
-	    	BsDebug(self.0.name()), BsDebug(self.0.value()))
-	}
-}
 
 struct GrpcStream {
     stream_id: Option<StreamId>,

@@ -1,5 +1,3 @@
-use std::marker;
-
 use marshall::Marshaller;
 
 use protobuf::Message;
@@ -18,7 +16,7 @@ impl<M : Message + MessageStatic> Marshaller<M> for MarshallerProtobuf {
         let mut is = CodedInputStream::from_bytes(buf);
         let mut r: M = M::new();
         r.merge_from(&mut is).unwrap();
-        r.check_initialized();
+        r.check_initialized().unwrap(); // TODO
         r
     }
 }
