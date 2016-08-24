@@ -56,10 +56,10 @@ use channel_sync_sender::channel_sync_sender;
 use method::MethodDescriptor;
 use result::GrpcError;
 
-use futuresx::*;
+use futures_misc::*;
 
 use grpc::*;
-use http2_async::*;
+use solicit_async::*;
 use solicit_misc::*;
 use io_misc::*;
 use misc::*;
@@ -104,7 +104,7 @@ impl GrpcClient {
         let socket_addr = (host, port).to_socket_addrs().unwrap().next().unwrap();
 
         thread::spawn(move || {
-            run_event_loop(socket_addr, rx);
+            run_client_event_loop(socket_addr, rx);
         });
 
         let r = GrpcClient {
@@ -127,21 +127,21 @@ impl GrpcClient {
     }
 }
 
-struct GrpcHttp2Stream {
+struct GrpcHttp2ClientStream {
     stream: DefaultStream,
     call: Option<Box<CallRequest>>,
 }
 
-impl GrpcHttp2Stream {
-    fn new() -> GrpcHttp2Stream {
-        GrpcHttp2Stream {
+impl GrpcHttp2ClientStream {
+    fn new() -> GrpcHttp2ClientStream {
+        GrpcHttp2ClientStream {
             stream: DefaultStream::new(),
             call: None,
         }
     }
 }
 
-impl solicit_Stream for GrpcHttp2Stream {
+impl solicit_Stream for GrpcHttp2ClientStream {
     fn new_data_chunk(&mut self, data: &[u8]) {
         self.stream.new_data_chunk(data)
     }
@@ -154,7 +154,7 @@ impl solicit_Stream for GrpcHttp2Stream {
         //println!("set_state: {:?}", state);
         if state == StreamState::Closed {
             //println!("response body: {:?}", BsDebug(&self.stream.body));
-            let message_serialized = parse_frame_completely(&self.stream.body).unwrap();
+            let message_serialized = parse_grpc_frame_completely(&self.stream.body).unwrap();
             self.call.as_mut().unwrap().complete(message_serialized);
         }
         self.stream.set_state(state)
@@ -169,23 +169,23 @@ impl solicit_Stream for GrpcHttp2Stream {
     }
 }
 
-struct ReadWriteSharedState {
+struct ClientSharedState {
     host: String,
-    conn: ClientConnection<DefaultSessionState<Client, GrpcHttp2Stream>>,
+    conn: ClientConnection<DefaultSessionState<Client, GrpcHttp2ClientStream>>,
 }
 
-unsafe impl Sync for ReadWriteSharedState {}
+unsafe impl Sync for ClientSharedState {}
 
-impl ReadWriteSharedState {
+impl ClientSharedState {
     fn new_stream<'n, 'v>(
         &self,
         method: &'v [u8],
         path: &'v [u8],
         extras: &[Header<'n, 'v>],
         body: Option<Vec<u8>>)
-            -> RequestStream<'n, 'v, GrpcHttp2Stream>
+            -> RequestStream<'n, 'v, GrpcHttp2ClientStream>
     {
-        let mut stream = GrpcHttp2Stream::new();
+        let mut stream = GrpcHttp2ClientStream::new();
         match body {
             Some(body) => stream.stream.set_full_data(body),
             None => stream.close_local(),
@@ -209,10 +209,10 @@ impl ReadWriteSharedState {
 
 fn run_read(
     read: TaskIoRead<TcpStream>,
-    shared: TaskDataMutex<ReadWriteSharedState>)
+    shared: TaskDataMutex<ClientSharedState>)
         -> GrpcFuture<()>
 {
-    let stream = stream::iter(repeat(()).map(|x| Ok(x)));
+    let stream = stream_repeat(());
 
     let future = stream.fold((read, shared), |(read, shared), _| {
         recv_raw_frame(read).map(|(read, raw_frame)| {
@@ -241,9 +241,9 @@ fn run_read(
 
 fn run_write(
     write: TaskIoWrite<TcpStream>,
-    shared: TaskDataMutex<ReadWriteSharedState>,
+    shared: TaskDataMutex<ClientSharedState>,
     rx: Receiver<Box<CallRequest>, GrpcError>)
-        -> GrpcFuture<()>
+    -> GrpcFuture<()>
 {
     let future = rx.fold((write, shared), |(write, shared), req| {
         let buf = shared.with(|shared| {
@@ -276,14 +276,16 @@ fn run_write(
     future.map(|_| ()).boxed()
 }
 
-fn run_event_loop(socket_addr: SocketAddr, rx: Receiver<Box<CallRequest>, GrpcError>) {
+fn run_client_event_loop(socket_addr: SocketAddr, rx: Receiver<Box<CallRequest>, GrpcError>) {
     let mut lp = Loop::new().unwrap();
 
     let connect = lp.handle().tcp_connect(&socket_addr);
 
-    let initial = connect.and_then(|conn| initial(conn).map_err(|_| io_error_other("connect")));
+    let handshake = connect.and_then(|conn| {
+        client_handshake(conn).map_err(|_| io_error_other("connect"))
+    });
 
-    let done = initial.and_then(|conn| {
+    let done = handshake.and_then(|conn| {
         let (read, write) = TaskIo::new(conn).split();
 
         let conn = HttpConnection::new(HttpScheme::Http);
@@ -291,7 +293,7 @@ fn run_event_loop(socket_addr: SocketAddr, rx: Receiver<Box<CallRequest>, GrpcEr
 
         let conn = ClientConnection::with_connection(conn, state);
 
-        let shared_for_read = TaskDataMutex::new(ReadWriteSharedState {
+        let shared_for_read = TaskDataMutex::new(ClientSharedState {
             host: "localhost".to_string(), // TODO
             conn: conn,
         });

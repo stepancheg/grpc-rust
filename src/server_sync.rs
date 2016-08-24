@@ -34,11 +34,106 @@ use solicit::http::session::StreamDataError;
 use solicit::http::transport::TransportStream;
 use solicit::http::transport::TransportReceiveFrame;
 
-use grpc;
-use method::ServerServiceDefinition;
-
+use grpc::*;
 use solicit_misc::*;
 use misc::*;
+use method::*;
+use result::GrpcResult;
+
+
+
+pub trait MethodHandlerSync<Req, Resp> {
+    fn handle(&self, req: Req) -> GrpcResult<Resp>;
+}
+
+pub struct MethodHandlerSyncEcho;
+
+impl<A> MethodHandlerSync<A, A> for MethodHandlerSyncEcho {
+    fn handle(&self, req: A) -> GrpcResult<A> {
+        println!("handle echo");
+        Ok(req)
+    }
+}
+
+pub struct MethodHandlerSyncFn<F> {
+    f: F
+}
+
+impl<F> MethodHandlerSyncFn<F> {
+    pub fn new<Req, Resp>(f: F)
+        -> Self
+        where F : Fn(Req) -> GrpcResult<Resp>
+    {
+        MethodHandlerSyncFn {
+            f: f,
+        }
+    }
+}
+
+impl<Req, Resp, F : Fn(Req) -> GrpcResult<Resp>> MethodHandlerSync<Req, Resp> for MethodHandlerSyncFn<F> {
+    fn handle(&self, req: Req) -> GrpcResult<Resp> {
+        (self.f)(req)
+    }
+}
+
+trait MethodHandlerDispatchSync {
+    fn on_message(&self, message: &[u8]) -> GrpcResult<Vec<u8>>;
+}
+
+struct MethodHandlerDispatchSyncImpl<Req, Resp> {
+    desc: MethodDescriptor<Req, Resp>,
+    method_handler: Box<MethodHandlerSync<Req, Resp> + Sync + Send>,
+}
+
+impl<Req, Resp> MethodHandlerDispatchSync for MethodHandlerDispatchSyncImpl<Req, Resp> {
+    fn on_message(&self, message: &[u8]) -> GrpcResult<Vec<u8>> {
+        let req = self.desc.req_marshaller.read(message);
+        let resp = try!(self.method_handler.handle(req));
+        Ok(self.desc.resp_marshaller.write(&resp))
+    }
+}
+
+pub struct ServerMethodSync {
+    name: String,
+    dispatch: Box<MethodHandlerDispatchSync + Sync + Send>,
+}
+
+impl ServerMethodSync {
+    pub fn new<Req : 'static, Resp : 'static, H : MethodHandlerSync<Req, Resp> + 'static + Sync + Send>(method: MethodDescriptor<Req, Resp>, handler: H) -> ServerMethodSync {
+        ServerMethodSync {
+            name: method.name.clone(),
+            dispatch: Box::new(MethodHandlerDispatchSyncImpl {
+                desc: method,
+                method_handler: Box::new(handler),
+            }),
+        }
+    }
+}
+
+pub struct ServerServiceDefinitionSync {
+    methods: Vec<ServerMethodSync>,
+}
+
+impl ServerServiceDefinitionSync {
+    pub fn new(mut methods: Vec<ServerMethodSync>) -> ServerServiceDefinitionSync {
+        ServerServiceDefinitionSync {
+            methods: methods,
+        }
+    }
+
+    pub fn find_method(&self, name: &str) -> &ServerMethodSync {
+        self.methods.iter()
+            .filter(|m| m.name == name)
+            .next()
+            .expect(&format!("unknown method: {}", name))
+    }
+
+    pub fn handle_method(&self, name: &str, message: &[u8]) -> GrpcResult<Vec<u8>> {
+        self.find_method(name).dispatch.on_message(message)
+    }
+}
+
+
 
 
 struct GrpcStream {
@@ -50,12 +145,12 @@ struct GrpcStream {
 
     req_buf: Vec<u8>,
     resp_buf: Vec<u8>,
-    service_definition: Arc<ServerServiceDefinition>,
+    service_definition: Arc<ServerServiceDefinitionSync>,
     path: String,
 }
 
 impl GrpcStream {
-    fn with_id(stream_id: StreamId, service_definition: Arc<ServerServiceDefinition>) -> Self {
+    fn with_id(stream_id: StreamId, service_definition: Arc<ServerServiceDefinitionSync>) -> Self {
         println!("new stream {}", stream_id);
         GrpcStream {
             stream_id: Some(stream_id),
@@ -72,7 +167,7 @@ impl GrpcStream {
 
     fn process_buf(&mut self) {
         loop {
-            let (r, pos) = match grpc::parse_frame(&self.req_buf) {
+            let (r, pos) = match parse_grpc_frame(&self.req_buf) {
                 Some((frame, pos)) => {
                     let r = self.service_definition.handle_method(&self.path, frame).unwrap();
                     (r, pos)
@@ -81,7 +176,7 @@ impl GrpcStream {
             };
 
             self.req_buf.drain(..pos);
-            grpc::write_grpc_frame(&mut self.resp_buf, &r);
+            write_grpc_frame(&mut self.resp_buf, &r);
         }
     }
 }
@@ -145,22 +240,8 @@ impl Stream for GrpcStream {
     }
 }
 
-/*
-struct GrpcSessionState {
-    default_state: DefaultSessionState,
-}
-
-impl GrpcSessionState {
-    fn new() -> Self {
-        GrpcSessionState {
-            default_state: DefaultSessionState::new(),
-        }
-    }
-}
-*/
-
 struct GrpcStreamFactory {
-    service_definition: Arc<ServerServiceDefinition>,
+    service_definition: Arc<ServerServiceDefinitionSync>,
 }
 
 impl StreamFactory for GrpcStreamFactory {
@@ -180,7 +261,7 @@ struct GrpcServerConnection {
 }
 
 impl GrpcServerConnection {
-    fn new(mut stream: TcpStream, service_definition: Arc<ServerServiceDefinition>) -> GrpcServerConnection {
+    fn new(mut stream: TcpStream, service_definition: Arc<ServerServiceDefinitionSync>) -> GrpcServerConnection {
         let mut preface = [0; 24];
 
         (&mut stream as &mut Read).read_exact(&mut preface).unwrap();
@@ -295,14 +376,14 @@ impl GrpcServerConnection {
 
 pub struct GrpcServer {
     listener: TcpListener,
-    service_definition: Arc<ServerServiceDefinition>,
+    service_definition: Arc<ServerServiceDefinitionSync>,
 }
 
 impl GrpcServer {
-    pub fn new(service_definition: Arc<ServerServiceDefinition>) -> GrpcServer {
+    pub fn new(service_definition: ServerServiceDefinitionSync) -> GrpcServer {
         GrpcServer {
             listener: TcpListener::bind("[::1]:50051").unwrap(),
-            service_definition: service_definition,
+            service_definition: Arc::new(service_definition),
         }
     }
 

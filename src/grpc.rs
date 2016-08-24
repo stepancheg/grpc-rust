@@ -2,7 +2,7 @@ use std::ptr;
 use std::mem;
 
 // return message and size consumed
-pub fn parse_frame(stream: &[u8]) -> Option<(&[u8], usize)> {
+pub fn parse_grpc_frame(stream: &[u8]) -> Option<(&[u8], usize)> {
     let header_len = 5;
     if stream.len() < header_len {
         return None;
@@ -25,8 +25,8 @@ pub fn parse_frame(stream: &[u8]) -> Option<(&[u8], usize)> {
     Some((&stream[header_len..end], end))
 }
 
-pub fn parse_frame_completely(stream: &[u8]) -> Option<&[u8]> {
-    match parse_frame(stream) {
+pub fn parse_grpc_frame_completely(stream: &[u8]) -> Option<&[u8]> {
+    match parse_grpc_frame(stream) {
         Some((bytes, pos)) if pos == stream.len() => Some(bytes),
         _ => None,
     }

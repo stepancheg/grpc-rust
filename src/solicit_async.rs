@@ -2,6 +2,7 @@ use std::io;
 use std::io::Read;
 use std::io::Write;
 
+use futures::done;
 use futures::Future;
 use futures::BoxFuture;
 
@@ -61,6 +62,25 @@ pub fn recv_raw_frame<R : Read + Send + 'static>(read: R) -> HttpFuture<(R, RawF
         .boxed()
 }
 
+pub fn recv_raw_frame_stream<R : Read + Send + 'static>(read: R) -> HttpStream<RawFrame<'static>> {
+    // https://users.rust-lang.org/t/futures-rs-how-to-generate-a-stream-from-futures/7020
+    panic!();
+}
+
+pub fn recv_settings_frame<R : Read + Send + 'static>(read: R) -> HttpFuture<(R, SettingsFrame)> {
+    recv_raw_frame(read)
+        .then(|result| {
+            result.and_then(|(read, raw_frame)| {
+                match HttpFrame::from_raw(&raw_frame) {
+                    Ok(HttpFrame::SettingsFrame(f)) => Ok((read, f)),
+                    Ok(_) => Err(HttpError::InvalidFrame),
+                    Err(e) => Err(e),
+                }
+            })
+        })
+        .boxed()
+}
+
 pub fn send_raw_frame<W : Write + Send + 'static>(write: W, frame: RawFrame<'static>) -> HttpFuture<W> {
     let bytes = frame.serialize();
     write_all(write, bytes)
@@ -78,14 +98,14 @@ pub fn send_frame<W : Write + Send + 'static, F : FrameIR>(write: W, frame: F) -
         .boxed()
 }
 
-pub fn initial(conn: TcpStream) -> HttpFuture<TcpStream> {
-    let preface = b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
+static PREFACE: &'static [u8] = b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
 
-    let write_preface = write_all(conn, preface)
+pub fn client_handshake(conn: TcpStream) -> HttpFuture<TcpStream> {
+    let send_preface = write_all(conn, PREFACE)
         .map(|(conn, _)| conn)
         .map_err(|e| e.into());
 
-    let write_settings = write_preface.and_then(|conn| {
+    let send_settings = send_preface.and_then(|conn| {
         let settings = {
             let mut frame = SettingsFrame::new();
             frame.add_setting(HttpSetting::EnablePush(0));
@@ -94,15 +114,8 @@ pub fn initial(conn: TcpStream) -> HttpFuture<TcpStream> {
         send_frame(conn, settings)
     });
 
-    let recv_settings = write_settings.and_then(|conn| {
-        recv_raw_frame(conn).map(|(conn, settings_raw)| {
-            match HttpFrame::from_raw(&settings_raw).unwrap() {
-                HttpFrame::SettingsFrame(..) => (),
-                _ => panic!("expecting settings frame"),
-            };
-
-            conn
-        })
+    let recv_settings = send_settings.and_then(|conn| {
+        recv_settings_frame(conn).map(|(conn, _)| conn)
     });
 
     let done = recv_settings;
@@ -110,3 +123,31 @@ pub fn initial(conn: TcpStream) -> HttpFuture<TcpStream> {
     done.boxed()
 }
 
+pub fn server_handshake(conn: TcpStream) -> HttpFuture<TcpStream> {
+    let mut preface_buf = Vec::with_capacity(PREFACE.len());
+    preface_buf.resize(PREFACE.len(), 0);
+    let recv_preface = read_exact(conn, preface_buf)
+        .map_err(|e| e.into())
+        .and_then(|(conn, preface_buf)| {
+            done(if preface_buf == PREFACE {
+                Ok((conn))
+            } else {
+                Err(HttpError::InvalidFrame)
+            })
+        });
+
+    let recv_settings = recv_preface.and_then(|conn| {
+        recv_settings_frame(conn).map(|(conn, _)| conn)
+    });
+
+    let send_settings = recv_settings.and_then(|conn| {
+        let settings = {
+            let mut frame = SettingsFrame::new_ack();
+            frame.add_setting(HttpSetting::EnablePush(0));
+            frame
+        };
+        send_frame(conn, settings)
+    });
+
+    send_settings.boxed()
+}

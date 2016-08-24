@@ -207,7 +207,7 @@ impl<'a> ServiceGen<'a> {
 
     fn write_sync_server(&self, w: &mut CodeWriter) {
         w.pub_struct(&self.sync_server_name(), |w| {
-            w.field_decl("server", "::grpc::server::GrpcServer");
+            w.field_decl("server", "::grpc::server_sync::GrpcServer");
         });
 
         w.write_line("");
@@ -215,14 +215,14 @@ impl<'a> ServiceGen<'a> {
         w.impl_self_block(&self.sync_server_name(), |w| {
             w.pub_fn(format!("new<H : {} + 'static + Sync + Send>(h: H) -> Self", self.sync_intf_name()), |w| {
                 w.write_line("let handler_arc = ::std::sync::Arc::new(h);");
-                w.block("let service_definition = ::std::sync::Arc::new(::grpc::method::ServerServiceDefinition::new(", "));", |w| {
+                w.block("let service_definition = ::grpc::server_sync::ServerServiceDefinitionSync::new(", ");", |w| {
                     w.block("vec![", "],", |w| {
                         for method in &self.methods {
-                            w.block("::grpc::method::ServerMethod::new(", "),", |w| {
+                            w.block("::grpc::server_sync::ServerMethodSync::new(", "),", |w| {
                                 method.write_method_descriptor(w, "", ",");
                                 w.block("{", "},", |w| {
                                     w.write_line("let handler_copy = handler_arc.clone();");
-                                    w.write_line(format!("::grpc::method::MethodHandlerFn::new(move |p| handler_copy.{}(p))", method.proto.get_name()));
+                                    w.write_line(format!("::grpc::server_sync::MethodHandlerSyncFn::new(move |p| handler_copy.{}(p))", method.proto.get_name()));
                                 });
                             });
                         }
@@ -230,7 +230,7 @@ impl<'a> ServiceGen<'a> {
                 });
 
                 w.expr_block(self.sync_server_name(), |w| {
-                    w.field_entry("server", "::grpc::server::GrpcServer::new(service_definition)");
+                    w.field_entry("server", "::grpc::server_sync::GrpcServer::new(service_definition)");
                 });
             });
 
@@ -244,13 +244,30 @@ impl<'a> ServiceGen<'a> {
 
     fn write_async_server(&self, w: &mut CodeWriter) {
         w.pub_struct(&self.async_server_name(), |w| {
+            w.field_decl("grpc_server", "::grpc::server_async::GrpcServerAsync");
         });
 
         w.write_line("");
 
         w.impl_self_block(&self.async_server_name(), |w| {
-            w.pub_fn(format!("new<H : {} + 'static + Sync + Send>(h: H) -> Self", self.async_intf_name()), |w| {
+            w.pub_fn(format!("new<H : {} + 'static + Sync + Send>(port: u16, h: H) -> Self", self.async_intf_name()), |w| {
+                w.write_line("let handler_arc = ::std::sync::Arc::new(h);");
+                w.block("let service_definition = ::grpc::server_async::ServerServiceDefinitionAsync::new(", ");", |w| {
+                    w.block("vec![", "],", |w| {
+                        for method in &self.methods {
+                            w.block("::grpc::server_async::ServerMethodAsync::new(", "),", |w| {
+                                method.write_method_descriptor(w, "", ",");
+                                w.block("{", "},", |w| {
+                                    w.write_line("let handler_copy = handler_arc.clone();");
+                                    w.write_line(format!("::grpc::server_async::MethodHandlerAsyncFn::new(move |p| handler_copy.{}(p))", method.proto.get_name()));
+                                });
+                            });
+                        }
+                    });
+                });
+
                 w.expr_block(self.async_server_name(), |w| {
+                    w.field_entry("grpc_server", "::grpc::server_async::GrpcServerAsync::new(port, service_definition)");
                 });
             });
         });
@@ -274,6 +291,8 @@ impl<'a> ServiceGen<'a> {
         w.comment("sync server");
         w.write_line("");
         self.write_sync_server(w);
+        w.write_line("");
+        w.comment("async server");
         w.write_line("");
         self.write_async_server(w);
     }

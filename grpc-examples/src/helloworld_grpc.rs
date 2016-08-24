@@ -78,15 +78,15 @@ impl GreeterAsync for GreeterAsyncClient {
 // sync server
 
 pub struct GreeterServer {
-    server: ::grpc::server::GrpcServer,
+    server: ::grpc::server_sync::GrpcServer,
 }
 
 impl GreeterServer {
     pub fn new<H : Greeter + 'static + Sync + Send>(h: H) -> Self {
         let handler_arc = ::std::sync::Arc::new(h);
-        let service_definition = ::std::sync::Arc::new(::grpc::method::ServerServiceDefinition::new(
+        let service_definition = ::grpc::server_sync::ServerServiceDefinitionSync::new(
             vec![
-                ::grpc::method::ServerMethod::new(
+                ::grpc::server_sync::ServerMethodSync::new(
                     ::grpc::method::MethodDescriptor {
                         name: "/helloworld.Greeter/SayHello".to_string(),
                         client_streaming: false,
@@ -96,13 +96,13 @@ impl GreeterServer {
                     },
                     {
                         let handler_copy = handler_arc.clone();
-                        ::grpc::method::MethodHandlerFn::new(move |p| handler_copy.SayHello(p))
+                        ::grpc::server_sync::MethodHandlerSyncFn::new(move |p| handler_copy.SayHello(p))
                     },
                 ),
             ],
-        ));
+        );
         GreeterServer {
-            server: ::grpc::server::GrpcServer::new(service_definition),
+            server: ::grpc::server_sync::GrpcServer::new(service_definition),
         }
     }
 
@@ -111,12 +111,34 @@ impl GreeterServer {
     }
 }
 
+// async server
+
 pub struct GreeterAsyncServer {
+    grpc_server: ::grpc::server_async::GrpcServerAsync,
 }
 
 impl GreeterAsyncServer {
-    pub fn new<H : GreeterAsync + 'static + Sync + Send>(h: H) -> Self {
+    pub fn new<H : GreeterAsync + 'static + Sync + Send>(port: u16, h: H) -> Self {
+        let handler_arc = ::std::sync::Arc::new(h);
+        let service_definition = ::grpc::server_async::ServerServiceDefinitionAsync::new(
+            vec![
+                ::grpc::server_async::ServerMethodAsync::new(
+                    ::grpc::method::MethodDescriptor {
+                        name: "/helloworld.Greeter/SayHello".to_string(),
+                        client_streaming: false,
+                        server_streaming: false,
+                        req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+                        resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+                    },
+                    {
+                        let handler_copy = handler_arc.clone();
+                        ::grpc::server_async::MethodHandlerAsyncFn::new(move |p| handler_copy.SayHello(p))
+                    },
+                ),
+            ],
+        );
         GreeterAsyncServer {
+            grpc_server: ::grpc::server_async::GrpcServerAsync::new(port, service_definition),
         }
     }
 }

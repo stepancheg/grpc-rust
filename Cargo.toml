@@ -20,11 +20,6 @@ futures-mio = { git = "https://github.com/alexcrichton/futures-rs" }
 name = "protoc-gen-rust-grpc"
 test = false
 
-[[bin]]
-
-name = "temp-server"
-test = false
-
 [workspace]
 members = [
     "grpc-examples",

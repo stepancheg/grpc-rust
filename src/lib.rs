@@ -6,7 +6,8 @@ extern crate futures_mio;
 
 pub mod codegen;
 
-pub mod server;
+pub mod server_sync;
+pub mod server_async;
 pub mod client;
 mod grpc;
 pub mod method;
@@ -15,8 +16,8 @@ pub mod marshall;
 pub mod futures_grpc;
 pub mod result;
 mod channel_sync_sender;
-mod http2_async;
+mod solicit_async;
 mod io_misc;
-pub mod futuresx;
+mod futures_misc;
 mod misc;
 mod solicit_misc;
