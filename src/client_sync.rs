@@ -22,7 +22,7 @@ use solicit::http::HttpError;
 use std::net::TcpStream;
 
 use method::MethodDescriptor;
-use grpc::write_frame;
+use grpc::write_grpc_frame;
 use grpc::parse_frame;
 use grpc::parse_frame_completely;
 use result::GrpcResult;
@@ -127,7 +127,7 @@ impl GrpcClient {
         let req_serialized = method.req_marshaller.write(&req);
 
         let mut http_req_body = Vec::new();
-        write_frame(&mut http_req_body, &req_serialized);
+        write_grpc_frame(&mut http_req_body, &req_serialized);
 
         let stream_id = self.request(
             b"POST",

@@ -88,7 +88,7 @@ impl GrpcStream {
             };
 
             self.req_buf.drain(..pos);
-            grpc::write_frame(&mut self.resp_buf, &r);
+            grpc::write_grpc_frame(&mut self.resp_buf, &r);
         }
     }
 }

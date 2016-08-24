@@ -258,7 +258,7 @@ fn run_write(
 
         let buf = shared.with(|shared| {
             let mut body = Vec::new();
-            write_frame(&mut body, &req.write_req());
+            write_grpc_frame(&mut body, &req.write_req());
             let path = req.method_name().as_bytes().to_vec();
             let mut stream = shared.new_stream(
                 b"POST",

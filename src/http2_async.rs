@@ -17,8 +17,10 @@ use futures_mio::TcpStream;
 use solicit::http::HttpResult;
 use solicit::http::HttpError;
 use solicit::http::frame::RawFrame;
-use solicit::http::frame::unpack_header;
 use solicit::http::frame::FrameIR;
+use solicit::http::frame::unpack_header;
+use solicit::http::frame::settings::SettingsFrame;
+use solicit::http::frame::settings::HttpSetting;
 use solicit::http::connection::HttpFrame;
 use solicit::http::connection::ReceiveFrame;
 use solicit::http::connection::SendFrame;
@@ -67,10 +69,38 @@ pub fn recv_raw_frame<R : Read + Send + 'static>(read: R) -> HttpFuture<(R, RawF
         .boxed()
 }
 
+pub fn send_raw_frame<W : Write + Send + 'static>(write: W, frame: RawFrame<'static>) -> HttpFuture<W> {
+    let bytes = frame.serialize();
+    write_all(write, bytes)
+        .map(|(w, _)| w)
+        .map_err(|e| e.into())
+        .boxed()
+}
+
+pub fn send_frame<W : Write + Send + 'static, F : FrameIR>(write: W, frame: F) -> HttpFuture<W> {
+    let mut buf = io::Cursor::new(Vec::with_capacity(16));
+    frame.serialize_into(&mut buf).unwrap();
+    write_all(write, buf.into_inner())
+        .map(|(w, _)| w)
+        .map_err(|e| e.into())
+        .boxed()
+}
+
 pub fn initial(conn: TcpStream) -> HttpFuture<TcpStream> {
     let preface = b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
 
-    let write_preface = write_all(conn, preface).map_err(|e| e.into());
+    let write_preface = write_all(conn, preface)
+        .map(|(conn, _)| conn)
+        .map_err(|e| e.into());
+
+    let write_settings = write_preface.and_then(|conn| {
+        let settings = {
+            let mut frame = SettingsFrame::new();
+            frame.add_setting(HttpSetting::EnablePush(0));
+            frame
+        };
+        send_frame(conn, settings)
+    });
 
     /*
     let settings = write_preface.and_then(|(conn, _)| {
@@ -87,7 +117,7 @@ pub fn initial(conn: TcpStream) -> HttpFuture<TcpStream> {
     });
     */
 
-    let done = write_preface.map(|(conn, _)| conn);
+    let done = write_settings;
 
     done.boxed()
 }

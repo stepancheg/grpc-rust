@@ -32,7 +32,7 @@ pub fn parse_frame_completely(stream: &[u8]) -> Option<&[u8]> {
     }
 }
 
-pub fn write_frame(stream: &mut Vec<u8>, frame: &[u8]) {
+pub fn write_grpc_frame(stream: &mut Vec<u8>, frame: &[u8]) {
 	stream.push(0); // compressed flag
 	let len_raw: [u8; 4] = unsafe {
 	    mem::transmute((frame.len() as u32).to_be())
