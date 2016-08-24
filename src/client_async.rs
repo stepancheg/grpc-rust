@@ -42,6 +42,9 @@ use solicit::http::session::Client;
 use solicit::http::session::SessionState;
 use solicit::http::session::DefaultSessionState;
 use solicit::http::session::DefaultStream;
+use solicit::http::session::StreamState;
+use solicit::http::session::StreamDataChunk;
+use solicit::http::session::StreamDataError;
 use solicit::http::session::Stream as solicit_Stream;
 use solicit::http::connection::HttpConnection;
 use solicit::http::connection::SendStatus;
@@ -123,9 +126,45 @@ impl GrpcClientAsync {
     }
 }
 
+struct GrpcHttp2Stream {
+    stream: DefaultStream,
+    call: Option<Box<CallRequest>>,
+}
+
+impl GrpcHttp2Stream {
+    fn new() -> GrpcHttp2Stream {
+        GrpcHttp2Stream {
+            stream: DefaultStream::new(),
+            call: None,
+        }
+    }
+}
+
+impl solicit_Stream for GrpcHttp2Stream {
+    fn new_data_chunk(&mut self, data: &[u8]) {
+        self.stream.new_data_chunk(data)
+    }
+
+    fn set_headers<'n, 'v>(&mut self, headers: Vec<Header<'n, 'v>>) {
+        self.stream.set_headers(headers)
+    }
+
+    fn set_state(&mut self, state: StreamState) {
+        self.stream.set_state(state)
+    }
+
+    fn get_data_chunk(&mut self, buf: &mut [u8]) -> Result<StreamDataChunk, StreamDataError> {
+        self.stream.get_data_chunk(buf)
+    }
+
+    fn state(&self) -> StreamState {
+        self.stream.state()
+    }
+}
+
 struct ReadWriteSharedState {
     host: String,
-    conn: ClientConnection,
+    conn: ClientConnection<DefaultSessionState<Client, GrpcHttp2Stream>>,
 }
 
 unsafe impl Sync for ReadWriteSharedState {}
@@ -137,11 +176,11 @@ impl ReadWriteSharedState {
         path: &'v [u8],
         extras: &[Header<'n, 'v>],
         body: Option<Vec<u8>>)
-            -> RequestStream<'n, 'v, DefaultStream>
+            -> RequestStream<'n, 'v, GrpcHttp2Stream>
     {
-        let mut stream = DefaultStream::new();
+        let mut stream = GrpcHttp2Stream::new();
         match body {
-            Some(body) => stream.set_full_data(body),
+            Some(body) => stream.stream.set_full_data(body),
             None => stream.close_local(),
         };
 
@@ -161,8 +200,22 @@ impl ReadWriteSharedState {
     }
 }
 
-fn run_read(read: TaskIoRead<TcpStream>, shared: TaskDataMutex<ReadWriteSharedState>) -> GrpcFuture<()> {
-    empty().boxed()
+fn run_read(
+    read: TaskIoRead<TcpStream>,
+    shared: TaskDataMutex<ReadWriteSharedState>)
+        -> GrpcFuture<()>
+{
+    let stream = stream::iter(repeat(()).map(|x| Ok(x)));
+
+    let future = stream.fold(read, |read, _| {
+        recv_raw_frame(read).map(|(read, frame)| {
+            // TODO: process frame
+
+            read
+        })
+    });
+
+    future.map(|_| ()).boxed()
 }
 
 fn run_write(
@@ -173,17 +226,20 @@ fn run_write(
 {
     println!("run_write");
 
-    let stream = rx.fold((write, shared), |(write, shared), req| {
+    let future = rx.fold((write, shared), |(write, shared), req| {
         println!("got req");
 
         let buf = shared.with(|shared| {
             let mut body = Vec::new();
             write_frame(&mut body, &req.write_req());
-            let stream = shared.new_stream(
+            let path = req.method_name().as_bytes().to_vec();
+            let mut stream = shared.new_stream(
                 b"POST",
-                req.method_name().as_bytes(),
+                &path,
                 &[],
                 Some(body));
+
+            stream.stream.call = Some(req);
 
             let mut buf = VecAsTransportStream(Vec::new());
 
@@ -200,7 +256,7 @@ fn run_write(
             .map(|(write, _)| (write, shared))
             .map(|x| { println!("written"); x })
     });
-    stream.map(|_| ()).boxed()
+    future.map(|_| ()).boxed()
 }
 
 fn run_event_loop(socket_addr: SocketAddr, rx: Receiver<Box<CallRequest>, GrpcError>) {

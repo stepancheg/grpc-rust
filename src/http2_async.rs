@@ -35,7 +35,7 @@ impl<T> AsMut<[T]> for VecWithPos<T> {
     }
 }
 
-fn recv_raw_frame<R : Read + Send + 'static>(read: R) -> GrpcFuture<(R, RawFrame<'static>)> {
+pub fn recv_raw_frame<R : Read + Send + 'static>(read: R) -> GrpcFuture<(R, RawFrame<'static>)> {
     let header = read_exact(read, [0; 9]);
     let frame_buf = header.and_then(|(read, raw_header)| {
         let header = unpack_header(&raw_header);
