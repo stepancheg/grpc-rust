@@ -4,15 +4,18 @@ use std::io::Write;
 use std::mem;
 
 use futures::Future;
+use futures::BoxFuture;
 use futures::failed;
 
 use futures::stream::Stream;
+use futures::stream::BoxStream;
 
 use futures_io::read_exact;
 use futures_io::write_all;
 use futures_mio::TcpStream;
 
 use solicit::http::HttpResult;
+use solicit::http::HttpError;
 use solicit::http::frame::RawFrame;
 use solicit::http::frame::unpack_header;
 use solicit::http::frame::FrameIR;
@@ -21,12 +24,11 @@ use solicit::http::connection::ReceiveFrame;
 use solicit::http::connection::SendFrame;
 use solicit::http::transport::TransportStream;
 
-use result::GrpcError;
-
-use futures_grpc::GrpcFuture;
-use futures_grpc::GrpcStream;
-
 use io_misc::*;
+
+
+pub type HttpFuture<T> = BoxFuture<T, HttpError>;
+pub type HttpStream<T> = BoxStream<T, HttpError>;
 
 
 struct VecWithPos<T> {
@@ -40,7 +42,7 @@ impl<T> AsMut<[T]> for VecWithPos<T> {
     }
 }
 
-pub fn recv_raw_frame<R : Read + Send + 'static>(read: R) -> GrpcFuture<(R, RawFrame<'static>)> {
+pub fn recv_raw_frame<R : Read + Send + 'static>(read: R) -> HttpFuture<(R, RawFrame<'static>)> {
     let header = read_exact(read, [0; 9]);
     let frame_buf = header.and_then(|(read, raw_header)| {
         let header = unpack_header(&raw_header);
@@ -65,10 +67,10 @@ pub fn recv_raw_frame<R : Read + Send + 'static>(read: R) -> GrpcFuture<(R, RawF
         .boxed()
 }
 
-pub fn initial(conn: TcpStream) -> GrpcFuture<TcpStream> {
+pub fn initial(conn: TcpStream) -> HttpFuture<TcpStream> {
     let preface = b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
 
-    let write_preface = write_all(conn, preface).map_err(|_| GrpcError::Other("preface"));
+    let write_preface = write_all(conn, preface).map_err(|e| e.into());
 
     /*
     let settings = write_preface.and_then(|(conn, _)| {
