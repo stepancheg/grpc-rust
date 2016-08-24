@@ -269,6 +269,7 @@ impl GrpcServerConnection {
     pub fn handle_next_frame(&mut self) -> HttpResult<()> {
         let mut rx = TransportReceiveFrame::new(&mut self.receiver);
         let mut session = ServerSession::new(&mut self.state, &mut self.factory, &mut self.sender);
+        println!("handle_next_frame");
         self.conn.handle_next_frame(&mut rx, &mut session)
     }
 

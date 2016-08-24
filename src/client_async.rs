@@ -48,6 +48,8 @@ use solicit::http::session::StreamDataError;
 use solicit::http::session::Stream as solicit_Stream;
 use solicit::http::connection::HttpConnection;
 use solicit::http::connection::SendStatus;
+use solicit::http::connection::HttpFrame;
+use solicit::http::frame::RawFrame;
 use solicit::http::HttpScheme;
 use solicit::http::StreamId;
 use solicit::http::Header;
@@ -122,7 +124,7 @@ impl GrpcClientAsync {
             complete: complete,
         })));
 
-        oneshot.map_err(|e| GrpcError::Other).boxed()
+        oneshot.map_err(|e| GrpcError::Other("call")).boxed()
     }
 }
 
@@ -150,6 +152,10 @@ impl solicit_Stream for GrpcHttp2Stream {
     }
 
     fn set_state(&mut self, state: StreamState) {
+        println!("set_state: {:?}", state);
+        if state == StreamState::Closed {
+            println!("response body: {:?}", BsDebug(&self.stream.body));
+        }
         self.stream.set_state(state)
     }
 
@@ -207,11 +213,23 @@ fn run_read(
 {
     let stream = stream::iter(repeat(()).map(|x| Ok(x)));
 
-    let future = stream.fold(read, |read, _| {
-        recv_raw_frame(read).map(|(read, frame)| {
-            // TODO: process frame
+    let future = stream.fold((read, shared), |(read, shared), _| {
+        recv_raw_frame(read).map(|(read, raw_frame)| {
 
-            read
+            shared.with(|shared| {
+                // https://github.com/mlalic/solicit/pull/32
+                let raw_frame = RawFrame::from(raw_frame.serialize());
+
+                let mut send = VecSendFrame(Vec::new());
+
+                shared.conn.handle_next_frame(
+                    &mut OnceReceiveFrame::new(raw_frame),
+                    &mut send);
+
+                // TODO: process send
+            });
+
+            (read, shared)
         })
     });
 
@@ -241,7 +259,7 @@ fn run_write(
 
             stream.stream.call = Some(req);
 
-            let mut buf = VecAsTransportStream(Vec::new());
+            let mut buf = VecSendFrame(Vec::new());
 
             let stream_id = shared.conn.start_request(stream, &mut buf).unwrap();
             while let SendStatus::Sent = shared.conn.send_next_data(&mut buf).unwrap() {
@@ -264,7 +282,7 @@ fn run_event_loop(socket_addr: SocketAddr, rx: Receiver<Box<CallRequest>, GrpcEr
 
     let connect = lp.handle().tcp_connect(&socket_addr);
 
-    let initial = connect.and_then(|conn| initial(conn).map_err(|_| io_error_other("todo")));
+    let initial = connect.and_then(|conn| initial(conn).map_err(|_| io_error_other("connect")));
 
     let done = initial.and_then(|conn| {
         let (read, write) = TaskIo::new(conn).split();
@@ -282,7 +300,7 @@ fn run_event_loop(socket_addr: SocketAddr, rx: Receiver<Box<CallRequest>, GrpcEr
         println!("about to run_write+run_read");
         run_read(read, shared_for_read)
             .join(run_write(write, shared_for_write, rx))
-                .map_err(|e| io_error_other("todo"))
+                .map_err(|e| e.into())
     });
 
     lp.run(done).unwrap();
