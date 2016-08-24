@@ -71,7 +71,7 @@ use io_misc::*;
 use misc::*;
 
 
-pub struct GrpcClientAsync {
+pub struct GrpcClient {
     tx: SyncSender<Box<CallRequest>, GrpcError>,
 }
 
@@ -101,8 +101,8 @@ impl<Req : Send, Resp : Send> CallRequest for CallRequestTyped<Req, Resp> {
     }
 }
 
-impl GrpcClientAsync {
-    pub fn new(host: &str, port: u16) -> GrpcClientAsync {
+impl GrpcClient {
+    pub fn new(host: &str, port: u16) -> GrpcClient {
 
         let (tx, rx) = channel_sync_sender();
 
@@ -113,7 +113,7 @@ impl GrpcClientAsync {
             run_event_loop(socket_addr, rx);
         });
 
-        let r = GrpcClientAsync {
+        let r = GrpcClient {
             tx: tx,
         };
 

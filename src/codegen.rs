@@ -65,7 +65,7 @@ impl<'a> MethodGen<'a> {
             self.write_method_descriptor(w,
                 &format!("let method: ::grpc::method::MethodDescriptor<{}, {}> = ", self.input(), self.output()),
                 ";");
-            w.write_line("self.grpc_client_async.call(p, method)")
+            w.write_line("self.grpc_client.call(p, method)")
         });
     }
 
@@ -184,7 +184,7 @@ impl<'a> ServiceGen<'a> {
 
     fn write_async_client(&self, w: &mut CodeWriter) {
         w.pub_struct(&self.async_client_name(), |w| {
-            w.field_decl("grpc_client_async", "::grpc::client_async::GrpcClientAsync");
+            w.field_decl("grpc_client", "::grpc::client::GrpcClient");
         });
 
         w.write_line("");
@@ -192,7 +192,7 @@ impl<'a> ServiceGen<'a> {
         w.impl_self_block(&self.async_client_name(), |w| {
             w.pub_fn("new(host: &str, port: u16) -> Self", |w| {
                 w.expr_block(&self.async_client_name(), |w| {
-                    w.field_entry("grpc_client_async", "::grpc::client_async::GrpcClientAsync::new(host, port)");
+                    w.field_entry("grpc_client", "::grpc::client::GrpcClient::new(host, port)");
                 });
             });
         });

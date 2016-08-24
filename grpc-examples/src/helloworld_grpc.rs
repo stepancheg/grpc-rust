@@ -51,13 +51,13 @@ impl Greeter for GreeterClient {
 // async client
 
 pub struct GreeterAsyncClient {
-    grpc_client_async: ::grpc::client_async::GrpcClientAsync,
+    grpc_client: ::grpc::client::GrpcClient,
 }
 
 impl GreeterAsyncClient {
     pub fn new(host: &str, port: u16) -> Self {
         GreeterAsyncClient {
-            grpc_client_async: ::grpc::client_async::GrpcClientAsync::new(host, port),
+            grpc_client: ::grpc::client::GrpcClient::new(host, port),
         }
     }
 }
@@ -71,7 +71,7 @@ impl GreeterAsync for GreeterAsyncClient {
             req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
             resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
         };
-        self.grpc_client_async.call(p, method)
+        self.grpc_client.call(p, method)
     }
 }
 
