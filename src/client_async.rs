@@ -78,12 +78,13 @@ pub struct GrpcClientAsync {
 trait CallRequest : Send {
     fn write_req(&self) -> Vec<u8>;
     fn method_name(&self) -> &str;
+    fn complete(&mut self, message: &[u8]);
 }
 
 struct CallRequestTyped<Req, Resp> {
     method: MethodDescriptor<Req, Resp>,
     req: Req,
-    complete: Complete<Resp>, // TODO: GrpcError
+    complete: Option<Complete<Resp>>, // TODO: GrpcError
 }
 
 impl<Req : Send, Resp : Send> CallRequest for CallRequestTyped<Req, Resp> {
@@ -93,6 +94,10 @@ impl<Req : Send, Resp : Send> CallRequest for CallRequestTyped<Req, Resp> {
 
     fn method_name(&self) -> &str {
         &self.method.name
+    }
+
+    fn complete(&mut self, message: &[u8]) {
+        self.complete.take().unwrap().complete(self.method.resp_marshaller.read(message));
     }
 }
 
@@ -121,7 +126,7 @@ impl GrpcClientAsync {
         self.tx.send(Ok(Box::new(CallRequestTyped {
             method: method,
             req: req,
-            complete: complete,
+            complete: Some(complete),
         })));
 
         oneshot.map_err(|e| GrpcError::Other("call")).boxed()
@@ -155,6 +160,8 @@ impl solicit_Stream for GrpcHttp2Stream {
         println!("set_state: {:?}", state);
         if state == StreamState::Closed {
             println!("response body: {:?}", BsDebug(&self.stream.body));
+            let message_serialized = parse_frame_completely(&self.stream.body).unwrap();
+            self.call.as_mut().unwrap().complete(message_serialized);
         }
         self.stream.set_state(state)
     }
@@ -227,6 +234,8 @@ fn run_read(
                     &mut send);
 
                 // TODO: process send
+
+                shared.conn.state.get_closed();
             });
 
             (read, shared)
