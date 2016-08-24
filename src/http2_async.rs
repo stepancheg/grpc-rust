@@ -102,22 +102,18 @@ pub fn initial(conn: TcpStream) -> HttpFuture<TcpStream> {
         send_frame(conn, settings)
     });
 
-    /*
-    let settings = write_preface.and_then(|(conn, _)| {
-        recv_raw_frame(conn)
+    let recv_settings = write_settings.and_then(|conn| {
+        recv_raw_frame(conn).map(|(conn, settings_raw)| {
+            match HttpFrame::from_raw(&settings_raw).unwrap() {
+                HttpFrame::SettingsFrame(..) => (),
+                _ => panic!("expecting settings frame"),
+            };
+
+            conn
+        })
     });
 
-    let done = settings.map(|(conn, settings_raw)| {
-        match HttpFrame::from_raw(&settings_raw).unwrap() {
-            HttpFrame::SettingsFrame(..) => (),
-            _ => panic!("expecting settings frame"),
-        };
-
-        conn
-    });
-    */
-
-    let done = write_settings;
+    let done = recv_settings;
 
     done.boxed()
 }
