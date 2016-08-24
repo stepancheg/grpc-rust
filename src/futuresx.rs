@@ -50,3 +50,12 @@ impl<A> TaskDataMutex<A> {
     }
 
 }
+
+
+// Work around.
+// For some reason I don't understand BoxFuture::wait
+// produces strange compile-time error:
+// the trait bound `futures::Future<..> + Send + 'static: std::marker::Sized` is not satisfied
+pub fn wait2<F : ::futures::Future>(f: F) -> Result<F::Item, F::Error> {
+    f.wait()
+}

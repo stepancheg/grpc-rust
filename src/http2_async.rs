@@ -139,7 +139,6 @@ impl ReceiveFrame for OnceReceiveFrame {
         self.used = true;
         let r = HttpFrame::from_raw(&self.raw_frame);
         if let Some(f) = r.as_ref().ok() {
-            println!("read frame: {:?}", f);
         }
         r
     }
@@ -149,8 +148,6 @@ pub struct VecSendFrame(pub Vec<u8>);
 
 impl SendFrame for VecSendFrame {
     fn send_frame<F : FrameIR>(&mut self, frame: F) -> HttpResult<()> {
-        println!("VecSendFrame::send_frame");
-
         let pos = self.0.len();
         let mut cursor = io::Cursor::new(mem::replace(&mut self.0, Vec::new()));
         cursor.set_position(pos as u64);

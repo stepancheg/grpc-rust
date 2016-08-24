@@ -14,5 +14,5 @@ fn main() {
     let mut req = HelloRequest::new();
     req.set_name(name);
     let resp = client.SayHello(req);
-    println!("{:?}", resp);
+    println!("{:?}", resp.unwrap());
 }

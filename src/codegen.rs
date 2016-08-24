@@ -53,10 +53,7 @@ impl<'a> MethodGen<'a> {
         let output = self.root_scope.find_message(self.proto.get_output_type()).rust_fq_name();
 
         w.def_fn(&self.sync_sig(), |w| {
-            self.write_method_descriptor(w,
-                &format!("let method: ::grpc::method::MethodDescriptor<{}, {}> = ", self.input(), self.output()),
-                ";");
-            w.write_line("self.grpc_client.borrow_mut().call(p, method)")
+            w.write_line(&format!("::grpc::futuresx::wait2(self.async_client.{}(p))", self.proto.get_name()));
         });
     }
 
@@ -159,7 +156,7 @@ impl<'a> ServiceGen<'a> {
 
     fn write_sync_client(&self, w: &mut CodeWriter) {
         w.pub_struct(&self.sync_client_name(), |w| {
-            w.field_decl("grpc_client", "::std::cell::RefCell<::grpc::client_sync::GrpcClient>");
+            w.field_decl("async_client", &self.async_client_name());
         });
 
         w.write_line("");
@@ -167,7 +164,7 @@ impl<'a> ServiceGen<'a> {
         w.impl_self_block(&self.sync_client_name(), |w| {
             w.pub_fn("new(host: &str, port: u16) -> Self", |w| {
                 w.expr_block(&self.sync_client_name(), |w| {
-                    w.field_entry("grpc_client", "::std::cell::RefCell::new(::grpc::client_sync::GrpcClient::new(host, port))");
+                    w.field_entry("async_client", format!("{}::new(host, port)", &self.async_client_name()));
                 });
             });
         });

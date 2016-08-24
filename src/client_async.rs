@@ -157,9 +157,9 @@ impl solicit_Stream for GrpcHttp2Stream {
     }
 
     fn set_state(&mut self, state: StreamState) {
-        println!("set_state: {:?}", state);
+        //println!("set_state: {:?}", state);
         if state == StreamState::Closed {
-            println!("response body: {:?}", BsDebug(&self.stream.body));
+            //println!("response body: {:?}", BsDebug(&self.stream.body));
             let message_serialized = parse_frame_completely(&self.stream.body).unwrap();
             self.call.as_mut().unwrap().complete(message_serialized);
         }
@@ -251,11 +251,7 @@ fn run_write(
     rx: Receiver<Box<CallRequest>, GrpcError>)
         -> GrpcFuture<()>
 {
-    println!("run_write");
-
     let future = rx.fold((write, shared), |(write, shared), req| {
-        println!("got req");
-
         let buf = shared.with(|shared| {
             let mut body = Vec::new();
             write_grpc_frame(&mut body, &req.write_req());
@@ -277,11 +273,11 @@ fn run_write(
             buf.0
         });
 
-        println!("write_all {:?}", BsDebug(&buf));
+        //println!("write_all {:?}", BsDebug(&buf));
 
         futures_io::write_all(write, buf)
             .map(|(write, _)| (write, shared))
-            .map(|x| { println!("written"); x })
+            //.map(|x| { println!("written"); x })
     });
     future.map(|_| ()).boxed()
 }
@@ -306,7 +302,6 @@ fn run_event_loop(socket_addr: SocketAddr, rx: Receiver<Box<CallRequest>, GrpcEr
             conn: conn,
         });
         let shared_for_write = shared_for_read.clone();
-        println!("about to run_write+run_read");
         run_read(read, shared_for_read)
             .join(run_write(write, shared_for_write, rx))
                 .map_err(|e| e.into())

@@ -31,27 +31,20 @@ pub trait GreeterAsync {
 // sync client
 
 pub struct GreeterClient {
-    grpc_client: ::std::cell::RefCell<::grpc::client_sync::GrpcClient>,
+    async_client: GreeterAsyncClient,
 }
 
 impl GreeterClient {
     pub fn new(host: &str, port: u16) -> Self {
         GreeterClient {
-            grpc_client: ::std::cell::RefCell::new(::grpc::client_sync::GrpcClient::new(host, port)),
+            async_client: GreeterAsyncClient::new(host, port),
         }
     }
 }
 
 impl Greeter for GreeterClient {
     fn SayHello(&self, p: super::helloworld::HelloRequest) -> ::grpc::result::GrpcResult<super::helloworld::HelloReply> {
-        let method: ::grpc::method::MethodDescriptor<super::helloworld::HelloRequest, super::helloworld::HelloReply> = ::grpc::method::MethodDescriptor {
-            name: "/helloworld.Greeter/SayHello".to_string(),
-            client_streaming: false,
-            server_streaming: false,
-            req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-            resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-        };
-        self.grpc_client.borrow_mut().call(p, method)
+        ::grpc::futuresx::wait2(self.async_client.SayHello(p))
     }
 }
 
