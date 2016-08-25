@@ -78,51 +78,47 @@ impl GreeterAsync for GreeterAsyncClient {
 // sync server
 
 pub struct GreeterServer {
-    server: ::grpc::server_sync::GrpcServer,
+    async_server: GreeterAsyncServer,
+}
+
+struct GreeterServerHandlerToAsync {
+    handler: ::std::sync::Arc<Greeter + Send + Sync>,
+    cpupool: ::futures_cpupool::CpuPool,
+}
+
+impl GreeterAsync for GreeterServerHandlerToAsync {
+    fn SayHello(&self, p: super::helloworld::HelloRequest) -> ::grpc::futures_grpc::GrpcFuture<super::helloworld::HelloReply> {
+        let h = self.handler.clone();
+        ::futures::Future::boxed(::futures::Future::map_err(self.cpupool.execute(move || {
+            h.SayHello(p).unwrap()
+        }), |_| ::grpc::result::GrpcError::Other("cpupool")))
+    }
 }
 
 impl GreeterServer {
-    pub fn new<H : Greeter + 'static + Sync + Send>(h: H) -> Self {
-        let handler_arc = ::std::sync::Arc::new(h);
-        let service_definition = ::grpc::server_sync::ServerServiceDefinitionSync::new(
-            vec![
-                ::grpc::server_sync::ServerMethodSync::new(
-                    ::grpc::method::MethodDescriptor {
-                        name: "/helloworld.Greeter/SayHello".to_string(),
-                        client_streaming: false,
-                        server_streaming: false,
-                        req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                        resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                    },
-                    {
-                        let handler_copy = handler_arc.clone();
-                        ::grpc::server_sync::MethodHandlerSyncFn::new(move |p| handler_copy.SayHello(p))
-                    },
-                ),
-            ],
-        );
+    pub fn new<H : Greeter + Send + Sync + 'static>(port: u16, h: H) -> Self {
+        let h = GreeterServerHandlerToAsync {
+            cpupool: ::futures_cpupool::CpuPool::new_num_cpus(),
+            handler: ::std::sync::Arc::new(h),
+        };
         GreeterServer {
-            server: ::grpc::server_sync::GrpcServer::new(service_definition),
+            async_server: GreeterAsyncServer::new(port, h),
         }
-    }
-
-    pub fn run(&mut self) {
-        self.server.run()
     }
 }
 
 // async server
 
 pub struct GreeterAsyncServer {
-    grpc_server: ::grpc::server_async::GrpcServerAsync,
+    grpc_server: ::grpc::server::GrpcServer,
 }
 
 impl GreeterAsyncServer {
-    pub fn new<H : GreeterAsync + 'static + Sync + Send>(port: u16, h: H) -> Self {
+    pub fn new<H : GreeterAsync + 'static + Sync + Send + 'static>(port: u16, h: H) -> Self {
         let handler_arc = ::std::sync::Arc::new(h);
-        let service_definition = ::grpc::server_async::ServerServiceDefinitionAsync::new(
+        let service_definition = ::grpc::server::ServerServiceDefinition::new(
             vec![
-                ::grpc::server_async::ServerMethodAsync::new(
+                ::grpc::server::ServerMethod::new(
                     ::grpc::method::MethodDescriptor {
                         name: "/helloworld.Greeter/SayHello".to_string(),
                         client_streaming: false,
@@ -132,13 +128,13 @@ impl GreeterAsyncServer {
                     },
                     {
                         let handler_copy = handler_arc.clone();
-                        ::grpc::server_async::MethodHandlerAsyncFn::new(move |p| handler_copy.SayHello(p))
+                        ::grpc::server::MethodHandlerFn::new(move |p| handler_copy.SayHello(p))
                     },
                 ),
             ],
         );
         GreeterAsyncServer {
-            grpc_server: ::grpc::server_async::GrpcServerAsync::new(port, service_definition),
+            grpc_server: ::grpc::server::GrpcServer::new(port, service_definition),
         }
     }
 }

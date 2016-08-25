@@ -57,35 +57,35 @@ use solicit_misc::*;
 use grpc::*;
 
 
-pub trait MethodHandlerAsync<Req, Resp> {
+pub trait MethodHandler<Req, Resp> {
     fn handle(&self, req: Req) -> GrpcFuture<Resp>;
 }
 
-pub struct MethodHandlerAsyncEcho;
+pub struct MethodHandlerEcho;
 
-impl<A : Send + 'static> MethodHandlerAsync<A, A> for MethodHandlerAsyncEcho {
+impl<A : Send + 'static> MethodHandler<A, A> for MethodHandlerEcho {
     fn handle(&self, req: A) -> GrpcFuture<A> {
         println!("handle echo");
         done(Ok(req)).boxed()
     }
 }
 
-pub struct MethodHandlerAsyncFn<F> {
+pub struct MethodHandlerFn<F> {
     f: F
 }
 
-impl<F> MethodHandlerAsyncFn<F> {
+impl<F> MethodHandlerFn<F> {
     pub fn new<Req, Resp>(f: F)
         -> Self
         where F : Fn(Req) -> GrpcFuture<Resp>
     {
-        MethodHandlerAsyncFn {
+        MethodHandlerFn {
             f: f,
         }
     }
 }
 
-impl<Req, Resp, F> MethodHandlerAsync<Req, Resp> for MethodHandlerAsyncFn<F>
+impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerFn<F>
     where
         Resp : Send + 'static,
         F : Fn(Req) -> GrpcFuture<Resp>,
@@ -95,16 +95,16 @@ impl<Req, Resp, F> MethodHandlerAsync<Req, Resp> for MethodHandlerAsyncFn<F>
     }
 }
 
-trait MethodHandlerDispatchAsync {
+trait MethodHandlerDispatch {
     fn on_message(&self, message: &[u8]) -> GrpcFuture<Vec<u8>>;
 }
 
 struct MethodHandlerDispatchAsyncImpl<Req, Resp> {
     desc: Arc<MethodDescriptor<Req, Resp>>,
-    method_handler: Box<MethodHandlerAsync<Req, Resp> + Sync + Send>,
+    method_handler: Box<MethodHandler<Req, Resp> + Sync + Send>,
 }
 
-impl<Req, Resp> MethodHandlerDispatchAsync for MethodHandlerDispatchAsyncImpl<Req, Resp>
+impl<Req, Resp> MethodHandlerDispatch for MethodHandlerDispatchAsyncImpl<Req, Resp>
     where
         Req : Send + 'static,
         Resp : Send + 'static,
@@ -119,19 +119,19 @@ impl<Req, Resp> MethodHandlerDispatchAsync for MethodHandlerDispatchAsyncImpl<Re
     }
 }
 
-pub struct ServerMethodAsync {
+pub struct ServerMethod {
     name: String,
-    dispatch: Box<MethodHandlerDispatchAsync + Sync + Send>,
+    dispatch: Box<MethodHandlerDispatch + Sync + Send>,
 }
 
-impl ServerMethodAsync {
-    pub fn new<Req, Resp, H>(method: MethodDescriptor<Req, Resp>, handler: H) -> ServerMethodAsync
+impl ServerMethod {
+    pub fn new<Req, Resp, H>(method: MethodDescriptor<Req, Resp>, handler: H) -> ServerMethod
         where
             Req : Send + 'static,
             Resp : Send + 'static,
-            H : MethodHandlerAsync<Req, Resp> + 'static + Sync + Send,
+            H : MethodHandler<Req, Resp> + 'static + Sync + Send,
     {
-        ServerMethodAsync {
+        ServerMethod {
             name: method.name.clone(),
             dispatch: Box::new(MethodHandlerDispatchAsyncImpl {
                 desc: Arc::new(method),
@@ -141,18 +141,18 @@ impl ServerMethodAsync {
     }
 }
 
-pub struct ServerServiceDefinitionAsync {
-    methods: Vec<ServerMethodAsync>,
+pub struct ServerServiceDefinition {
+    methods: Vec<ServerMethod>,
 }
 
-impl ServerServiceDefinitionAsync {
-    pub fn new(mut methods: Vec<ServerMethodAsync>) -> ServerServiceDefinitionAsync {
-        ServerServiceDefinitionAsync {
+impl ServerServiceDefinition {
+    pub fn new(mut methods: Vec<ServerMethod>) -> ServerServiceDefinition {
+        ServerServiceDefinition {
             methods: methods,
         }
     }
 
-    pub fn find_method(&self, name: &str) -> &ServerMethodAsync {
+    pub fn find_method(&self, name: &str) -> &ServerMethod {
         self.methods.iter()
             .filter(|m| m.name == name)
             .next()
@@ -166,26 +166,26 @@ impl ServerServiceDefinitionAsync {
 
 
 
-pub struct GrpcServerAsync {
+pub struct GrpcServer {
 
 }
 
-impl GrpcServerAsync {
-    pub fn new(port: u16, service_definition: ServerServiceDefinitionAsync) -> GrpcServerAsync {
+impl GrpcServer {
+    pub fn new(port: u16, service_definition: ServerServiceDefinition) -> GrpcServer {
         let listen_addr = ("::", port).to_socket_addrs().unwrap().next().unwrap();
 
         thread::spawn(move || {
             run_server_event_loop(listen_addr, service_definition);
         });
 
-        GrpcServerAsync {
+        GrpcServer {
         }
     }
 }
 
 struct GrpcHttp2ServerStream {
     stream: DefaultStream,
-    service_definition: Arc<ServerServiceDefinitionAsync>,
+    service_definition: Arc<ServerServiceDefinition>,
     path: String,
     loop_handle: LoopHandle,
     sender: Sender<ReadToWriteMessage>,
@@ -241,7 +241,7 @@ impl solicit_Stream for GrpcHttp2ServerStream {
 
 struct GrpcStreamFactory {
     loop_handle: LoopHandle,
-    service_definition: Arc<ServerServiceDefinitionAsync>,
+    service_definition: Arc<ServerServiceDefinition>,
     sender: Sender<ReadToWriteMessage>,
 }
 
@@ -355,9 +355,9 @@ fn run_write(
 fn run_connection(
     socket: TcpStream,
     peer_addr: SocketAddr,
-    service_defintion: Arc<ServerServiceDefinitionAsync>,
+    service_defintion: Arc<ServerServiceDefinition>,
     loop_handle: LoopHandle)
-        -> IoFuture<()>
+    -> IoFuture<()>
 {
     println!("accepted connection from {}", peer_addr);
     let handshake = server_handshake(socket).map_err(GrpcError::from);
@@ -402,7 +402,7 @@ fn run_connection(
         .boxed()
 }
 
-fn run_server_event_loop(listen_addr: SocketAddr, service_definition: ServerServiceDefinitionAsync) {
+fn run_server_event_loop(listen_addr: SocketAddr, service_definition: ServerServiceDefinition) {
     let mut lp = Loop::new().unwrap();
 
     let listen = lp.handle().tcp_listen(&listen_addr);

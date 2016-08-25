@@ -6,9 +6,8 @@ extern crate futures_mio;
 
 pub mod codegen;
 
-pub mod server_sync;
-pub mod server_async;
 pub mod client;
+pub mod server;
 mod grpc;
 pub mod method;
 pub mod grpc_protobuf;

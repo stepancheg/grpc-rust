@@ -1,6 +1,8 @@
 extern crate grpc_examples;
 extern crate grpc;
 
+use std::thread;
+
 use grpc::result::GrpcResult;
 
 use grpc_examples::helloworld_grpc::*;
@@ -19,7 +21,9 @@ impl Greeter for GreeterImpl {
 }
 
 fn main() {
-    let mut server = GreeterServer::new(GreeterImpl);
-    server.run();
+    let mut server = GreeterServer::new(50051, GreeterImpl);
 
+    loop {
+        thread::park();
+    }
 }

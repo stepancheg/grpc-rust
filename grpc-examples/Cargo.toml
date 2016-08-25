@@ -7,5 +7,6 @@ authors = ["Stepan Koltsov <stepan.koltsov@gmail.com>"]
 path = ".."
 
 [dependencies]
-protobuf    = { path = "../../rust-protobuf" }
-futures     = { git = "https://github.com/alexcrichton/futures-rs" }
+protobuf        = { path = "../../rust-protobuf" }
+futures         = { git = "https://github.com/alexcrichton/futures-rs" }
+futures-cpupool = { git = "https://github.com/alexcrichton/futures-rs" }
