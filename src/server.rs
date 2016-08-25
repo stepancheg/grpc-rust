@@ -213,12 +213,11 @@ impl solicit_Stream for GrpcHttp2ServerStream {
 
             let message = parse_grpc_frame_completely(&self.stream.body).unwrap();
 
-            // TODO: https://github.com/alexcrichton/futures-rs/issues/99
-            let sender = Mutex::new(self.sender.clone());
+            let sender = self.sender.clone();
             self.service_definition.handle_method(&self.path, message)
                 .map(move |resp_bytes| {
                     println!("send to writer...");
-                    sender.lock().unwrap().send(ReadToWriteMessage {
+                    sender.send(ReadToWriteMessage {
                         stream_id: stream_id,
                         resp_bytes: resp_bytes,
                     }).unwrap();
