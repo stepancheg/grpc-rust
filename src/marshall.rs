@@ -1,7 +1,7 @@
 use error::*;
 use result::*;
 
-// TODO: GrpcResult
+
 pub trait Marshaller<M> {
     fn write(&self, m: &M) -> GrpcResult<Vec<u8>>;
     fn read(&self, bytes: &[u8]) -> GrpcResult<M>;
