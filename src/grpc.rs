@@ -51,14 +51,14 @@ mod test {
 
     #[test]
     fn test_parse_frame() {
-        assert_eq!(None, parse_frame(b""));
-        assert_eq!(None, parse_frame(b"1"));
-        assert_eq!(None, parse_frame(b"14sc"));
+        assert_eq!(None, parse_grpc_frame(b""));
+        assert_eq!(None, parse_grpc_frame(b"1"));
+        assert_eq!(None, parse_grpc_frame(b"14sc"));
         assert_eq!(
             None,
-            parse_frame(b"\x00\x00\x00\x00\x07\x0a\x05wo"));
+            parse_grpc_frame(b"\x00\x00\x00\x00\x07\x0a\x05wo"));
         assert_eq!(
             Some((&b"\x0a\x05world"[..], 12)),
-            parse_frame(b"\x00\x00\x00\x00\x07\x0a\x05world"));
+            parse_grpc_frame(b"\x00\x00\x00\x00\x07\x0a\x05world"));
     }
 }
