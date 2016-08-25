@@ -196,6 +196,12 @@ impl GrpcHttp2ServerStream {
 
 impl solicit_Stream for GrpcHttp2ServerStream {
     fn set_headers(&mut self, headers: Vec<Header>) {
+        for h in &headers {
+            if h.name() == b":path" {
+                self.path = String::from_utf8(h.value().to_owned()).unwrap();
+            }
+        }
+
         self.stream.set_headers(headers)
     }
 
@@ -204,6 +210,12 @@ impl solicit_Stream for GrpcHttp2ServerStream {
     }
 
     fn set_state(&mut self, state: StreamState) {
+        println!("set state {:?}", state);
+        if state == StreamState::HalfClosedRemote {
+            let message = parse_grpc_frame_completely(&self.stream.body).unwrap();
+            self.service_definition.handle_method(&self.path, message)
+                .forget();
+        }
         self.stream.set_state(state)
     }
 
