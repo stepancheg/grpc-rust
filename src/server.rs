@@ -21,7 +21,7 @@ use solicit::http::HttpScheme;
 use solicit::http::StreamId;
 use solicit::http::Header;
 
-use futures::done;
+use futures;
 use futures::Future;
 use futures::stream;
 use futures::stream::Stream;
@@ -54,7 +54,7 @@ pub struct MethodHandlerEcho;
 impl<A : Send + 'static> MethodHandler<A, A> for MethodHandlerEcho {
     fn handle(&self, req: A) -> GrpcFuture<A> {
         println!("handle echo");
-        done(Ok(req)).boxed()
+        futures::done(Ok(req)).boxed()
     }
 }
 
@@ -98,11 +98,14 @@ impl<Req, Resp> MethodHandlerDispatch for MethodHandlerDispatchAsyncImpl<Req, Re
         Resp : Send + 'static,
 {
     fn on_message(&self, message: &[u8]) -> GrpcFuture<Vec<u8>> {
-        let req = self.desc.req_marshaller.read(message);
+        let req = match self.desc.req_marshaller.read(message) {
+            Ok(req) => req,
+            Err(e) => return futures::done(Err(e)).boxed(),
+        };
         let resp = self.method_handler.handle(req);
         let desc_copy = self.desc.clone();
         resp
-            .map(move |resp| desc_copy.resp_marshaller.write(&resp))
+            .and_then(move |resp| desc_copy.resp_marshaller.write(&resp))
             .boxed()
     }
 }

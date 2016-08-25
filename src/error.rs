@@ -6,12 +6,15 @@ use futures;
 
 use solicit::http::HttpError;
 
+use protobuf::ProtobufError;
+
 
 #[derive(Debug)]
 pub enum GrpcError {
     Io(io::Error),
     Http(HttpError),
     Canceled(futures::Canceled),
+    Protobuf(ProtobufError),
     Other(&'static str),
 }
 
@@ -20,6 +23,7 @@ impl Error for GrpcError {
         match self {
             &GrpcError::Io(ref err) => err.description(),
             &GrpcError::Http(ref err) => err.description(),
+            &GrpcError::Protobuf(ref err) => err.description(),
             &GrpcError::Canceled(..) => "canceled",
             &GrpcError::Other(ref message) => message,
         }
@@ -31,6 +35,7 @@ impl fmt::Display for GrpcError {
         match self {
             &GrpcError::Io(ref err) => write!(f, "io error: {}", err.description()),
             &GrpcError::Http(ref err) => write!(f, "http error: {}", err.description()),
+            &GrpcError::Protobuf(ref err) => write!(f, "protobuf error: {}", err.description()),
             &GrpcError::Canceled(..) => write!(f, "canceled"),
             &GrpcError::Other(ref message) => write!(f, "other error: {}", message),
         }
@@ -47,6 +52,12 @@ impl From<io::Error> for GrpcError {
 impl From<HttpError> for GrpcError {
     fn from(err: HttpError) -> Self {
         GrpcError::Http(err)
+    }
+}
+
+impl From<ProtobufError> for GrpcError {
+    fn from(err: ProtobufError) -> Self {
+        GrpcError::Protobuf(err)
     }
 }
 

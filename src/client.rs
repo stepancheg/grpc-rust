@@ -4,6 +4,7 @@ use std::net::ToSocketAddrs;
 use std::sync::mpsc;
 use std::sync::Arc;
 
+use futures;
 use futures::Future;
 use futures::stream::Stream;
 use futures::oneshot;
@@ -53,7 +54,7 @@ pub struct GrpcClient {
 }
 
 trait CallRequest : Send {
-    fn write_req(&self) -> Vec<u8>;
+    fn write_req(&self) -> GrpcResult<Vec<u8>>;
     fn method_name(&self) -> &str;
     fn complete(&mut self, message: &[u8]);
 }
@@ -65,7 +66,7 @@ struct CallRequestTyped<Req, Resp> {
 }
 
 impl<Req : Send, Resp : Send> CallRequest for CallRequestTyped<Req, Resp> {
-    fn write_req(&self) -> Vec<u8> {
+    fn write_req(&self) -> GrpcResult<Vec<u8>> {
         self.method.req_marshaller.write(&self.req)
     }
 
@@ -74,7 +75,7 @@ impl<Req : Send, Resp : Send> CallRequest for CallRequestTyped<Req, Resp> {
     }
 
     fn complete(&mut self, message: &[u8]) {
-        self.complete.take().unwrap().complete(Ok(self.method.resp_marshaller.read(message)));
+        self.complete.take().unwrap().complete(self.method.resp_marshaller.read(message));
     }
 }
 
@@ -239,7 +240,7 @@ fn run_write(
     let future = rx.fold((write, shared), |(write, shared), req| {
         let send_buf = shared.with(|shared: &mut ClientSharedState| {
             let mut body = Vec::new();
-            write_grpc_frame(&mut body, &req.write_req());
+            write_grpc_frame(&mut body, &try!(req.write_req()));
             let path = req.method_name().as_bytes().to_vec();
             let mut stream = shared.new_stream(
                 b"POST",
@@ -256,11 +257,14 @@ fn run_write(
             while let SendStatus::Sent = shared.conn.send_next_data(&mut send_buf).unwrap() {
             }
 
-            send_buf.0
+            Ok(send_buf.0)
         });
 
-        futures_io::write_all(write, send_buf)
-            .map(|(write, _)| (write, shared))
+        futures::done(send_buf)
+            .and_then(|send_buf| {
+                futures_io::write_all(write, send_buf)
+                    .map(|(write, _)| (write, shared))
+            })
     });
     future
         .map(|_| ())
