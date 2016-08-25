@@ -52,26 +52,27 @@ impl Greeter for GreeterClient {
 
 pub struct GreeterAsyncClient {
     grpc_client: ::grpc::client::GrpcClient,
+    method_SayHello: ::std::sync::Arc<::grpc::method::MethodDescriptor<super::helloworld::HelloRequest, super::helloworld::HelloReply>>,
 }
 
 impl GreeterAsyncClient {
     pub fn new(host: &str, port: u16) -> Self {
         GreeterAsyncClient {
             grpc_client: ::grpc::client::GrpcClient::new(host, port),
+            method_SayHello: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
+                name: "/helloworld.Greeter/SayHello".to_string(),
+                client_streaming: false,
+                server_streaming: false,
+                req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+                resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+            }),
         }
     }
 }
 
 impl GreeterAsync for GreeterAsyncClient {
     fn SayHello(&self, p: super::helloworld::HelloRequest) -> ::grpc::futures_grpc::GrpcFuture<super::helloworld::HelloReply> {
-        let method: ::grpc::method::MethodDescriptor<super::helloworld::HelloRequest, super::helloworld::HelloReply> = ::grpc::method::MethodDescriptor {
-            name: "/helloworld.Greeter/SayHello".to_string(),
-            client_streaming: false,
-            server_streaming: false,
-            req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-            resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-        };
-        self.grpc_client.call(p, method)
+        self.grpc_client.call(p, self.method_SayHello.clone())
     }
 }
 

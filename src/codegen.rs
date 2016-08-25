@@ -55,16 +55,21 @@ impl<'a> MethodGen<'a> {
         });
     }
 
+    fn descriptor_field_name(&self) -> String {
+        format!("method_{}", self.proto.get_name())
+    }
+
+    fn descriptor_type(&self) -> String {
+        format!("::grpc::method::MethodDescriptor<{}, {}>", self.input(), self.output())
+    }
+
     fn write_async_client(&self, w: &mut CodeWriter) {
         w.def_fn(&self.async_sig(), |w| {
-            self.write_method_descriptor(w,
-                &format!("let method: ::grpc::method::MethodDescriptor<{}, {}> = ", self.input(), self.output()),
-                ";");
-            w.write_line("self.grpc_client.call(p, method)")
+            w.write_line(&format!("self.grpc_client.call(p, self.{}.clone())", self.descriptor_field_name()))
         });
     }
 
-    fn write_method_descriptor(&self, w: &mut CodeWriter, before: &str, after: &str) {
+    fn write_descriptor(&self, w: &mut CodeWriter, before: &str, after: &str) {
         w.block(format!("{}{}", before, "::grpc::method::MethodDescriptor {"), format!("{}{}", "}", after), |w| {
             w.field_entry("name", format!("\"{}/{}\".to_string()", self.service_path, self.proto.get_name()));
             w.field_entry("client_streaming", if self.proto.get_client_streaming() { "true" } else { "false" });
@@ -193,6 +198,11 @@ impl<'a> ServiceGen<'a> {
     fn write_async_client(&self, w: &mut CodeWriter) {
         w.pub_struct(&self.async_client_name(), |w| {
             w.field_decl("grpc_client", "::grpc::client::GrpcClient");
+            for method in &self.methods {
+                w.field_decl(
+                    &method.descriptor_field_name(),
+                    &format!("::std::sync::Arc<{}>", method.descriptor_type()));
+            }
         });
 
         w.write_line("");
@@ -201,6 +211,12 @@ impl<'a> ServiceGen<'a> {
             w.pub_fn("new(host: &str, port: u16) -> Self", |w| {
                 w.expr_block(&self.async_client_name(), |w| {
                     w.field_entry("grpc_client", "::grpc::client::GrpcClient::new(host, port)");
+                    for method in &self.methods {
+                        method.write_descriptor(
+                            w,
+                            &format!("{}: ::std::sync::Arc::new(", method.descriptor_field_name()),
+                            "),");
+                    }
                 });
             });
         });
@@ -271,7 +287,7 @@ impl<'a> ServiceGen<'a> {
                     w.block("vec![", "],", |w| {
                         for method in &self.methods {
                             w.block("::grpc::server::ServerMethod::new(", "),", |w| {
-                                method.write_method_descriptor(w, "", ",");
+                                method.write_descriptor(w, "", ",");
                                 w.block("{", "},", |w| {
                                     w.write_line("let handler_copy = handler_arc.clone();");
                                     w.write_line(format!("::grpc::server::MethodHandlerFn::new(move |p| handler_copy.{}(p))", method.proto.get_name()));

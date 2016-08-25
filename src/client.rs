@@ -2,6 +2,7 @@ use std::thread;
 use std::net::SocketAddr;
 use std::net::ToSocketAddrs;
 use std::sync::mpsc;
+use std::sync::Arc;
 
 use futures::Future;
 use futures::stream::Stream;
@@ -57,7 +58,7 @@ trait CallRequest : Send {
 }
 
 struct CallRequestTyped<Req, Resp> {
-    method: MethodDescriptor<Req, Resp>,
+    method: Arc<MethodDescriptor<Req, Resp>>,
     req: Req,
     complete: Option<Complete<Resp>>, // TODO: GrpcError
 }
@@ -97,7 +98,7 @@ impl GrpcClient {
         r
     }
 
-    pub fn call<Req : Send + 'static, Resp : Send + 'static>(&self, req: Req, method: MethodDescriptor<Req, Resp>) -> GrpcFuture<Resp> {
+    pub fn call<Req : Send + 'static, Resp : Send + 'static>(&self, req: Req, method: Arc<MethodDescriptor<Req, Resp>>) -> GrpcFuture<Resp> {
         let (complete, oneshot) = oneshot();
 
         self.tx.send(Box::new(CallRequestTyped {
@@ -269,7 +270,7 @@ fn run_client_event_loop(
 
     let (tx, rx) = lp.handle().channel();
 
-    send_proper_channel_tx.send(tx);
+    send_proper_channel_tx.send(tx).unwrap();
 
     let rx = rx.map_err(GrpcError::from);
 

@@ -17,6 +17,7 @@ pub struct SyncSender<T, E> {
     sender: Mutex<Option<Sender<T, E>>>
 }
 
+#[allow(dead_code)]
 impl<T, E> SyncSender<T, E> {
     pub fn send(&self, result: Result<T, E>) {
         let mut ptr = self.sender.lock().unwrap();
