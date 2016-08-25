@@ -61,7 +61,6 @@ use futures_misc::*;
 use grpc::*;
 use solicit_async::*;
 use solicit_misc::*;
-use io_misc::*;
 use misc::*;
 
 
@@ -277,10 +276,10 @@ fn run_write(
 fn run_client_event_loop(socket_addr: SocketAddr, rx: Receiver<Box<CallRequest>, GrpcError>) {
     let mut lp = Loop::new().unwrap();
 
-    let connect = lp.handle().tcp_connect(&socket_addr);
+    let connect = lp.handle().tcp_connect(&socket_addr).map_err(GrpcError::from);
 
     let handshake = connect.and_then(|conn| {
-        client_handshake(conn).map_err(|_| io_error_other("connect"))
+        client_handshake(conn).map_err(GrpcError::from)
     });
 
     let done = handshake.and_then(|conn| {
@@ -298,7 +297,7 @@ fn run_client_event_loop(socket_addr: SocketAddr, rx: Receiver<Box<CallRequest>,
         let shared_for_write = shared_for_read.clone();
         run_read(read, shared_for_read)
             .join(run_write(write, shared_for_write, rx))
-                .map_err(|e| e.into())
+                .map_err(GrpcError::from)
     });
 
     lp.run(done).unwrap();

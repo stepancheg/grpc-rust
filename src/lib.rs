@@ -16,7 +16,6 @@ pub mod futures_grpc;
 pub mod result;
 mod channel_sync_sender;
 mod solicit_async;
-mod io_misc;
 mod futures_misc;
 mod misc;
 mod solicit_misc;
