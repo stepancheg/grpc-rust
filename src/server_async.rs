@@ -23,6 +23,8 @@ use solicit::http::session::Stream as solicit_Stream;
 use solicit::http::connection::HttpConnection;
 use solicit::http::connection::SendStatus;
 use solicit::http::connection::HttpFrame;
+use solicit::http::connection::EndStream;
+use solicit::http::connection::DataChunk;
 use solicit::http::frame::RawFrame;
 use solicit::http::HttpScheme;
 use solicit::http::StreamId;
@@ -35,6 +37,7 @@ use futures::done;
 use futures::Future;
 use futures::stream;
 use futures::stream::Stream;
+use futures_io;
 use futures_io::IoFuture;
 use futures_io::TaskIo;
 use futures_io::TaskIoRead;
@@ -258,7 +261,9 @@ impl StreamFactory for GrpcStreamFactory {
 }
 
 struct ServerSharedState {
-    conn: ServerConnection<GrpcStreamFactory, DefaultSessionState<Server, GrpcHttp2ServerStream>>,
+    conn: HttpConnection,
+    factory: GrpcStreamFactory,
+    state: DefaultSessionState<Server, GrpcHttp2ServerStream>,
 }
 
 struct ReadToWriteMessage {
@@ -278,13 +283,14 @@ fn run_read(
             .map(|(read, raw_frame)| {
                 println!("received frame");
 
-                shared.with(|shared| {
+                shared.with(|shared: &mut ServerSharedState| {
 
-                    let mut send = VecSendFrame(Vec::new());
+                    let mut send_buf = VecSendFrame(Vec::new());
 
+                    let mut session = ServerSession::new(&mut shared.state, &mut shared.factory, &mut send_buf);
                     shared.conn.handle_next_frame(
                         &mut OnceReceiveFrame::new(raw_frame),
-                        &mut send);
+                        &mut session).unwrap();
 
                     // TODO: process send
                 });
@@ -304,16 +310,43 @@ fn run_write(
         -> GrpcFuture<()>
 {
     println!("run_write");
-    let future = receiver.fold(write, |write, message| {
+    let future = receiver.fold((write, shared), |(write, shared), message| {
         println!("writer got message from reader");
-        future_success::<_, io::Error>(write)
+
+        let send_buf = shared.with(|shared: &mut ServerSharedState| {
+            let mut send_buf = VecSendFrame(Vec::new());
+
+            shared.conn.sender(&mut send_buf).send_headers(
+                vec![
+                	Header::new(b":status", b"200"),
+                	Header::new(&b"content-type"[..], &b"application/grpc"[..]),
+                ],
+                message.stream_id,
+                EndStream::No).unwrap();
+
+            let mut body = Vec::new();
+            write_grpc_frame(&mut body, &message.resp_bytes);
+
+            shared.conn.sender(&mut send_buf).send_data(
+                DataChunk::new_borrowed(&body[..], message.stream_id, EndStream::No)).unwrap();
+
+            shared.conn.sender(&mut send_buf).send_headers(
+                vec![
+                	Header::new(&b"grpc-status"[..], b"0"),
+                ],
+                message.stream_id,
+                EndStream::Yes)
+                    .unwrap();
+
+            send_buf.0
+        });
+
+        futures_io::write_all(write, send_buf)
+            .map(|(write, _)| (write, shared))
     });
 
     future
-        .map(|_| {
-            println!("write done");
-            ()
-        })
+        .map(|_| ())
         .map_err(GrpcError::from)
         .boxed()
 }
@@ -343,15 +376,13 @@ fn run_connection(
         let (read, write) = TaskIo::new(conn).split();
 
         let shared_for_read = TaskDataMutex::new(ServerSharedState {
-            conn: ServerConnection::with_connection(
-                HttpConnection::new(HttpScheme::Http),
-                DefaultSessionState::<Server, _>::new(),
-                GrpcStreamFactory {
-                    loop_handle: loop_handle,
-                    service_definition: service_defintion,
-                    sender: sender,
-                }
-            ),
+            conn: HttpConnection::new(HttpScheme::Http),
+            state: DefaultSessionState::<Server, _>::new(),
+            factory: GrpcStreamFactory {
+                loop_handle: loop_handle,
+                service_definition: service_defintion,
+                sender: sender,
+            },
         });
         let shared_for_write = shared_for_read.clone();
 

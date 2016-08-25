@@ -247,7 +247,7 @@ fn run_write(
     -> GrpcFuture<()>
 {
     let future = rx.fold((write, shared), |(write, shared), req| {
-        let buf = shared.with(|shared| {
+        let send_buf = shared.with(|shared| {
             let mut body = Vec::new();
             write_grpc_frame(&mut body, &req.write_req());
             let path = req.method_name().as_bytes().to_vec();
@@ -259,20 +259,17 @@ fn run_write(
 
             stream.stream.call = Some(req);
 
-            let mut buf = VecSendFrame(Vec::new());
+            let mut send_buf = VecSendFrame(Vec::new());
 
-            let stream_id = shared.conn.start_request(stream, &mut buf).unwrap();
-            while let SendStatus::Sent = shared.conn.send_next_data(&mut buf).unwrap() {
+            let stream_id = shared.conn.start_request(stream, &mut send_buf).unwrap();
+            while let SendStatus::Sent = shared.conn.send_next_data(&mut send_buf).unwrap() {
             }
 
-            buf.0
+            send_buf.0
         });
 
-        //println!("write_all {:?}", BsDebug(&buf));
-
-        futures_io::write_all(write, buf)
+        futures_io::write_all(write, send_buf)
             .map(|(write, _)| (write, shared))
-            //.map(|x| { println!("written"); x })
     });
     future.map(|_| ()).boxed()
 }
