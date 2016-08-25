@@ -98,6 +98,7 @@ impl<Req : Send, Resp : Send> CallRequest for CallRequestTyped<Req, Resp> {
 impl GrpcClient {
     pub fn new(host: &str, port: u16) -> GrpcClient {
 
+        // TODO: must not be sync
         let (tx, rx) = channel_sync_sender();
 
         // TODO: sync

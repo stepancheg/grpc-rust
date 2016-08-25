@@ -143,7 +143,6 @@ pub fn server_handshake(conn: TcpStream) -> HttpFuture<TcpStream> {
     let send_settings = recv_settings.and_then(|conn| {
         let settings = {
             let mut frame = SettingsFrame::new_ack();
-            frame.add_setting(HttpSetting::EnablePush(0));
             frame
         };
         send_frame(conn, settings)

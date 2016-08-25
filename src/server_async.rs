@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::thread;
 use std::net::SocketAddr;
 use std::net::ToSocketAddrs;
@@ -39,7 +40,10 @@ use futures_io::TaskIo;
 use futures_io::TaskIoRead;
 use futures_io::TaskIoWrite;
 use futures_mio::Loop;
+use futures_mio::LoopHandle;
 use futures_mio::TcpStream;
+use futures_mio::Sender;
+use futures_mio::Receiver;
 
 use method::*;
 use result::*;
@@ -178,20 +182,10 @@ impl GrpcServerAsync {
 
 struct GrpcHttp2ServerStream {
     stream: DefaultStream,
-
     service_definition: Arc<ServerServiceDefinitionAsync>,
     path: String,
-}
-
-impl GrpcHttp2ServerStream {
-    fn with_id(stream_id: StreamId, service_definition: Arc<ServerServiceDefinitionAsync>) -> Self {
-        println!("new stream {}", stream_id);
-        GrpcHttp2ServerStream {
-            stream: DefaultStream::new(),
-            service_definition: service_definition,
-            path: String::new(),
-        }
-    }
+    loop_handle: LoopHandle,
+    sender: Sender<ReadToWriteMessage>,
 }
 
 impl solicit_Stream for GrpcHttp2ServerStream {
@@ -212,8 +206,22 @@ impl solicit_Stream for GrpcHttp2ServerStream {
     fn set_state(&mut self, state: StreamState) {
         println!("set state {:?}", state);
         if state == StreamState::HalfClosedRemote {
+            let stream_id = self.stream.stream_id.unwrap();
+
             let message = parse_grpc_frame_completely(&self.stream.body).unwrap();
+
+            // TODO: https://github.com/alexcrichton/futures-rs/issues/99
+            let sender = Mutex::new(self.sender.clone());
             self.service_definition.handle_method(&self.path, message)
+                .map(move |resp_bytes| {
+                    println!("send to writer...");
+                    sender.lock().unwrap().send(ReadToWriteMessage {
+                        stream_id: stream_id,
+                        resp_bytes: resp_bytes,
+                    }).unwrap();
+                    println!("send to writer done");
+                    ()
+                })
                 .forget();
         }
         self.stream.set_state(state)
@@ -229,19 +237,33 @@ impl solicit_Stream for GrpcHttp2ServerStream {
 }
 
 struct GrpcStreamFactory {
+    loop_handle: LoopHandle,
     service_definition: Arc<ServerServiceDefinitionAsync>,
+    sender: Sender<ReadToWriteMessage>,
 }
 
 impl StreamFactory for GrpcStreamFactory {
 	type Stream = GrpcHttp2ServerStream;
 
-	fn create(&mut self, id: StreamId) -> GrpcHttp2ServerStream {
-		GrpcHttp2ServerStream::with_id(id, self.service_definition.clone())
+	fn create(&mut self, stream_id: StreamId) -> GrpcHttp2ServerStream {
+        println!("new stream {}", stream_id);
+        GrpcHttp2ServerStream {
+            stream: DefaultStream::with_id(stream_id),
+            service_definition: self.service_definition.clone(),
+            path: String::new(),
+            loop_handle: self.loop_handle.clone(),
+            sender: self.sender.clone(),
+        }
 	}
 }
 
 struct ServerSharedState {
     conn: ServerConnection<GrpcStreamFactory, DefaultSessionState<Server, GrpcHttp2ServerStream>>,
+}
+
+struct ReadToWriteMessage {
+    stream_id: StreamId,
+    resp_bytes: Vec<u8>,
 }
 
 fn run_read(
@@ -277,24 +299,47 @@ fn run_read(
 
 fn run_write(
     write: TaskIoWrite<TcpStream>,
-    shared: TaskDataMutex<ServerSharedState>)
+    shared: TaskDataMutex<ServerSharedState>,
+    receiver: Receiver<ReadToWriteMessage>)
         -> GrpcFuture<()>
 {
-    done(Ok(())).boxed()
+    println!("run_write");
+    let future = receiver.fold(write, |write, message| {
+        println!("writer got message from reader");
+        future_success::<_, io::Error>(write)
+    });
+
+    future
+        .map(|_| {
+            println!("write done");
+            ()
+        })
+        .map_err(GrpcError::from)
+        .boxed()
 }
 
 
 fn run_connection(
     socket: TcpStream,
     peer_addr: SocketAddr,
-    service_defintion: Arc<ServerServiceDefinitionAsync>)
+    service_defintion: Arc<ServerServiceDefinitionAsync>,
+    loop_handle: LoopHandle)
         -> IoFuture<()>
 {
     println!("accepted connection from {}", peer_addr);
-    let handshake = server_handshake(socket)
-        .map_err(|e| e.into());
+    let handshake = server_handshake(socket).map_err(GrpcError::from);
 
-    let run = handshake.and_then(|conn| {
+    let loop_handle_for_channel = loop_handle.clone();
+    let three = handshake.and_then(|conn| {
+        let (sender, receiver_future) = loop_handle_for_channel.channel();
+        receiver_future
+            .map(|receiver| {
+                (conn, sender, receiver)
+            })
+            .map_err(GrpcError::from)
+    });
+
+    let run = three.and_then(|(conn, sender, receiver_stream)| {
         let (read, write) = TaskIo::new(conn).split();
 
         let shared_for_read = TaskDataMutex::new(ServerSharedState {
@@ -302,15 +347,16 @@ fn run_connection(
                 HttpConnection::new(HttpScheme::Http),
                 DefaultSessionState::<Server, _>::new(),
                 GrpcStreamFactory {
-                    // TODO
+                    loop_handle: loop_handle,
                     service_definition: service_defintion,
+                    sender: sender,
                 }
             ),
         });
         let shared_for_write = shared_for_read.clone();
 
         run_read(read, shared_for_read)
-            .join(run_write(write, shared_for_write))
+            .join(run_write(write, shared_for_write, receiver_stream))
     });
 
     let bye = run
@@ -330,11 +376,11 @@ fn run_server_event_loop(listen_addr: SocketAddr, service_definition: ServerServ
 
     let listen = lp.handle().tcp_listen(&listen_addr);
 
-    let service_definition_stream = stream_repeat(Arc::new(service_definition));
+    let stuff = stream_repeat((Arc::new(service_definition), lp.handle()));
 
     let done = listen.and_then(|socket| {
-        socket.incoming().zip(service_definition_stream).for_each(|((socket, peer_addr), service_definition)| {
-            run_connection(socket, peer_addr, service_definition).forget();
+        socket.incoming().zip(stuff).for_each(|((socket, peer_addr), (service_definition, loop_handle))| {
+            run_connection(socket, peer_addr, service_definition, loop_handle).forget();
             Ok(())
         })
     });

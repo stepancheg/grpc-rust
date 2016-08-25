@@ -10,6 +10,12 @@ use futures::stream::BoxStream;
 use futures::task::TaskData;
 
 
+pub fn future_success<T : Send + 'static, E : Send + 'static>(t: T) -> BoxFuture<T, E> {
+    done(Ok(t))
+        .boxed()
+}
+
+
 pub fn stream_repeat<T : Clone + Send + 'static, E>(t: T) -> BoxStream<T, E> {
     let ts = iter::repeat(t).map(|t| Ok(t));
     stream::iter(ts)
