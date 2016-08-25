@@ -6,11 +6,13 @@ use futures::stream::Sender;
 use futures::stream::Receiver;
 //use futures::stream::FutureSender;
 
+#[allow(dead_code)]
 pub fn channel_sync_sender<T, E>() -> (SyncSender<T, E>, Receiver<T, E>) {
     let (sender, receiver) = channel();
     (SyncSender { sender: Mutex::new(Some(sender)) }, receiver)
 }
 
+#[allow(dead_code)]
 pub struct SyncSender<T, E> {
     sender: Mutex<Option<Sender<T, E>>>
 }

@@ -1,10 +1,10 @@
 use std::thread;
 use std::net::SocketAddr;
 use std::net::ToSocketAddrs;
+use std::sync::mpsc;
 
 use futures::Future;
 use futures::stream::Stream;
-use futures::stream::Receiver;
 use futures::oneshot;
 use futures::Complete;
 
@@ -13,6 +13,7 @@ use futures_io::TaskIo;
 use futures_io::TaskIoRead;
 use futures_io::TaskIoWrite;
 
+use futures_mio;
 use futures_mio::Loop;
 use futures_mio::TcpStream;
 
@@ -33,8 +34,6 @@ use solicit::http::HttpScheme;
 use solicit::http::Header;
 
 
-use channel_sync_sender::SyncSender;
-use channel_sync_sender::channel_sync_sender;
 use method::MethodDescriptor;
 
 use error::*;
@@ -48,7 +47,7 @@ use solicit_misc::*;
 
 
 pub struct GrpcClient {
-    tx: SyncSender<Box<CallRequest>, GrpcError>,
+    tx: futures_mio::Sender<Box<CallRequest>>,
 }
 
 trait CallRequest : Send {
@@ -80,15 +79,16 @@ impl<Req : Send, Resp : Send> CallRequest for CallRequestTyped<Req, Resp> {
 impl GrpcClient {
     pub fn new(host: &str, port: u16) -> GrpcClient {
 
-        // TODO: must not be sync
-        let (tx, rx) = channel_sync_sender();
-
         // TODO: sync
         let socket_addr = (host, port).to_socket_addrs().unwrap().next().unwrap();
 
+        let (get_proper_channel_tx, get_proper_channel_rx) = mpsc::channel();
+
         thread::spawn(move || {
-            run_client_event_loop(socket_addr, rx);
+            run_client_event_loop(socket_addr, get_proper_channel_tx);
         });
+
+        let tx = get_proper_channel_rx.recv().unwrap();
 
         let r = GrpcClient {
             tx: tx,
@@ -100,11 +100,11 @@ impl GrpcClient {
     pub fn call<Req : Send + 'static, Resp : Send + 'static>(&self, req: Req, method: MethodDescriptor<Req, Resp>) -> GrpcFuture<Resp> {
         let (complete, oneshot) = oneshot();
 
-        self.tx.send(Ok(Box::new(CallRequestTyped {
+        self.tx.send(Box::new(CallRequestTyped {
             method: method,
             req: req,
             complete: Some(complete),
-        })));
+        })).unwrap();
 
         oneshot.map_err(GrpcError::from).boxed()
     }
@@ -226,7 +226,7 @@ fn run_read(
 fn run_write(
     write: TaskIoWrite<TcpStream>,
     shared: TaskDataMutex<ClientSharedState>,
-    rx: Receiver<Box<CallRequest>, GrpcError>)
+    rx: futures_mio::Receiver<Box<CallRequest>>)
     -> GrpcFuture<()>
 {
     let future = rx.fold((write, shared), |(write, shared), req| {
@@ -255,19 +255,38 @@ fn run_write(
         futures_io::write_all(write, send_buf)
             .map(|(write, _)| (write, shared))
     });
-    future.map(|_| ()).boxed()
+    future
+        .map(|_| ())
+        .map_err(|e| e.into())
+        .boxed()
 }
 
-fn run_client_event_loop(socket_addr: SocketAddr, rx: Receiver<Box<CallRequest>, GrpcError>) {
+fn run_client_event_loop(
+    socket_addr: SocketAddr,
+    send_proper_channel_tx: mpsc::Sender<futures_mio::Sender<Box<CallRequest>>>)
+{
     let mut lp = Loop::new().unwrap();
 
-    let connect = lp.handle().tcp_connect(&socket_addr).map_err(GrpcError::from);
+    let (tx, rx) = lp.handle().channel();
 
-    let handshake = connect.and_then(|conn| {
-        client_handshake(conn).map_err(GrpcError::from)
+    send_proper_channel_tx.send(tx);
+
+    let rx = rx.map_err(GrpcError::from);
+
+    let h = lp.handle();
+    let connect = rx.and_then(|rx| {
+        h.tcp_connect(&socket_addr)
+            .map(|conn| (conn, rx))
+            .map_err(GrpcError::from)
     });
 
-    let done = handshake.and_then(|conn| {
+    let handshake = connect.and_then(|(conn, rx)| {
+        client_handshake(conn)
+            .map(|conn| (conn, rx))
+            .map_err(GrpcError::from)
+    });
+
+    let done = handshake.and_then(|(conn, rx)| {
         let (read, write) = TaskIo::new(conn).split();
 
         let conn = HttpConnection::new(HttpScheme::Http);
