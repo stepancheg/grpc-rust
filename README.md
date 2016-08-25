@@ -37,6 +37,7 @@ Client and server are implemented asynchronously, and sync versions are thin wra
 
 ### TODO
 
+* Tests
 * Proper error handling
 * Upload to crates
 * Streaming
