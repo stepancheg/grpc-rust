@@ -38,6 +38,7 @@ use solicit::http::Header;
 use method::MethodDescriptor;
 
 use error::*;
+use result::*;
 
 use futures_misc::*;
 use futures_grpc::*;
@@ -60,7 +61,7 @@ trait CallRequest : Send {
 struct CallRequestTyped<Req, Resp> {
     method: Arc<MethodDescriptor<Req, Resp>>,
     req: Req,
-    complete: Option<Complete<Resp>>, // TODO: GrpcError
+    complete: Option<Complete<GrpcResult<Resp>>>,
 }
 
 impl<Req : Send, Resp : Send> CallRequest for CallRequestTyped<Req, Resp> {
@@ -73,7 +74,7 @@ impl<Req : Send, Resp : Send> CallRequest for CallRequestTyped<Req, Resp> {
     }
 
     fn complete(&mut self, message: &[u8]) {
-        self.complete.take().unwrap().complete(self.method.resp_marshaller.read(message));
+        self.complete.take().unwrap().complete(Ok(self.method.resp_marshaller.read(message)));
     }
 }
 
@@ -107,7 +108,12 @@ impl GrpcClient {
             complete: Some(complete),
         })).unwrap();
 
-        oneshot.map_err(GrpcError::from).boxed()
+        oneshot.then(|result| {
+            match result {
+                Ok(grpc_result) => grpc_result,
+                Err(err) => Err(GrpcError::from(err)),
+            }
+        }).boxed()
     }
 }
 

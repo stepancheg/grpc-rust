@@ -1,3 +1,4 @@
+// TODO: GrpcResult
 pub trait Marshaller<M> {
     fn write(&self, m: &M) -> Vec<u8>;
     fn read(&self, bytes: &[u8]) -> M;
