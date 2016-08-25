@@ -185,7 +185,6 @@ struct ClientSharedState {
     conn: ClientConnection<DefaultSessionState<Client, GrpcHttp2ClientStream>>,
 }
 
-unsafe impl Sync for ClientSharedState {}
 
 impl ClientSharedState {
     fn new_stream<'n, 'v>(
