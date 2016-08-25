@@ -37,7 +37,7 @@ use futures_mio::Sender;
 use futures_mio::Receiver;
 
 use method::*;
-use result::*;
+use error::*;
 use futures_grpc::*;
 use futures_misc::*;
 use solicit_async::*;

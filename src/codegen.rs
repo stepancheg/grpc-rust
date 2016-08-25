@@ -79,7 +79,7 @@ impl<'a> MethodGen<'a> {
             w.write_line("let h = self.handler.clone();");
             w.write_line("::futures::Future::boxed(::futures::Future::map_err(self.cpupool.execute(move || {");
             w.write_line(format!("    h.{}(p).unwrap()", self.proto.get_name()));
-            w.write_line("}), |_| ::grpc::result::GrpcError::Other(\"cpupool\")))");
+            w.write_line("}), |_| ::grpc::error::GrpcError::Other(\"cpupool\")))");
         });
     }
 }

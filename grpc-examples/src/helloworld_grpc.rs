@@ -91,7 +91,7 @@ impl GreeterAsync for GreeterServerHandlerToAsync {
         let h = self.handler.clone();
         ::futures::Future::boxed(::futures::Future::map_err(self.cpupool.execute(move || {
             h.SayHello(p).unwrap()
-        }), |_| ::grpc::result::GrpcError::Other("cpupool")))
+        }), |_| ::grpc::error::GrpcError::Other("cpupool")))
     }
 }
 

@@ -14,6 +14,7 @@ pub mod grpc_protobuf;
 pub mod marshall;
 pub mod futures_grpc;
 pub mod result;
+pub mod error;
 mod channel_sync_sender;
 mod solicit_async;
 mod futures_misc;

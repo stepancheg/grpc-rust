@@ -36,7 +36,8 @@ use solicit::http::Header;
 use channel_sync_sender::SyncSender;
 use channel_sync_sender::channel_sync_sender;
 use method::MethodDescriptor;
-use result::GrpcError;
+
+use error::*;
 
 use futures_misc::*;
 use futures_grpc::*;
