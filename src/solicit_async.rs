@@ -6,7 +6,6 @@ use futures::done;
 use futures::Future;
 use futures::BoxFuture;
 
-use futures::stream::Stream;
 use futures::stream::BoxStream;
 
 use futures_io::read_exact;
@@ -62,7 +61,8 @@ pub fn recv_raw_frame<R : Read + Send + 'static>(read: R) -> HttpFuture<(R, RawF
         .boxed()
 }
 
-pub fn recv_raw_frame_stream<R : Read + Send + 'static>(read: R) -> HttpStream<RawFrame<'static>> {
+#[allow(dead_code)]
+pub fn recv_raw_frame_stream<R : Read + Send + 'static>(_read: R) -> HttpStream<RawFrame<'static>> {
     // https://users.rust-lang.org/t/futures-rs-how-to-generate-a-stream-from-futures/7020
     panic!();
 }
@@ -81,6 +81,7 @@ pub fn recv_settings_frame<R : Read + Send + 'static>(read: R) -> HttpFuture<(R,
         .boxed()
 }
 
+#[allow(dead_code)]
 pub fn send_raw_frame<W : Write + Send + 'static>(write: W, frame: RawFrame<'static>) -> HttpFuture<W> {
     let bytes = frame.serialize();
     write_all(write, bytes)
@@ -141,11 +142,7 @@ pub fn server_handshake(conn: TcpStream) -> HttpFuture<TcpStream> {
     });
 
     let send_settings = recv_settings.and_then(|conn| {
-        let settings = {
-            let mut frame = SettingsFrame::new_ack();
-            frame
-        };
-        send_frame(conn, settings)
+        send_frame(conn, SettingsFrame::new_ack())
     });
 
     send_settings.boxed()

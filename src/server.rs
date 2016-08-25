@@ -1,19 +1,13 @@
 use std::sync::Arc;
-use std::sync::Mutex;
 use std::thread;
 use std::net::SocketAddr;
 use std::net::ToSocketAddrs;
 use std::io;
-use std::io::Cursor;
 use std::iter::repeat;
 
-use solicit::http::server::ServerConnection;
 use solicit::http::server::StreamFactory;
 use solicit::http::server::ServerSession;
-use solicit::http::transport::TransportStream;
-use solicit::http::transport::TransportReceiveFrame;
 use solicit::http::session::Server;
-use solicit::http::session::SessionState;
 use solicit::http::session::DefaultSessionState;
 use solicit::http::session::DefaultStream;
 use solicit::http::session::StreamState;
@@ -21,17 +15,11 @@ use solicit::http::session::StreamDataChunk;
 use solicit::http::session::StreamDataError;
 use solicit::http::session::Stream as solicit_Stream;
 use solicit::http::connection::HttpConnection;
-use solicit::http::connection::SendStatus;
-use solicit::http::connection::HttpFrame;
 use solicit::http::connection::EndStream;
 use solicit::http::connection::DataChunk;
-use solicit::http::frame::RawFrame;
 use solicit::http::HttpScheme;
 use solicit::http::StreamId;
 use solicit::http::Header;
-use solicit::http::HttpResult;
-use solicit::http::Response;
-use solicit::http::HttpError;
 
 use futures::done;
 use futures::Future;
@@ -146,7 +134,7 @@ pub struct ServerServiceDefinition {
 }
 
 impl ServerServiceDefinition {
-    pub fn new(mut methods: Vec<ServerMethod>) -> ServerServiceDefinition {
+    pub fn new(methods: Vec<ServerMethod>) -> ServerServiceDefinition {
         ServerServiceDefinition {
             methods: methods,
         }
@@ -187,7 +175,6 @@ struct GrpcHttp2ServerStream {
     stream: DefaultStream,
     service_definition: Arc<ServerServiceDefinition>,
     path: String,
-    loop_handle: LoopHandle,
     sender: Sender<ReadToWriteMessage>,
 }
 
@@ -239,7 +226,6 @@ impl solicit_Stream for GrpcHttp2ServerStream {
 }
 
 struct GrpcStreamFactory {
-    loop_handle: LoopHandle,
     service_definition: Arc<ServerServiceDefinition>,
     sender: Sender<ReadToWriteMessage>,
 }
@@ -253,7 +239,6 @@ impl StreamFactory for GrpcStreamFactory {
             stream: DefaultStream::with_id(stream_id),
             service_definition: self.service_definition.clone(),
             path: String::new(),
-            loop_handle: self.loop_handle.clone(),
             sender: self.sender.clone(),
         }
 	}
@@ -378,7 +363,6 @@ fn run_connection(
             conn: HttpConnection::new(HttpScheme::Http),
             state: DefaultSessionState::<Server, _>::new(),
             factory: GrpcStreamFactory {
-                loop_handle: loop_handle,
                 service_definition: service_defintion,
                 sender: sender,
             },

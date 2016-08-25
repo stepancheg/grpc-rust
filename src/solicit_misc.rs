@@ -13,6 +13,7 @@ use solicit::http::connection::SendFrame;
 use misc::*;
 
 
+#[allow(dead_code)]
 pub struct HeaderDebug<'a>(pub &'a Header<'a, 'a>);
 
 impl<'a> fmt::Debug for HeaderDebug<'a> {

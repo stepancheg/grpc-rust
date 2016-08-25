@@ -7,7 +7,6 @@ use std::thread;
 
 use futures::*;
 
-use grpc::result::GrpcResult;
 use grpc::futures_grpc::GrpcFuture;
 
 use grpc_examples::helloworld_grpc::*;
@@ -26,7 +25,7 @@ impl GreeterAsync for GreeterImpl {
 }
 
 fn main() {
-    let mut server = GreeterAsyncServer::new(50051, GreeterImpl);
+    let _server = GreeterAsyncServer::new(50051, GreeterImpl);
 
     loop {
         thread::park();

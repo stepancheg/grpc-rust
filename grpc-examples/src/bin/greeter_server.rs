@@ -21,7 +21,7 @@ impl Greeter for GreeterImpl {
 }
 
 fn main() {
-    let mut server = GreeterServer::new(50051, GreeterImpl);
+    let _server = GreeterServer::new(50051, GreeterImpl);
 
     loop {
         thread::park();

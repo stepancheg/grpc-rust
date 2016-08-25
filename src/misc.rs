@@ -1,5 +1,6 @@
 use std::fmt;
 
+#[allow(dead_code)]
 pub struct BsDebug<'a>(pub &'a [u8]);
 
 impl<'a> fmt::Debug for BsDebug<'a> {

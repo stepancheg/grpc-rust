@@ -1,19 +1,14 @@
 use std::thread;
 use std::net::SocketAddr;
 use std::net::ToSocketAddrs;
-use std::iter::repeat;
 
 use futures::Future;
-use futures::stream;
 use futures::stream::Stream;
-use futures::stream::channel;
-use futures::stream::Sender;
 use futures::stream::Receiver;
 use futures::oneshot;
 use futures::Complete;
 
 use futures_io;
-use futures_io::write_all;
 use futures_io::TaskIo;
 use futures_io::TaskIoRead;
 use futures_io::TaskIoWrite;
@@ -21,16 +16,8 @@ use futures_io::TaskIoWrite;
 use futures_mio::Loop;
 use futures_mio::TcpStream;
 
-use futures_grpc::GrpcFuture;
-use futures_grpc::GrpcStream;
-
 use solicit::http::client::ClientConnection;
-use solicit::http::client::CleartextConnector;
-use solicit::http::client::ClientStream;
-use solicit::http::client::HttpConnect;
 use solicit::http::client::RequestStream;
-use solicit::http::transport::TransportStream;
-use solicit::http::transport::TransportReceiveFrame;
 use solicit::http::session::Client;
 use solicit::http::session::SessionState;
 use solicit::http::session::DefaultSessionState;
@@ -41,14 +28,9 @@ use solicit::http::session::StreamDataError;
 use solicit::http::session::Stream as solicit_Stream;
 use solicit::http::connection::HttpConnection;
 use solicit::http::connection::SendStatus;
-use solicit::http::connection::HttpFrame;
 use solicit::http::frame::RawFrame;
 use solicit::http::HttpScheme;
-use solicit::http::StreamId;
 use solicit::http::Header;
-use solicit::http::HttpResult;
-use solicit::http::Response;
-use solicit::http::HttpError;
 
 
 use channel_sync_sender::SyncSender;
@@ -57,11 +39,11 @@ use method::MethodDescriptor;
 use result::GrpcError;
 
 use futures_misc::*;
+use futures_grpc::*;
 
 use grpc::*;
 use solicit_async::*;
 use solicit_misc::*;
-use misc::*;
 
 
 pub struct GrpcClient {
@@ -123,7 +105,7 @@ impl GrpcClient {
             complete: Some(complete),
         })));
 
-        oneshot.map_err(|e| GrpcError::Other("call")).boxed()
+        oneshot.map_err(GrpcError::from).boxed()
     }
 }
 
@@ -217,15 +199,16 @@ fn run_read(
     let future = stream.fold((read, shared), |(read, shared), _| {
         recv_raw_frame(read).map(|(read, raw_frame)| {
 
-            shared.with(|shared| {
+            shared.with(|shared: &mut ClientSharedState| {
                 // https://github.com/mlalic/solicit/pull/32
                 let raw_frame = RawFrame::from(raw_frame.serialize());
 
                 let mut send = VecSendFrame(Vec::new());
 
+                // TODO: do not unwrap
                 shared.conn.handle_next_frame(
                     &mut OnceReceiveFrame::new(raw_frame),
-                    &mut send);
+                    &mut send).unwrap();
 
                 // TODO: process send
 
@@ -246,7 +229,7 @@ fn run_write(
     -> GrpcFuture<()>
 {
     let future = rx.fold((write, shared), |(write, shared), req| {
-        let send_buf = shared.with(|shared| {
+        let send_buf = shared.with(|shared: &mut ClientSharedState| {
             let mut body = Vec::new();
             write_grpc_frame(&mut body, &req.write_req());
             let path = req.method_name().as_bytes().to_vec();
@@ -260,7 +243,8 @@ fn run_write(
 
             let mut send_buf = VecSendFrame(Vec::new());
 
-            let stream_id = shared.conn.start_request(stream, &mut send_buf).unwrap();
+            // TODO: do not unwrap
+            let _stream_id = shared.conn.start_request(stream, &mut send_buf).unwrap();
             while let SendStatus::Sent = shared.conn.send_next_data(&mut send_buf).unwrap() {
             }
 

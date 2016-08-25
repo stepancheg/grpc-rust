@@ -1,6 +1,7 @@
 use std::ptr;
 use std::mem;
 
+// TODO: GrpcResult
 // return message and size consumed
 pub fn parse_grpc_frame(stream: &[u8]) -> Option<(&[u8], usize)> {
     let header_len = 5;
@@ -9,9 +10,12 @@ pub fn parse_grpc_frame(stream: &[u8]) -> Option<(&[u8], usize)> {
     }
     let compressed = match stream[0] {
         0 => false,
-        1 => panic!("compression is not implemented"),
+        1 => true,
         _ => panic!("unknown compression flag"),
     };
+    if compressed {
+        panic!("compression is not implemented");
+    }
     let mut len_raw = 0u32;
     unsafe {
         ptr::copy_nonoverlapping(&stream[1] as *const u8, &mut len_raw as *mut u32 as *mut u8, 4);

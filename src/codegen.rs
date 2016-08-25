@@ -86,10 +86,10 @@ impl<'a> MethodGen<'a> {
 
 struct ServiceGen<'a> {
     proto: &'a ServiceDescriptorProto,
-    root_scope: &'a RootScope<'a>,
+    _root_scope: &'a RootScope<'a>,
     methods: Vec<MethodGen<'a>>,
-    service_path: String,
-    package: String,
+    _service_path: String,
+    _package: String,
 }
 
 impl<'a> ServiceGen<'a> {
@@ -101,10 +101,10 @@ impl<'a> ServiceGen<'a> {
 
         ServiceGen {
             proto: proto,
-            root_scope: root_scope,
+            _root_scope: root_scope,
             methods: methods,
-            service_path: service_path,
-            package: file.get_package().to_string(),
+            _service_path: service_path,
+            _package: file.get_package().to_string(),
         }
     }
 

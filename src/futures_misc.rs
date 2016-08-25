@@ -10,12 +10,14 @@ use futures::stream::BoxStream;
 use futures::task::TaskData;
 
 
+#[allow(dead_code)]
 pub fn future_success<T : Send + 'static, E : Send + 'static>(t: T) -> BoxFuture<T, E> {
     done(Ok(t))
         .boxed()
 }
 
 
+#[allow(dead_code)]
 pub fn stream_repeat<T : Clone + Send + 'static, E>(t: T) -> BoxStream<T, E> {
     let ts = iter::repeat(t).map(|t| Ok(t));
     stream::iter(ts)
@@ -24,6 +26,7 @@ pub fn stream_repeat<T : Clone + Send + 'static, E>(t: T) -> BoxStream<T, E> {
 
 
 //#[derive(Clone)]
+#[allow(dead_code)]
 pub struct TaskDataMut<A>(TaskData<RefCell<A>>);
 
 impl<A> Clone for TaskDataMut<A> {
@@ -32,6 +35,7 @@ impl<A> Clone for TaskDataMut<A> {
     }
 }
 
+#[allow(dead_code)]
 impl<A> TaskDataMut<A> {
 
     pub fn new(a: A) -> TaskDataMut<A> {

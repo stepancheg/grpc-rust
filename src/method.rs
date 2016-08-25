@@ -1,7 +1,5 @@
 use marshall::*;
 
-use result::GrpcResult;
-
 
 pub struct MethodDescriptor<Req, Resp> {
     pub name: String,
