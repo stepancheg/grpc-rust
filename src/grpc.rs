@@ -1,8 +1,23 @@
-use std::ptr;
-use std::mem;
-
 use error::*;
 use result::*;
+
+
+fn read_u32_be(bytes: &[u8]) -> u32 {
+    0
+        | ((bytes[0] as u32) << 24)
+        | ((bytes[1] as u32) << 16)
+        | ((bytes[2] as u32) <<  8)
+        | ((bytes[3] as u32) <<  0)
+}
+
+fn write_u32_be(v: u32) -> [u8; 4] {
+    [
+        (v >> 24) as u8,
+        (v >> 16) as u8,
+        (v >>  8) as u8,
+        (v >>  0) as u8,
+    ]
+}
 
 
 // return message and size consumed
@@ -19,11 +34,7 @@ pub fn parse_grpc_frame(stream: &[u8]) -> GrpcResult<Option<(&[u8], usize)>> {
     if compressed {
         return Err(GrpcError::Other("compression is not implemented"));
     }
-    let mut len_raw = 0u32;
-    unsafe {
-        ptr::copy_nonoverlapping(&stream[1] as *const u8, &mut len_raw as *mut u32 as *mut u8, 4);
-    }
-    let len = len_raw.to_be() as usize;
+    let len = read_u32_be(&stream[1..]) as usize;
     let end = len + header_len;
     if end > stream.len() {
         return Ok(None);
@@ -42,10 +53,7 @@ pub fn parse_grpc_frame_completely(stream: &[u8]) -> GrpcResult<&[u8]> {
 
 pub fn write_grpc_frame(stream: &mut Vec<u8>, frame: &[u8]) {
 	stream.push(0); // compressed flag
-	let len_raw: [u8; 4] = unsafe {
-	    mem::transmute((frame.len() as u32).to_be())
-	};
-	stream.extend(&len_raw);
+	stream.extend(&write_u32_be(frame.len() as u32));
 	stream.extend(frame);
 }
 
