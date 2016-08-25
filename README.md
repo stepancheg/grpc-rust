@@ -40,5 +40,6 @@ Client and server are implemented asynchronously, and sync versions are thin wra
 * Tests
 * Proper error handling
 * Upload to crates
+* Setup build at travis-ci
 * Streaming
 * Performance
