@@ -1,20 +1,23 @@
 use std::ptr;
 use std::mem;
 
-// TODO: GrpcResult
+use error::*;
+use result::*;
+
+
 // return message and size consumed
-pub fn parse_grpc_frame(stream: &[u8]) -> Option<(&[u8], usize)> {
+pub fn parse_grpc_frame(stream: &[u8]) -> GrpcResult<Option<(&[u8], usize)>> {
     let header_len = 5;
     if stream.len() < header_len {
-        return None;
+        return Ok(None);
     }
     let compressed = match stream[0] {
         0 => false,
         1 => true,
-        _ => panic!("unknown compression flag"),
+        _ => return Err(GrpcError::Other("unknown compression flag")),
     };
     if compressed {
-        panic!("compression is not implemented");
+        return Err(GrpcError::Other("compression is not implemented"));
     }
     let mut len_raw = 0u32;
     unsafe {
@@ -23,16 +26,17 @@ pub fn parse_grpc_frame(stream: &[u8]) -> Option<(&[u8], usize)> {
     let len = len_raw.to_be() as usize;
     let end = len + header_len;
     if end > stream.len() {
-        return None;
+        return Ok(None);
     }
 
-    Some((&stream[header_len..end], end))
+    Ok(Some((&stream[header_len..end], end)))
 }
 
-pub fn parse_grpc_frame_completely(stream: &[u8]) -> Option<&[u8]> {
+pub fn parse_grpc_frame_completely(stream: &[u8]) -> GrpcResult<&[u8]> {
     match parse_grpc_frame(stream) {
-        Some((bytes, pos)) if pos == stream.len() => Some(bytes),
-        _ => None,
+        Ok(Some((bytes, pos))) if pos == stream.len() => Ok(bytes),
+        Ok(..) => Err(GrpcError::Other("not complete single frame")),
+        Err(e) => Err(e),
     }
 }
 
@@ -51,14 +55,14 @@ mod test {
 
     #[test]
     fn test_parse_frame() {
-        assert_eq!(None, parse_grpc_frame(b""));
-        assert_eq!(None, parse_grpc_frame(b"1"));
-        assert_eq!(None, parse_grpc_frame(b"14sc"));
+        assert_eq!(None, parse_grpc_frame(b"").unwrap());
+        assert_eq!(None, parse_grpc_frame(b"1").unwrap());
+        assert_eq!(None, parse_grpc_frame(b"14sc").unwrap());
         assert_eq!(
             None,
-            parse_grpc_frame(b"\x00\x00\x00\x00\x07\x0a\x05wo"));
+            parse_grpc_frame(b"\x00\x00\x00\x00\x07\x0a\x05wo").unwrap());
         assert_eq!(
             Some((&b"\x0a\x05world"[..], 12)),
-            parse_grpc_frame(b"\x00\x00\x00\x00\x07\x0a\x05world"));
+            parse_grpc_frame(b"\x00\x00\x00\x00\x07\x0a\x05world").unwrap());
     }
 }
