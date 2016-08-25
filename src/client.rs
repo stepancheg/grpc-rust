@@ -87,8 +87,10 @@ impl GrpcClient {
 
         let (get_proper_channel_tx, get_proper_channel_rx) = mpsc::channel();
 
+        let host = host.to_owned();
+
         thread::spawn(move || {
-            run_client_event_loop(socket_addr, get_proper_channel_tx);
+            run_client_event_loop(host, socket_addr, get_proper_channel_tx);
         });
 
         let tx = get_proper_channel_rx.recv().unwrap();
@@ -273,6 +275,7 @@ fn run_write(
 }
 
 fn run_client_event_loop(
+    host: String,
     socket_addr: SocketAddr,
     send_proper_channel_tx: mpsc::Sender<futures_mio::Sender<Box<CallRequest>>>)
 {
@@ -306,7 +309,7 @@ fn run_client_event_loop(
         let conn = ClientConnection::with_connection(conn, state);
 
         let shared_for_read = TaskDataMutex::new(ClientSharedState {
-            host: "localhost".to_string(), // TODO
+            host: host,
             conn: conn,
         });
         let shared_for_write = shared_for_read.clone();
