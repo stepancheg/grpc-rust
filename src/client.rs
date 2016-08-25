@@ -49,8 +49,15 @@ use solicit_async::*;
 use solicit_misc::*;
 
 
+// Data sent from event loop to GrpcClient
+struct LoopToClient {
+    call_tx: futures_mio::Sender<Box<CallRequest>>,
+    shutdown_tx: futures_mio::Sender<()>,
+}
+
 pub struct GrpcClient {
-    tx: futures_mio::Sender<Box<CallRequest>>,
+    loop_to_client: LoopToClient,
+    thread_join_handle: Option<thread::JoinHandle<()>>,
 }
 
 trait CallRequest : Send {
@@ -85,18 +92,19 @@ impl GrpcClient {
         // TODO: sync
         let socket_addr = (host, port).to_socket_addrs().unwrap().next().unwrap();
 
-        let (get_proper_channel_tx, get_proper_channel_rx) = mpsc::channel();
+        let (get_from_loop_tx, get_from_loop_rx) = mpsc::channel();
 
         let host = host.to_owned();
 
-        thread::spawn(move || {
-            run_client_event_loop(host, socket_addr, get_proper_channel_tx);
+        let join_handle = thread::spawn(move || {
+            run_client_event_loop(host, socket_addr, get_from_loop_tx);
         });
 
-        let tx = get_proper_channel_rx.recv().unwrap();
+        let loop_to_client = get_from_loop_rx.recv().unwrap();
 
         let r = GrpcClient {
-            tx: tx,
+            loop_to_client: loop_to_client,
+            thread_join_handle: Some(join_handle),
         };
 
         r
@@ -105,7 +113,7 @@ impl GrpcClient {
     pub fn call<Req : Send + 'static, Resp : Send + 'static>(&self, req: Req, method: Arc<MethodDescriptor<Req, Resp>>) -> GrpcFuture<Resp> {
         let (complete, oneshot) = oneshot();
 
-        self.tx.send(Box::new(CallRequestTyped {
+        self.loop_to_client.call_tx.send(Box::new(CallRequestTyped {
             method: method,
             req: req,
             complete: Some(complete),
@@ -117,6 +125,16 @@ impl GrpcClient {
                 Err(err) => Err(GrpcError::from(err)),
             }
         }).boxed()
+    }
+}
+
+impl Drop for GrpcClient {
+    fn drop(&mut self) {
+        // ignore error because even loop may be already dead
+        self.loop_to_client.shutdown_tx.send(()).ok();
+
+        // do not ignore errors because we own event loop thread
+        self.thread_join_handle.take().unwrap().join().unwrap();
     }
 }
 
@@ -236,10 +254,10 @@ fn run_read(
 fn run_write(
     write: TaskIoWrite<TcpStream>,
     shared: TaskDataMutex<ClientSharedState>,
-    rx: futures_mio::Receiver<Box<CallRequest>>)
+    call_rx: futures_mio::Receiver<Box<CallRequest>>)
     -> GrpcFuture<()>
 {
-    let future = rx.fold((write, shared), |(write, shared), req| {
+    let future = call_rx.fold((write, shared), |(write, shared), req| {
         let send_buf = shared.with(|shared: &mut ClientSharedState| {
             let mut body = Vec::new();
             write_grpc_frame(&mut body, &try!(req.write_req()));
@@ -277,30 +295,32 @@ fn run_write(
 fn run_client_event_loop(
     host: String,
     socket_addr: SocketAddr,
-    send_proper_channel_tx: mpsc::Sender<futures_mio::Sender<Box<CallRequest>>>)
+    send_to_client: mpsc::Sender<LoopToClient>)
 {
     let mut lp = Loop::new().unwrap();
 
-    let (tx, rx) = lp.handle().channel();
+    let (call_tx, call_rx) = lp.handle().channel();
+    let (shutdown_tx, shutdown_rx) = lp.handle().channel();
 
-    send_proper_channel_tx.send(tx).unwrap();
+    send_to_client.send(LoopToClient { call_tx: call_tx, shutdown_tx: shutdown_tx }).unwrap();
 
-    let rx = rx.map_err(GrpcError::from);
+    let call_rx = call_rx.map_err(GrpcError::from);
+    let shutdown_rx = shutdown_rx.map_err(GrpcError::from);
 
     let h = lp.handle();
-    let connect = rx.and_then(|rx| {
+    let connect = call_rx.and_then(|call_rx| {
         h.tcp_connect(&socket_addr)
-            .map(|conn| (conn, rx))
+            .map(|conn| (conn, call_rx))
             .map_err(GrpcError::from)
     });
 
-    let handshake = connect.and_then(|(conn, rx)| {
+    let handshake = connect.and_then(|(conn, call_rx)| {
         client_handshake(conn)
-            .map(|conn| (conn, rx))
+            .map(|conn| (conn, call_rx))
             .map_err(GrpcError::from)
     });
 
-    let done = handshake.and_then(|(conn, rx)| {
+    let run_read_write = handshake.and_then(|(conn, call_rx)| {
         let (read, write) = TaskIo::new(conn).split();
 
         let conn = HttpConnection::new(HttpScheme::Http);
@@ -314,9 +334,20 @@ fn run_client_event_loop(
         });
         let shared_for_write = shared_for_read.clone();
         run_read(read, shared_for_read)
-            .join(run_write(write, shared_for_write, rx))
+            .join(run_write(write, shared_for_write, call_rx))
                 .map_err(GrpcError::from)
     });
 
-    lp.run(done).unwrap();
+    let shutdown = shutdown_rx.and_then(|shutdown_rx| {
+        shutdown_rx.into_future()
+            .map_err(|_| GrpcError::Other("error in shutdown channel"))
+            .and_then(|_| {
+                let result: Result<(), _> = Err(GrpcError::Other("shutdown"));
+                result
+            })
+    });
+
+    let done = run_read_write.join(shutdown);
+
+    lp.run(done).ok();
 }
