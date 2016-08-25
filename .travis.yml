@@ -11,14 +11,9 @@ rust:
   - beta
   - nightly
 
-#before_install:
-#  - ./install-protobuf.sh
-#  - PATH=/home/travis/bin:$PATH protoc --version
-
 script:
   - rustc --version
-  ## Full rebuild with regenerate
-  #- PATH=/home/travis/bin:$PATH src/full-rebuild.sh
-  # Test cargo configuration
+  - cargo build
+  - cargo build --manifest-path=grpc-examples/Cargo.toml
   - cargo test
-  - cd grpc-examples && cargo test
+  - cargo test --manifest-path=grpc-examples/Cargo.toml
