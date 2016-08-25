@@ -2,7 +2,7 @@ grpc-rust
 =========
 
 <!-- https://travis-ci.org/stepancheg/rust-protobuf.png -->
-[![Build Status](https://img.shields.io/travis/stepancheg/grpc-rust.svg)](https://travis-ci.org/stepancheg/rust-protobuf)
+[![Build Status](https://img.shields.io/travis/stepancheg/grpc-rust.svg)](https://travis-ci.org/stepancheg/grpc-rust)
 [![License](https://img.shields.io/crates/l/grpc.svg)](https://github.com/stepancheg/grpc-rust/blob/master/LICENSE.txt)
 
 Rust implementation of [gRPC](http://www.grpc.io/) protocol, under development.
