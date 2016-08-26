@@ -1,6 +1,7 @@
 use std::io;
 use std::io::Read;
 use std::io::Write;
+use std::net::SocketAddr;
 
 use futures::done;
 use futures::Future;
@@ -11,6 +12,7 @@ use futures::stream::BoxStream;
 use futures_io::read_exact;
 use futures_io::write_all;
 use futures_mio::TcpStream;
+use futures_mio::LoopHandle;
 
 use solicit::http::HttpError;
 use solicit::http::frame::RawFrame;
@@ -146,4 +148,13 @@ pub fn server_handshake(conn: TcpStream) -> HttpFuture<TcpStream> {
     });
 
     send_settings.boxed()
+}
+
+pub fn connect_and_handshake(lh: LoopHandle, addr: &SocketAddr) -> HttpFuture<TcpStream> {
+    let connect = lh.tcp_connect(&addr)
+        .map_err(|e| e.into());
+
+    let handshake = connect.and_then(client_handshake);
+
+    handshake.boxed()
 }

@@ -363,13 +363,8 @@ fn run_client_event_loop(
     let call_rx = call_rx.map_err(GrpcError::from);
     let shutdown_rx = shutdown_rx.map_err(GrpcError::from);
 
-    let connect = lp.handle().tcp_connect(&socket_addr)
+    let handshake = connect_and_handshake(lp.handle(), &socket_addr)
         .map_err(GrpcError::from);
-
-    let handshake = connect.and_then(|conn| {
-        client_handshake(conn)
-            .map_err(GrpcError::from)
-    });
 
     let run_read_write = handshake.join(call_rx).and_then(|(conn, call_rx)| {
         let (read, write) = TaskIo::new(conn).split();
