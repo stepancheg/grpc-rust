@@ -175,10 +175,14 @@ impl<'a> ServiceGen<'a> {
         w.write_line("");
 
         w.impl_self_block(&self.sync_client_name(), |w| {
-            w.pub_fn("new(host: &str, port: u16) -> Self", |w| {
-                w.expr_block(&self.sync_client_name(), |w| {
-                    w.field_entry("async_client", format!("{}::new(host, port)", &self.async_client_name()));
+            w.pub_fn("new(host: &str, port: u16) -> ::grpc::result::GrpcResult<Self>", |w| {
+                w.write_line(format!("{}::new(host, port).map(|c| {{", &self.async_client_name()));
+                w.indented(|w| {
+                    w.expr_block(&self.sync_client_name(), |w| {
+                        w.field_entry("async_client", "c");
+                    });
                 });
+                w.write_line("})");
             });
         });
 
@@ -208,16 +212,20 @@ impl<'a> ServiceGen<'a> {
         w.write_line("");
 
         w.impl_self_block(&self.async_client_name(), |w| {
-            w.pub_fn("new(host: &str, port: u16) -> Self", |w| {
-                w.expr_block(&self.async_client_name(), |w| {
-                    w.field_entry("grpc_client", "::grpc::client::GrpcClient::new(host, port)");
-                    for method in &self.methods {
-                        method.write_descriptor(
-                            w,
-                            &format!("{}: ::std::sync::Arc::new(", method.descriptor_field_name()),
-                            "),");
-                    }
+            w.pub_fn("new(host: &str, port: u16) -> ::grpc::result::GrpcResult<Self>", |w| {
+                w.write_line("::grpc::client::GrpcClient::new(host, port).map(|c| {");
+                w.indented(|w| {
+                    w.expr_block(&self.async_client_name(), |w| {
+                        w.field_entry("grpc_client", "c");
+                        for method in &self.methods {
+                            method.write_descriptor(
+                                w,
+                                &format!("{}: ::std::sync::Arc::new(", method.descriptor_field_name()),
+                                "),");
+                        }
+                    });
                 });
+                w.write_line("})");
             });
         });
 
