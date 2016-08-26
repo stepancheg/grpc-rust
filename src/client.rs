@@ -315,7 +315,7 @@ fn run_write(
 fn run_client_event_loop(
     host: String,
     socket_addr: SocketAddr,
-    send_to_client: mpsc::Sender<LoopToClient>)
+    send_to_back: mpsc::Sender<LoopToClient>)
 {
     // Create an event loop.
     let mut lp = Loop::new().unwrap();
@@ -325,7 +325,7 @@ fn run_client_event_loop(
     let (shutdown_tx, shutdown_rx) = lp.handle().channel();
 
     // Send channels back to GrpcClient
-    send_to_client.send(LoopToClient { call_tx: call_tx, shutdown_tx: shutdown_tx }).unwrap();
+    send_to_back.send(LoopToClient { call_tx: call_tx, shutdown_tx: shutdown_tx }).unwrap();
 
     let call_rx = call_rx.map_err(GrpcError::from);
     let shutdown_rx = shutdown_rx.map_err(GrpcError::from);
@@ -376,5 +376,6 @@ fn run_client_event_loop(
     // or shutdown signal.
     let done = run_read_write.join(shutdown);
 
+    // TODO: do not ignore error
     lp.run(done).ok();
 }

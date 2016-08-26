@@ -4,6 +4,7 @@ use std::net::SocketAddr;
 use std::net::ToSocketAddrs;
 use std::io;
 use std::iter::repeat;
+use std::sync::mpsc;
 
 use solicit::http::server::StreamFactory;
 use solicit::http::server::ServerSession;
@@ -30,6 +31,7 @@ use futures_io::IoFuture;
 use futures_io::TaskIo;
 use futures_io::TaskIoRead;
 use futures_io::TaskIoWrite;
+use futures_mio;
 use futures_mio::Loop;
 use futures_mio::LoopHandle;
 use futures_mio::TcpStream;
@@ -116,7 +118,7 @@ pub struct ServerMethod {
 }
 
 impl ServerMethod {
-    pub fn new<Req, Resp, H>(method: MethodDescriptor<Req, Resp>, handler: H) -> ServerMethod
+    pub fn new<Req, Resp, H>(method: Arc<MethodDescriptor<Req, Resp>>, handler: H) -> ServerMethod
         where
             Req : Send + 'static,
             Resp : Send + 'static,
@@ -125,7 +127,7 @@ impl ServerMethod {
         ServerMethod {
             name: method.name.clone(),
             dispatch: Box::new(MethodHandlerDispatchAsyncImpl {
-                desc: Arc::new(method),
+                desc: method,
                 method_handler: Box::new(handler),
             }),
         }
@@ -156,21 +158,48 @@ impl ServerServiceDefinition {
 }
 
 
+struct LoopToServer {
+    // used only once to send shutdown signal
+    shutdown_tx: futures_mio::Sender<()>,
+    local_addr: SocketAddr,
+}
 
 pub struct GrpcServer {
-
+    loop_to_server: LoopToServer,
+    thread_join_handle: Option<thread::JoinHandle<()>>,
 }
 
 impl GrpcServer {
     pub fn new(port: u16, service_definition: ServerServiceDefinition) -> GrpcServer {
         let listen_addr = ("::", port).to_socket_addrs().unwrap().next().unwrap();
 
-        thread::spawn(move || {
-            run_server_event_loop(listen_addr, service_definition);
+        let (get_from_loop_tx, get_from_loop_rx) = mpsc::channel();
+
+        let join_handle = thread::spawn(move || {
+            run_server_event_loop(listen_addr, service_definition, get_from_loop_tx);
         });
 
+        let loop_to_server = get_from_loop_rx.recv().unwrap();
+
         GrpcServer {
+            loop_to_server: loop_to_server,
+            thread_join_handle: Some(join_handle),
         }
+    }
+
+    pub fn local_addr(&self) -> &SocketAddr {
+        &self.loop_to_server.local_addr
+    }
+}
+
+// We shutdown client in destructor.
+impl Drop for GrpcServer {
+    fn drop(&mut self) {
+        // ignore error because even loop may be already dead
+        self.loop_to_server.shutdown_tx.send(()).ok();
+
+        // do not ignore errors because we own event loop thread
+        self.thread_join_handle.take().unwrap().join().unwrap();
     }
 }
 
@@ -388,19 +417,48 @@ fn run_connection(
         .boxed()
 }
 
-fn run_server_event_loop(listen_addr: SocketAddr, service_definition: ServerServiceDefinition) {
-    let mut lp = Loop::new().unwrap();
+fn run_server_event_loop(
+    listen_addr: SocketAddr,
+    service_definition: ServerServiceDefinition,
+    send_to_back: mpsc::Sender<LoopToServer>)
+{
+    let mut lp = Loop::new().expect("loop new");
+
+    let (shutdown_tx, shutdown_rx) = lp.handle().channel();
+
+    let shutdown_rx = shutdown_rx.map_err(GrpcError::from);
 
     let listen = lp.handle().tcp_listen(&listen_addr);
 
     let stuff = stream_repeat((Arc::new(service_definition), lp.handle()));
 
-    let done = listen.and_then(|socket| {
+    let loop_run = listen.and_then(|socket| {
+        let local_addr = socket.local_addr().unwrap();
+        send_to_back
+            .send(LoopToServer { shutdown_tx: shutdown_tx, local_addr: local_addr })
+            .expect("send back");
+
         socket.incoming().zip(stuff).for_each(|((socket, peer_addr), (service_definition, loop_handle))| {
             run_connection(socket, peer_addr, service_definition, loop_handle).forget();
             Ok(())
         })
+    }).map_err(GrpcError::from);
+
+    let shutdown = shutdown_rx.and_then(|shutdown_rx| {
+        shutdown_rx.into_future()
+            .map_err(|_| GrpcError::Other("error in shutdown channel"))
+            .and_then(|_| {
+                // Must complete with error,
+                // so `join` with this future cancels another future.
+                let result: Result<(), _> = Err(GrpcError::Other("shutdown"));
+                result
+            })
     });
 
-    lp.run(done).unwrap();
+    // Wait for either completion of connection (i. e. error)
+    // or shutdown signal.
+    let done = loop_run.join(shutdown);
+
+    // TODO: do not ignore error
+    lp.run(done).ok();
 }

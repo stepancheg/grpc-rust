@@ -287,7 +287,7 @@ impl<'a> ServiceGen<'a> {
                     w.block("vec![", "],", |w| {
                         for method in &self.methods {
                             w.block("::grpc::server::ServerMethod::new(", "),", |w| {
-                                method.write_descriptor(w, "", ",");
+                                method.write_descriptor(w, "::std::sync::Arc::new(", "),");
                                 w.block("{", "},", |w| {
                                     w.write_line("let handler_copy = handler_arc.clone();");
                                     w.write_line(format!("::grpc::server::MethodHandlerFn::new(move |p| handler_copy.{}(p))", method.proto.get_name()));

@@ -120,13 +120,13 @@ impl GreeterAsyncServer {
         let service_definition = ::grpc::server::ServerServiceDefinition::new(
             vec![
                 ::grpc::server::ServerMethod::new(
-                    ::grpc::method::MethodDescriptor {
+                    ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
                         name: "/helloworld.Greeter/SayHello".to_string(),
                         client_streaming: false,
                         server_streaming: false,
                         req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
                         resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                    },
+                    }),
                     {
                         let handler_copy = handler_arc.clone();
                         ::grpc::server::MethodHandlerFn::new(move |p| handler_copy.SayHello(p))

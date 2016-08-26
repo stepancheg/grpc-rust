@@ -17,6 +17,9 @@ futures     = { git = "https://github.com/alexcrichton/futures-rs" }
 futures-io =  { git = "https://github.com/alexcrichton/futures-rs" }
 futures-mio = { git = "https://github.com/alexcrichton/futures-rs" }
 
+[lib]
+doctest = false
+
 [[bin]]
 
 name = "protoc-gen-rust-grpc"
