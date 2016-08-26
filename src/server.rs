@@ -43,6 +43,7 @@ use futures_mio::Receiver;
 
 use method::*;
 use error::*;
+use result::*;
 use futures_grpc::*;
 use futures_misc::*;
 use solicit_async::*;
@@ -244,24 +245,12 @@ impl solicit_Stream for GrpcHttp2ServerStream {
             let sender = self.sender.clone();
             self.service_definition.handle_method(&self.path, message)
                 .then(move |result| {
-                    match result {
-                        Ok(resp_bytes) => {
-                            println!("send success to writer...");
-                            sender.send(ReadToWriteMessage {
-                                stream_id: stream_id,
-                                content: ReadToWriteMessageContent::Success(resp_bytes),
-                            }).unwrap();
-                        }
-                        Err(..) => {
-                            println!("send error to writer...");
-                            sender.send(ReadToWriteMessage {
-                                stream_id: stream_id,
-                                content: ReadToWriteMessageContent::Error,
-                            }).unwrap();
-                        }
-                    }
-                    let result: Result<_, ()> = Ok(());
-                    result.into_future()
+                    sender.send(ReadToWriteMessage {
+                        stream_id: stream_id,
+                        content: result,
+                    }).unwrap();
+                    let result: GrpcResult<_> = Ok(());
+                    result
                 })
                 .forget();
         }
@@ -302,14 +291,9 @@ struct ServerSharedState {
     state: DefaultSessionState<Server, GrpcHttp2ServerStream>,
 }
 
-enum ReadToWriteMessageContent {
-    Success(Vec<u8>),
-    Error
-}
-
 struct ReadToWriteMessage {
     stream_id: StreamId,
-    content: ReadToWriteMessageContent,
+    content: GrpcResult<Vec<u8>>,
 }
 
 fn run_read(
@@ -358,11 +342,11 @@ fn run_write(
             let mut send_buf = VecSendFrame(Vec::new());
 
             match message.content {
-                ReadToWriteMessageContent::Success(resp_bytes) => {
+                Ok(resp_bytes) => {
                     shared.conn.sender(&mut send_buf).send_headers(
                         vec![
-                        	Header::new(b":status", b"200"),
-                        	Header::new(&b"content-type"[..], &b"application/grpc"[..]),
+                            Header::new(b":status", b"200"),
+                            Header::new(&b"content-type"[..], &b"application/grpc"[..]),
                         ],
                         message.stream_id,
                         EndStream::No).unwrap();
@@ -375,16 +359,17 @@ fn run_write(
 
                     shared.conn.sender(&mut send_buf).send_headers(
                         vec![
-                        	Header::new(&b"grpc-status"[..], b"0"),
+                            Header::new(HEADER_GRPC_STATUS.as_bytes(), b"0"),
                         ],
                         message.stream_id,
                         EndStream::Yes)
                             .unwrap();
                 }
-                ReadToWriteMessageContent::Error => {
+                Err(e) => {
                     shared.conn.sender(&mut send_buf).send_headers(
                         vec![
-                        	Header::new(b":status", b"500"),
+                            Header::new(&b":status"[..], &b"500"[..]),
+                            Header::new(HEADER_GRPC_MESSAGE.as_bytes(), format!("{:?}", e).into_bytes()),
                         ],
                         message.stream_id,
                         EndStream::Yes).unwrap();

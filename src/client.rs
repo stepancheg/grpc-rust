@@ -3,6 +3,7 @@ use std::net::SocketAddr;
 use std::net::ToSocketAddrs;
 use std::sync::mpsc;
 use std::sync::Arc;
+use std::str::from_utf8;
 
 use futures;
 use futures::Future;
@@ -93,8 +94,10 @@ impl<Req : Send, Resp : Send> CallRequest for CallRequestTyped<Req, Resp> {
     }
 
     fn complete(&mut self, message: GrpcResult<&[u8]>) {
-        let result = message.and_then(|message| self.method.resp_marshaller.read(message));
-        self.complete.take().unwrap().complete(result);
+        if let Some(complete) = self.complete.take() {
+            let result = message.and_then(|message| self.method.resp_marshaller.read(message));
+            complete.complete(result);
+        }
     }
 }
 
@@ -162,6 +165,15 @@ struct GrpcHttp2ClientStream {
     call: Option<Box<CallRequest>>,
 }
 
+fn get_header<'a>(stream: &'a DefaultStream, name: &str) -> Option<&'a str> {
+    stream.headers.as_ref()
+        .and_then(|headers| {
+            headers.iter()
+                .find(|h| h.name() == name.as_bytes())
+                .and_then(|h| from_utf8(h.value()).ok())
+        })
+}
+
 impl GrpcHttp2ClientStream {
     fn new() -> GrpcHttp2ClientStream {
         GrpcHttp2ClientStream {
@@ -183,8 +195,18 @@ impl solicit_Stream for GrpcHttp2ClientStream {
     fn set_state(&mut self, state: StreamState) {
         //println!("set_state: {:?}", state);
         if state == StreamState::Closed {
-            let message_serialized = parse_grpc_frame_completely(&self.stream.body);
-            self.call.as_mut().unwrap().complete(message_serialized);
+            let status = get_header(&self.stream, ":status");
+            let grpc_status = get_header(&self.stream, HEADER_GRPC_STATUS);
+            let message = get_header(&self.stream, HEADER_GRPC_MESSAGE);
+            let result =
+                if let (Some("200"), Some("0")) = (status, grpc_status) {
+                    parse_grpc_frame_completely(&self.stream.body)
+                } else if let Some(message) = message {
+                    Err(GrpcError::GrpcHttp(GrpcHttpError { grpc_message: message.to_owned() }))
+                } else {
+                    Err(GrpcError::Other("not 200/0"))
+                };
+            self.call.as_mut().unwrap().complete(result);
         }
         self.stream.set_state(state)
     }

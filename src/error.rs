@@ -8,11 +8,17 @@ use solicit::http::HttpError;
 
 use protobuf::ProtobufError;
 
+#[derive(Debug)]
+pub struct GrpcHttpError {
+    pub grpc_message: String,
+}
+
 
 #[derive(Debug)]
 pub enum GrpcError {
     Io(io::Error),
     Http(HttpError),
+    GrpcHttp(GrpcHttpError),
     Canceled(futures::Canceled),
     Protobuf(ProtobufError),
     Other(&'static str),
@@ -23,6 +29,7 @@ impl Error for GrpcError {
         match self {
             &GrpcError::Io(ref err) => err.description(),
             &GrpcError::Http(ref err) => err.description(),
+            &GrpcError::GrpcHttp(ref err) => &err.grpc_message,
             &GrpcError::Protobuf(ref err) => err.description(),
             &GrpcError::Canceled(..) => "canceled",
             &GrpcError::Other(ref message) => message,
@@ -35,6 +42,7 @@ impl fmt::Display for GrpcError {
         match self {
             &GrpcError::Io(ref err) => write!(f, "io error: {}", err.description()),
             &GrpcError::Http(ref err) => write!(f, "http error: {}", err.description()),
+            &GrpcError::GrpcHttp(ref err) => write!(f, "grpc http error: {}", err.grpc_message),
             &GrpcError::Protobuf(ref err) => write!(f, "protobuf error: {}", err.description()),
             &GrpcError::Canceled(..) => write!(f, "canceled"),
             &GrpcError::Other(ref message) => write!(f, "other error: {}", message),
