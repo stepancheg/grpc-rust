@@ -71,7 +71,7 @@ trait CallRequest : Send {
     fn method_name(&self) -> &str;
     // called when server receives response from server
     // to send it back method called
-    fn complete(&mut self, message: &[u8]);
+    fn complete(&mut self, message: GrpcResult<&[u8]>);
 }
 
 struct CallRequestTyped<Req, Resp> {
@@ -92,8 +92,9 @@ impl<Req : Send, Resp : Send> CallRequest for CallRequestTyped<Req, Resp> {
         &self.method.name
     }
 
-    fn complete(&mut self, message: &[u8]) {
-        self.complete.take().unwrap().complete(self.method.resp_marshaller.read(message));
+    fn complete(&mut self, message: GrpcResult<&[u8]>) {
+        let result = message.and_then(|message| self.method.resp_marshaller.read(message));
+        self.complete.take().unwrap().complete(result);
     }
 }
 
@@ -182,8 +183,7 @@ impl solicit_Stream for GrpcHttp2ClientStream {
     fn set_state(&mut self, state: StreamState) {
         //println!("set_state: {:?}", state);
         if state == StreamState::Closed {
-            //println!("response body: {:?}", BsDebug(&self.stream.body));
-            let message_serialized = parse_grpc_frame_completely(&self.stream.body).unwrap();
+            let message_serialized = parse_grpc_frame_completely(&self.stream.body);
             self.call.as_mut().unwrap().complete(message_serialized);
         }
         self.stream.set_state(state)

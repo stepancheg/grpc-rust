@@ -5,6 +5,8 @@ use std::net::ToSocketAddrs;
 use std::io;
 use std::iter::repeat;
 use std::sync::mpsc;
+use std::panic::catch_unwind;
+use std::panic::AssertUnwindSafe;
 
 use solicit::http::server::StreamFactory;
 use solicit::http::server::ServerSession;
@@ -23,6 +25,7 @@ use solicit::http::StreamId;
 use solicit::http::Header;
 
 use futures;
+use futures::IntoFuture;
 use futures::Future;
 use futures::stream;
 use futures::stream::Stream;
@@ -104,11 +107,17 @@ impl<Req, Resp> MethodHandlerDispatch for MethodHandlerDispatchAsyncImpl<Req, Re
             Ok(req) => req,
             Err(e) => return futures::done(Err(e)).boxed(),
         };
-        let resp = self.method_handler.handle(req);
-        let desc_copy = self.desc.clone();
-        resp
-            .and_then(move |resp| desc_copy.resp_marshaller.write(&resp))
-            .boxed()
+        let resp =
+            catch_unwind(AssertUnwindSafe(|| self.method_handler.handle(req)));
+        match resp {
+            Ok(resp) => {
+                let desc_copy = self.desc.clone();
+                resp
+                    .and_then(move |resp| desc_copy.resp_marshaller.write(&resp))
+                    .boxed()
+            }
+            Err(..) => Err(GrpcError::Other("panic in handler")).into_future().boxed(),
+        }
     }
 }
 
@@ -234,14 +243,25 @@ impl solicit_Stream for GrpcHttp2ServerStream {
 
             let sender = self.sender.clone();
             self.service_definition.handle_method(&self.path, message)
-                .map(move |resp_bytes| {
-                    println!("send to writer...");
-                    sender.send(ReadToWriteMessage {
-                        stream_id: stream_id,
-                        resp_bytes: resp_bytes,
-                    }).unwrap();
-                    println!("send to writer done");
-                    ()
+                .then(move |result| {
+                    match result {
+                        Ok(resp_bytes) => {
+                            println!("send success to writer...");
+                            sender.send(ReadToWriteMessage {
+                                stream_id: stream_id,
+                                content: ReadToWriteMessageContent::Success(resp_bytes),
+                            }).unwrap();
+                        }
+                        Err(..) => {
+                            println!("send error to writer...");
+                            sender.send(ReadToWriteMessage {
+                                stream_id: stream_id,
+                                content: ReadToWriteMessageContent::Error,
+                            }).unwrap();
+                        }
+                    }
+                    let result: Result<_, ()> = Ok(());
+                    result.into_future()
                 })
                 .forget();
         }
@@ -282,9 +302,14 @@ struct ServerSharedState {
     state: DefaultSessionState<Server, GrpcHttp2ServerStream>,
 }
 
+enum ReadToWriteMessageContent {
+    Success(Vec<u8>),
+    Error
+}
+
 struct ReadToWriteMessage {
     stream_id: StreamId,
-    resp_bytes: Vec<u8>,
+    content: ReadToWriteMessageContent,
 }
 
 fn run_read(
@@ -326,33 +351,45 @@ fn run_write(
         -> GrpcFuture<()>
 {
     println!("run_write");
-    let future = receiver.fold((write, shared), |(write, shared), message| {
+    let future = receiver.fold((write, shared), |(write, shared), message: ReadToWriteMessage| {
         println!("writer got message from reader");
 
-        let send_buf = shared.with(|shared: &mut ServerSharedState| {
+        let send_buf = shared.with(move |shared: &mut ServerSharedState| {
             let mut send_buf = VecSendFrame(Vec::new());
 
-            shared.conn.sender(&mut send_buf).send_headers(
-                vec![
-                	Header::new(b":status", b"200"),
-                	Header::new(&b"content-type"[..], &b"application/grpc"[..]),
-                ],
-                message.stream_id,
-                EndStream::No).unwrap();
+            match message.content {
+                ReadToWriteMessageContent::Success(resp_bytes) => {
+                    shared.conn.sender(&mut send_buf).send_headers(
+                        vec![
+                        	Header::new(b":status", b"200"),
+                        	Header::new(&b"content-type"[..], &b"application/grpc"[..]),
+                        ],
+                        message.stream_id,
+                        EndStream::No).unwrap();
 
-            let mut body = Vec::new();
-            write_grpc_frame(&mut body, &message.resp_bytes);
+                    let mut body = Vec::new();
+                    write_grpc_frame(&mut body, &resp_bytes);
 
-            shared.conn.sender(&mut send_buf).send_data(
-                DataChunk::new_borrowed(&body[..], message.stream_id, EndStream::No)).unwrap();
+                    shared.conn.sender(&mut send_buf).send_data(
+                        DataChunk::new_borrowed(&body[..], message.stream_id, EndStream::No)).unwrap();
 
-            shared.conn.sender(&mut send_buf).send_headers(
-                vec![
-                	Header::new(&b"grpc-status"[..], b"0"),
-                ],
-                message.stream_id,
-                EndStream::Yes)
-                    .unwrap();
+                    shared.conn.sender(&mut send_buf).send_headers(
+                        vec![
+                        	Header::new(&b"grpc-status"[..], b"0"),
+                        ],
+                        message.stream_id,
+                        EndStream::Yes)
+                            .unwrap();
+                }
+                ReadToWriteMessageContent::Error => {
+                    shared.conn.sender(&mut send_buf).send_headers(
+                        vec![
+                        	Header::new(b":status", b"500"),
+                        ],
+                        message.stream_id,
+                        EndStream::Yes).unwrap();
+                }
+            }
 
             send_buf.0
         });
