@@ -33,7 +33,6 @@ use solicit::http::session::StreamDataError;
 use solicit::http::session::Stream as solicit_Stream;
 use solicit::http::connection::HttpConnection;
 use solicit::http::connection::SendStatus;
-use solicit::http::frame::RawFrame;
 use solicit::http::HttpScheme;
 use solicit::http::Header;
 
@@ -45,6 +44,7 @@ use result::*;
 
 use futures_misc::*;
 use futures_grpc::*;
+use futures_stream_merge2;
 
 use grpc::*;
 use solicit_async::*;
@@ -266,49 +266,70 @@ impl ClientSharedState {
     }
 }
 
-// All read from the socket happens in this function.
-fn run_read(
+struct ReadLoopBody {
     read: TaskIoRead<TcpStream>,
-    shared: TaskDataMutex<ClientSharedState>)
-        -> GrpcFuture<()>
-{
-    let stream = stream_repeat(());
+    shared: TaskDataMutex<ClientSharedState>,
+    read_to_write_tx: futures_mio::Sender<ReadToWrite>,
+}
 
-    let future = stream.fold((read, shared), |(read, shared), _| {
-        recv_raw_frame(read).map(|(read, raw_frame)| {
+impl ReadLoopBody {
+    fn read_and_process_frame(self) -> GrpcFuture<Self> {
+        let shared = self.shared;
+        let read_to_write_tx = self.read_to_write_tx;
+        recv_raw_frame(self.read).map(move |(read, raw_frame)| {
 
             shared.with(|shared: &mut ClientSharedState| {
-                // https://github.com/mlalic/solicit/pull/32
-                let raw_frame = RawFrame::from(raw_frame.serialize());
-
                 let mut send = VecSendFrame(Vec::new());
 
-                // TODO: do not unwrap
                 shared.conn.handle_next_frame(
                     &mut OnceReceiveFrame::new(raw_frame),
                     &mut send).unwrap();
 
-                // TODO: process send
-
                 shared.conn.state.get_closed();
+
+                if !send.0.is_empty() {
+                    read_to_write_tx.send(ReadToWrite::SendToSocket(send.0))
+                        .expect("read to write");
+                }
             });
 
-            (read, shared)
-        })
+            ReadLoopBody { read: read, shared: shared, read_to_write_tx: read_to_write_tx }
+        }).map_err(GrpcError::from).boxed()
+    }
+}
+
+// All read from the socket happens in this function.
+fn run_read(
+    read: TaskIoRead<TcpStream>,
+    shared: TaskDataMutex<ClientSharedState>,
+    read_to_write_tx: futures_mio::Sender<ReadToWrite>)
+        -> GrpcFuture<()>
+{
+    let stream = stream_repeat(());
+
+    let loop_body = ReadLoopBody { read: read, shared: shared, read_to_write_tx: read_to_write_tx };
+
+    let future = stream.fold(loop_body, |loop_body, _| {
+        loop_body.read_and_process_frame()
     });
 
     future.map(|_| ()).boxed()
 }
 
-// All write to socket happens in this function.
-fn run_write(
+enum ReadToWrite {
+    SendToSocket(Vec<u8>),
+}
+
+
+struct WriteLoopBody {
     write: TaskIoWrite<TcpStream>,
     shared: TaskDataMutex<ClientSharedState>,
-    call_rx: futures_mio::Receiver<Box<CallRequest>>)
-    -> GrpcFuture<()>
-{
-    let future = call_rx.fold((write, shared), |(write, shared), req| {
-        let send_buf = shared.with(|shared: &mut ClientSharedState| {
+}
+
+
+impl WriteLoopBody {
+    fn process_call(self, req: Box<CallRequest>) -> GrpcFuture<Self> {
+        let send_buf: GrpcResult<Vec<u8>> = self.shared.with(|shared: &mut ClientSharedState| {
             let mut body = Vec::new();
             write_grpc_frame(&mut body, &try!(req.write_req()));
             let path = req.method_name().as_bytes().to_vec();
@@ -330,15 +351,61 @@ fn run_write(
             Ok(send_buf.0)
         });
 
+        let write = self.write;
+        let shared = self.shared;
         futures::done(send_buf)
-            .and_then(|send_buf| {
+            .and_then(move |send_buf| {
                 futures_io::write_all(write, send_buf)
-                    .map(|(write, _)| (write, shared))
+                    .map(move |(write, _)| WriteLoopBody { write: write, shared: shared })
+                    .map_err(GrpcError::from)
             })
+            .boxed()
+    }
+
+    fn process_read_to_write(self, read_to_write: ReadToWrite) -> GrpcFuture<Self> {
+        let shared = self.shared;
+
+        match read_to_write {
+            ReadToWrite::SendToSocket(buf) => {
+                futures_io::write_all(self.write, buf)
+                    .map(move |(write, _)| WriteLoopBody { write: write, shared: shared })
+                    .map_err(GrpcError::from)
+                    .boxed()
+            }
+        }
+    }
+}
+
+
+// All write to socket happens in this function.
+fn run_write(
+    write: TaskIoWrite<TcpStream>,
+    shared: TaskDataMutex<ClientSharedState>,
+    call_rx: futures_mio::Receiver<Box<CallRequest>>,
+    read_to_write_rx: futures_mio::Receiver<ReadToWrite>)
+    -> GrpcFuture<()>
+{
+
+    let merge = futures_stream_merge2::new(call_rx, read_to_write_rx)
+        .map_err(GrpcError::from);
+
+    let loop_body = WriteLoopBody {
+        write: write,
+        shared: shared,
+    };
+
+    let future = merge.fold(loop_body, |loop_body: WriteLoopBody, req| {
+        match req {
+            futures_stream_merge2::MergedItem::First(call) => {
+                loop_body.process_call(call)
+            }
+            futures_stream_merge2::MergedItem::Second(read_to_write) => {
+                loop_body.process_read_to_write(read_to_write)
+            }
+        }
     });
     future
         .map(|_| ())
-        .map_err(|e| e.into())
         .boxed()
 }
 
@@ -351,8 +418,11 @@ fn run_client_event_loop(
     // Create an event loop.
     let mut lp = Loop::new().unwrap();
 
-    // Create channels to accept request from outside.
+    // Create a channel to receive method calls.
     let (call_tx, call_rx) = lp.handle().channel();
+    let call_rx = call_rx.map_err(GrpcError::from);
+
+    // Create a channel to receive shutdown signal.
     let (shutdown_tx, shutdown_rx) = lp.handle().channel();
 
     // Send channels back to GrpcClient
@@ -360,13 +430,15 @@ fn run_client_event_loop(
         .send(LoopToClient { call_tx: call_tx, shutdown_tx: shutdown_tx })
         .expect("send back");
 
-    let call_rx = call_rx.map_err(GrpcError::from);
     let shutdown_rx = shutdown_rx.map_err(GrpcError::from);
 
     let handshake = connect_and_handshake(lp.handle(), &socket_addr)
         .map_err(GrpcError::from);
 
-    let run_read_write = handshake.join(call_rx).and_then(|(conn, call_rx)| {
+    let (read_to_write_tx, read_to_write_rx) = lp.handle().channel();
+    let read_to_write_rx = read_to_write_rx.map_err(GrpcError::from);
+
+    let run_read_write = handshake.join3(call_rx, read_to_write_rx).and_then(|(conn, call_rx, read_to_write_rx)| {
         let (read, write) = TaskIo::new(conn).split();
 
         let conn = HttpConnection::new(HttpScheme::Http);
@@ -379,8 +451,8 @@ fn run_client_event_loop(
             conn: conn,
         });
         let shared_for_write = shared_for_read.clone();
-        run_read(read, shared_for_read)
-            .join(run_write(write, shared_for_write, call_rx))
+        run_read(read, shared_for_read, read_to_write_tx)
+            .join(run_write(write, shared_for_write, call_rx, read_to_write_rx))
     });
 
     let shutdown = shutdown_rx.and_then(|shutdown_rx| {

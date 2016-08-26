@@ -25,13 +25,13 @@ impl<'a> fmt::Debug for HeaderDebug<'a> {
 
 
 
-pub struct OnceReceiveFrame {
-    raw_frame: RawFrame<'static>,
+pub struct OnceReceiveFrame<'a> {
+    raw_frame: RawFrame<'a>,
     used: bool,
 }
 
-impl OnceReceiveFrame {
-    pub fn new(raw_frame: RawFrame<'static>) -> OnceReceiveFrame {
+impl<'a> OnceReceiveFrame<'a> {
+    pub fn new(raw_frame: RawFrame<'a>) -> OnceReceiveFrame<'a> {
         OnceReceiveFrame {
             raw_frame: raw_frame,
             used: false,
@@ -39,7 +39,7 @@ impl OnceReceiveFrame {
     }
 }
 
-impl ReceiveFrame for OnceReceiveFrame {
+impl<'a> ReceiveFrame for OnceReceiveFrame<'a> {
     fn recv_frame(&mut self) -> HttpResult<HttpFrame> {
         assert!(!self.used);
         self.used = true;

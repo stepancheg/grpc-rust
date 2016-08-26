@@ -18,5 +18,6 @@ pub mod error;
 mod channel_sync_sender;
 mod solicit_async;
 mod futures_misc;
+mod futures_stream_merge2;
 mod misc;
 mod solicit_misc;
