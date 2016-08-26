@@ -356,25 +356,22 @@ fn run_client_event_loop(
     let (shutdown_tx, shutdown_rx) = lp.handle().channel();
 
     // Send channels back to GrpcClient
-    send_to_back.send(LoopToClient { call_tx: call_tx, shutdown_tx: shutdown_tx }).unwrap();
+    send_to_back
+        .send(LoopToClient { call_tx: call_tx, shutdown_tx: shutdown_tx })
+        .expect("send back");
 
     let call_rx = call_rx.map_err(GrpcError::from);
     let shutdown_rx = shutdown_rx.map_err(GrpcError::from);
 
-    let h = lp.handle();
-    let connect = call_rx.and_then(|call_rx| {
-        h.tcp_connect(&socket_addr)
-            .map(|conn| (conn, call_rx))
-            .map_err(GrpcError::from)
-    });
+    let connect = lp.handle().tcp_connect(&socket_addr)
+        .map_err(GrpcError::from);
 
-    let handshake = connect.and_then(|(conn, call_rx)| {
+    let handshake = connect.and_then(|conn| {
         client_handshake(conn)
-            .map(|conn| (conn, call_rx))
             .map_err(GrpcError::from)
     });
 
-    let run_read_write = handshake.and_then(|(conn, call_rx)| {
+    let run_read_write = handshake.join(call_rx).and_then(|(conn, call_rx)| {
         let (read, write) = TaskIo::new(conn).split();
 
         let conn = HttpConnection::new(HttpScheme::Http);
@@ -389,7 +386,6 @@ fn run_client_event_loop(
         let shared_for_write = shared_for_read.clone();
         run_read(read, shared_for_read)
             .join(run_write(write, shared_for_write, call_rx))
-                .map_err(GrpcError::from)
     });
 
     let shutdown = shutdown_rx.and_then(|shutdown_rx| {
