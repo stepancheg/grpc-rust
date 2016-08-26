@@ -7,6 +7,7 @@ use std::str::from_utf8;
 
 use futures;
 use futures::Future;
+use futures::IntoFuture;
 use futures::stream::Stream;
 use futures::oneshot;
 use futures::Complete;
@@ -103,10 +104,11 @@ impl<Req : Send, Resp : Send> CallRequest for CallRequestTyped<Req, Resp> {
 
 impl GrpcClient {
     /// Create a client connected to specified host and port.
-    pub fn new(host: &str, port: u16) -> GrpcClient {
+    pub fn new(host: &str, port: u16) -> GrpcResult<GrpcClient> {
 
         // TODO: sync
-        let socket_addr = (host, port).to_socket_addrs().unwrap().next().unwrap();
+        // TODO: try connect to all addrs
+        let socket_addr = try!((host, port).to_socket_addrs()).next().unwrap();
 
         // We need some data back from event loop.
         // This channel is used to exchange that data
@@ -120,12 +122,13 @@ impl GrpcClient {
         });
 
         // Get back call channel and shutdown channel.
-        let loop_to_client = get_from_loop_rx.recv().unwrap();
+        let loop_to_client = try!(get_from_loop_rx.recv()
+            .map_err(|_| GrpcError::Other("get response from loop")));
 
-        GrpcClient {
+        Ok(GrpcClient {
             loop_to_client: loop_to_client,
             thread_join_handle: Some(join_handle),
-        }
+        })
     }
 
     pub fn call<Req : Send + 'static, Resp : Send + 'static>(&self, req: Req, method: Arc<MethodDescriptor<Req, Resp>>) -> GrpcFuture<Resp> {
@@ -133,11 +136,15 @@ impl GrpcClient {
         let (complete, oneshot) = oneshot();
 
         // Send call to event loop.
-        self.loop_to_client.call_tx.send(Box::new(CallRequestTyped {
+        let send = self.loop_to_client.call_tx.send(Box::new(CallRequestTyped {
             method: method,
             req: req,
             complete: Some(complete),
-        })).unwrap();
+        }));
+        match send {
+            Ok(..) => {},
+            Err(e) => return Err(e).into_future().map_err(GrpcError::from).boxed(),
+        }
 
         // Translate error when call completes.
         oneshot.then(|result| {
@@ -156,7 +163,8 @@ impl Drop for GrpcClient {
         self.loop_to_client.shutdown_tx.send(()).ok();
 
         // do not ignore errors because we own event loop thread
-        self.thread_join_handle.take().unwrap().join().unwrap();
+        self.thread_join_handle.take().expect("hanle.take")
+            .join().expect("join thread");
     }
 }
 
@@ -193,20 +201,21 @@ impl solicit_Stream for GrpcHttp2ClientStream {
     }
 
     fn set_state(&mut self, state: StreamState) {
-        //println!("set_state: {:?}", state);
         if state == StreamState::Closed {
-            let status = get_header(&self.stream, ":status");
-            let grpc_status = get_header(&self.stream, HEADER_GRPC_STATUS);
-            let message = get_header(&self.stream, HEADER_GRPC_MESSAGE);
-            let result =
-                if let (Some("200"), Some("0")) = (status, grpc_status) {
-                    parse_grpc_frame_completely(&self.stream.body)
-                } else if let Some(message) = message {
-                    Err(GrpcError::GrpcHttp(GrpcHttpError { grpc_message: message.to_owned() }))
-                } else {
-                    Err(GrpcError::Other("not 200/0"))
-                };
-            self.call.as_mut().unwrap().complete(result);
+            if let Some(mut call) = self.call.take() {
+                let status = get_header(&self.stream, ":status");
+                let grpc_status = get_header(&self.stream, HEADER_GRPC_STATUS);
+                let message = get_header(&self.stream, HEADER_GRPC_MESSAGE);
+                let result =
+                    if let (Some("200"), Some("0")) = (status, grpc_status) {
+                        parse_grpc_frame_completely(&self.stream.body)
+                    } else if let Some(message) = message {
+                        Err(GrpcError::GrpcMessage(GrpcMessageError { grpc_message: message.to_owned() }))
+                    } else {
+                        Err(GrpcError::Other("not 200/0"))
+                    };
+                call.complete(result);
+            }
         }
         self.stream.set_state(state)
     }

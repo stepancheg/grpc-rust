@@ -48,7 +48,7 @@ struct TestClient {
 impl TestClient {
     fn new(port: u16) -> TestClient {
         TestClient {
-            grpc_client: GrpcClient::new("::", port),
+            grpc_client: GrpcClient::new("::", port).expect("GrpcClient::new"),
         }
     }
 
@@ -66,7 +66,7 @@ impl TestClient {
     fn call_expect_grpc_error<F : FnOnce(&str) -> bool>(&self, name: &str, param: &str, expect: F) {
         self.call_expect_error(name, param, |e| {
             match e {
-                &GrpcError::GrpcHttp(GrpcHttpError { ref grpc_message }) if expect(&grpc_message) => true,
+                &GrpcError::GrpcMessage(GrpcMessageError { ref grpc_message }) if expect(&grpc_message) => true,
                 _ => false,
             }
         });
