@@ -10,6 +10,37 @@ use futures::stream::BoxStream;
 use futures::task::TaskData;
 
 
+pub struct FutureToStream<F> {
+    future: Option<F>,
+}
+
+pub fn future_to_stream<F : Future>(f: F) -> FutureToStream<F> {
+    FutureToStream {
+        future: Some(f)
+    }
+}
+
+impl<F : Future> Stream for FutureToStream<F> {
+    type Item = F::Item;
+    type Error = F::Error;
+
+    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+        let r = match &mut self.future {
+            &mut None => return Poll::Ok(None),
+            &mut Some(ref mut future) => match future.poll() {
+                Poll::NotReady => return Poll::NotReady,
+                Poll::Err(e) => Poll::Err(e),
+                Poll::Ok(r) => Poll::Ok(Some(r)),
+            }
+        };
+
+        self.future.take();
+
+        r
+    }
+}
+
+
 #[allow(dead_code)]
 pub fn future_success<T : Send + 'static, E : Send + 'static>(t: T) -> BoxFuture<T, E> {
     done(Ok(t))

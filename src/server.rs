@@ -3,7 +3,7 @@ use std::thread;
 use std::net::SocketAddr;
 use std::net::ToSocketAddrs;
 use std::io;
-use std::iter::repeat;
+use std::iter;
 use std::sync::mpsc;
 use std::panic::catch_unwind;
 use std::panic::AssertUnwindSafe;
@@ -25,7 +25,6 @@ use solicit::http::StreamId;
 use solicit::http::Header;
 
 use futures;
-use futures::IntoFuture;
 use futures::Future;
 use futures::stream;
 use futures::stream::Stream;
@@ -52,7 +51,7 @@ use grpc::*;
 
 
 pub trait MethodHandler<Req, Resp> {
-    fn handle(&self, req: Req) -> GrpcFuture<Resp>;
+    fn handle(&self, req: Req) -> GrpcStream<Resp>;
 }
 
 pub struct MethodHandlerFn<F> {
@@ -75,13 +74,14 @@ impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerFn<F>
         Resp : Send + 'static,
         F : Fn(Req) -> GrpcFuture<Resp>,
 {
-    fn handle(&self, req: Req) -> GrpcFuture<Resp> {
-        (self.f)(req)
+    fn handle(&self, req: Req) -> GrpcStream<Resp> {
+        future_to_stream((self.f)(req))
+            .boxed()
     }
 }
 
 trait MethodHandlerDispatch {
-    fn on_message(&self, message: &[u8]) -> GrpcFuture<Vec<u8>>;
+    fn on_message(&self, message: &[u8]) -> GrpcStream<Vec<u8>>;
 }
 
 struct MethodHandlerDispatchAsyncImpl<Req, Resp> {
@@ -94,10 +94,10 @@ impl<Req, Resp> MethodHandlerDispatch for MethodHandlerDispatchAsyncImpl<Req, Re
         Req : Send + 'static,
         Resp : Send + 'static,
 {
-    fn on_message(&self, message: &[u8]) -> GrpcFuture<Vec<u8>> {
+    fn on_message(&self, message: &[u8]) -> GrpcStream<Vec<u8>> {
         let req = match self.desc.req_marshaller.read(message) {
             Ok(req) => req,
-            Err(e) => return futures::done(Err(e)).boxed(),
+            Err(e) => return future_to_stream(futures::done(Err(e))).boxed(),
         };
         let resp =
             catch_unwind(AssertUnwindSafe(|| self.method_handler.handle(req)));
@@ -108,7 +108,8 @@ impl<Req, Resp> MethodHandlerDispatch for MethodHandlerDispatchAsyncImpl<Req, Re
                     .and_then(move |resp| desc_copy.resp_marshaller.write(&resp))
                     .boxed()
             }
-            Err(..) => Err(GrpcError::Other("panic in handler")).into_future().boxed(),
+            Err(..) => future_to_stream(futures::done(Err(GrpcError::Other("panic in handler"))))
+                .boxed(),
         }
     }
 }
@@ -153,7 +154,7 @@ impl ServerServiceDefinition {
             .expect(&format!("unknown method: {}", name))
     }
 
-    pub fn handle_method(&self, name: &str, message: &[u8]) -> GrpcFuture<Vec<u8>> {
+    pub fn handle_method(&self, name: &str, message: &[u8]) -> GrpcStream<Vec<u8>> {
         self.find_method(name).dispatch.on_message(message)
     }
 }
@@ -235,13 +236,23 @@ impl solicit_Stream for GrpcHttp2ServerStream {
 
             let sender = self.sender.clone();
             self.service_definition.handle_method(&self.path, message)
-                .then(move |result| {
+                .fold(sender.clone(), move |sender, result| {
                     sender.send(ReadToWriteMessage {
                         stream_id: stream_id,
-                        content: result,
+                        content: Ok(result),
                     }).unwrap();
-                    let result: GrpcResult<_> = Ok(());
-                    result
+                    futures::done::<_, GrpcError>(Ok(sender))
+                })
+                .then(move |result| {
+                    // TODO: send EOF flag
+                    if let Err(e) = result {
+                        sender.send(ReadToWriteMessage {
+                            stream_id: stream_id,
+                            content: Err(e),
+                        }).unwrap();
+                    }
+
+                    futures::done::<_, GrpcError>(Ok(()))
                 })
                 .forget();
         }
@@ -292,7 +303,7 @@ fn run_read(
     shared: TaskDataMutex<ServerSharedState>)
         -> GrpcFuture<()>
 {
-    let stream = stream::iter(repeat(()).map(|x| Ok(x)));
+    let stream = stream::iter(iter::repeat(()).map(|x| Ok(x)));
 
     let future = stream.fold((read, shared), |(read, shared), _| {
         recv_raw_frame(read)
@@ -334,6 +345,7 @@ fn run_write(
 
             match message.content {
                 Ok(resp_bytes) => {
+                    // TODO: might be not the first message
                     shared.conn.sender(&mut send_buf).send_headers(
                         vec![
                             Header::new(b":status", b"200"),
