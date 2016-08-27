@@ -10,13 +10,19 @@ use futures::stream::BoxStream;
 use futures::task::TaskData;
 
 
+enum FutureToStreamState<F> {
+    Future(F),
+    Eof,
+    Done,
+}
+
 pub struct FutureToStream<F> {
-    future: Option<F>,
+    future: FutureToStreamState<F>,
 }
 
 pub fn future_to_stream<F : Future>(f: F) -> FutureToStream<F> {
     FutureToStream {
-        future: Some(f)
+        future: FutureToStreamState::Future(f)
     }
 }
 
@@ -26,17 +32,23 @@ impl<F : Future> Stream for FutureToStream<F> {
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
         let r = match &mut self.future {
-            &mut None => return Poll::Ok(None),
-            &mut Some(ref mut future) => match future.poll() {
+            r @ &mut FutureToStreamState::Eof => {
+                *r = FutureToStreamState::Done;
+                return Poll::Ok(None)
+            },
+            &mut FutureToStreamState::Done => {
+                panic!("cannot poll after eof");
+            },
+            &mut FutureToStreamState::Future(ref mut future) => match future.poll() {
                 Poll::NotReady => return Poll::NotReady,
-                Poll::Err(e) => Poll::Err(e),
-                Poll::Ok(r) => Poll::Ok(Some(r)),
+                Poll::Err(e) => return Poll::Err(e),
+                Poll::Ok(r) => r,
             }
         };
 
-        self.future.take();
+        self.future = FutureToStreamState::Eof;
 
-        r
+        Poll::Ok(Some(r))
     }
 }
 
