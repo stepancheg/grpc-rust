@@ -27,15 +27,15 @@ fn test_server() -> GrpcServer {
         ServerServiceDefinition::new(vec![
             ServerMethod::new(
                 string_string_method("/test/Echo"),
-                MethodHandlerFn::new(|s| Ok(s).into_future().boxed()),
+                MethodHandlerUnary::new(|s| Ok(s).into_future().boxed()),
             ),
             ServerMethod::new(
                 string_string_method("/test/Error"),
-                MethodHandlerFn::new(|_| Err(GrpcError::Other("my error")).into_future().boxed()),
+                MethodHandlerUnary::new(|_| Err(GrpcError::Other("my error")).into_future().boxed()),
             ),
             ServerMethod::new(
                 string_string_method("/test/Panic"),
-                MethodHandlerFn::new(|_| panic!("icnap")),
+                MethodHandlerUnary::new(|_| panic!("icnap")),
             ),
         ]),
     )

@@ -54,28 +54,52 @@ pub trait MethodHandler<Req, Resp> {
     fn handle(&self, req: Req) -> GrpcStream<Resp>;
 }
 
-pub struct MethodHandlerFn<F> {
+pub struct MethodHandlerUnary<F> {
     f: F
 }
 
-impl<F> MethodHandlerFn<F> {
-    pub fn new<Req, Resp>(f: F)
-        -> Self
+pub struct MethodHandlerServerStreaming<F> {
+    f: F
+}
+
+impl<F> MethodHandlerUnary<F> {
+    pub fn new<Req, Resp>(f: F) -> Self
         where F : Fn(Req) -> GrpcFuture<Resp>
     {
-        MethodHandlerFn {
+        MethodHandlerUnary {
             f: f,
         }
     }
 }
 
-impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerFn<F>
+impl<F> MethodHandlerServerStreaming<F> {
+    pub fn new<Req, Resp>(f: F) -> Self
+        where F : Fn(Req) -> GrpcStream<Resp>
+    {
+        MethodHandlerServerStreaming {
+            f: f,
+        }
+    }
+}
+
+impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerUnary<F>
     where
         Resp : Send + 'static,
         F : Fn(Req) -> GrpcFuture<Resp>,
 {
     fn handle(&self, req: Req) -> GrpcStream<Resp> {
         future_to_stream((self.f)(req))
+            .boxed()
+    }
+}
+
+impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerServerStreaming<F>
+    where
+        Resp : Send + 'static,
+        F : Fn(Req) -> GrpcStream<Resp>,
+{
+    fn handle(&self, req: Req) -> GrpcStream<Resp> {
+        (self.f)(req)
             .boxed()
     }
 }

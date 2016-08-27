@@ -133,7 +133,7 @@ impl GreeterAsyncServer {
                     }),
                     {
                         let handler_copy = handler_arc.clone();
-                        ::grpc::server::MethodHandlerFn::new(move |p| handler_copy.SayHello(p))
+                        ::grpc::server::MethodHandlerUnary::new(move |p| handler_copy.SayHello(p))
                     },
                 ),
             ],

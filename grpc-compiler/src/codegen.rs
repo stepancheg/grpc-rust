@@ -63,6 +63,15 @@ impl<'a> MethodGen<'a> {
         format!("::grpc::method::MethodDescriptor<{}, {}>", self.input(), self.output())
     }
 
+    fn method_handler_suffix(&self) -> &'static str {
+        match (self.proto.get_client_streaming(), self.proto.get_server_streaming()) {
+            (false, false) => "Unary",
+            (false, true) => "ServerStreaming",
+            (true, false) => "ClientStreaming",
+            (true, true) => "Bidi",
+        }
+    }
+
     fn write_async_client(&self, w: &mut CodeWriter) {
         w.def_fn(&self.async_sig(), |w| {
             w.write_line(&format!("self.grpc_client.call(p, self.{}.clone())", self.descriptor_field_name()))
@@ -298,7 +307,9 @@ impl<'a> ServiceGen<'a> {
                                 method.write_descriptor(w, "::std::sync::Arc::new(", "),");
                                 w.block("{", "},", |w| {
                                     w.write_line("let handler_copy = handler_arc.clone();");
-                                    w.write_line(format!("::grpc::server::MethodHandlerFn::new(move |p| handler_copy.{}(p))", method.proto.get_name()));
+                                    w.write_line(format!("::grpc::server::MethodHandler{}::new(move |p| handler_copy.{}(p))",
+                                        method.method_handler_suffix(),
+                                        method.proto.get_name()));
                                 });
                             });
                         }
