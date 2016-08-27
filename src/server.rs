@@ -55,15 +55,6 @@ pub trait MethodHandler<Req, Resp> {
     fn handle(&self, req: Req) -> GrpcFuture<Resp>;
 }
 
-pub struct MethodHandlerEcho;
-
-impl<A : Send + 'static> MethodHandler<A, A> for MethodHandlerEcho {
-    fn handle(&self, req: A) -> GrpcFuture<A> {
-        println!("handle echo");
-        futures::done(Ok(req)).boxed()
-    }
-}
-
 pub struct MethodHandlerFn<F> {
     f: F
 }
