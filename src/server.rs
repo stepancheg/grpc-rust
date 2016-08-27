@@ -43,7 +43,6 @@ use tokio_core::Receiver;
 
 use method::*;
 use error::*;
-use result::*;
 use futures_grpc::*;
 use futures_misc::*;
 use solicit_async::*;
@@ -237,21 +236,21 @@ impl solicit_Stream for GrpcHttp2ServerStream {
 
             let sender = self.sender.clone();
             self.service_definition.handle_method(&self.path, message)
-                .fold(sender.clone(), move |sender, result| {
+                .fold((sender.clone(), 0), move |(sender, i), resp| {
                     sender.send(ReadToWriteMessage {
                         stream_id: stream_id,
-                        content: Ok(result),
+                        content: ResponseChunk::Resp(resp, i == 0),
                     }).unwrap();
-                    futures::done::<_, GrpcError>(Ok(sender))
+                    futures::done::<_, GrpcError>(Ok((sender, i + 1)))
                 })
                 .then(move |result| {
-                    // TODO: send EOF flag
-                    if let Err(e) = result {
-                        sender.send(ReadToWriteMessage {
-                            stream_id: stream_id,
-                            content: Err(e),
-                        }).unwrap();
-                    }
+                    sender.send(ReadToWriteMessage {
+                        stream_id: stream_id,
+                        content: match result {
+                            Ok(..) => ResponseChunk::DoneSuccess,
+                            Err(e) => ResponseChunk::Error(e),
+                        }
+                    }).expect("send to write");
 
                     futures::done::<_, GrpcError>(Ok(()))
                 })
@@ -294,9 +293,15 @@ struct ServerSharedState {
     state: DefaultSessionState<Server, GrpcHttp2ServerStream>,
 }
 
+enum ResponseChunk {
+    Resp(/* resp */ Vec<u8>, /* first */ bool),
+    DoneSuccess,
+    Error(GrpcError),
+}
+
 struct ReadToWriteMessage {
     stream_id: StreamId,
-    content: GrpcResult<Vec<u8>>,
+    content: ResponseChunk,
 }
 
 fn run_read(
@@ -345,22 +350,24 @@ fn run_write(
             let mut send_buf = VecSendFrame(Vec::new());
 
             match message.content {
-                Ok(resp_bytes) => {
-                    // TODO: might be not the first message
-                    shared.conn.sender(&mut send_buf).send_headers(
-                        vec![
+                ResponseChunk::Resp(resp_bytes, first) => {
+                    if first {
+                        shared.conn.sender(&mut send_buf).send_headers(
+                            vec![
                             Header::new(b":status", b"200"),
                             Header::new(&b"content-type"[..], &b"application/grpc"[..]),
                         ],
-                        message.stream_id,
-                        EndStream::No).unwrap();
+                            message.stream_id,
+                            EndStream::No).unwrap();
+                    }
 
                     let mut body = Vec::new();
                     write_grpc_frame(&mut body, &resp_bytes);
 
                     shared.conn.sender(&mut send_buf).send_data(
                         DataChunk::new_borrowed(&body[..], message.stream_id, EndStream::No)).unwrap();
-
+                }
+                ResponseChunk::DoneSuccess => {
                     shared.conn.sender(&mut send_buf).send_headers(
                         vec![
                             Header::new(HEADER_GRPC_STATUS.as_bytes(), b"0"),
@@ -368,10 +375,8 @@ fn run_write(
                         message.stream_id,
                         EndStream::Yes)
                             .unwrap();
-
-                    shared.state.remove_stream(message.stream_id).expect("unknown stream id");
                 }
-                Err(e) => {
+                ResponseChunk::Error(e) => {
                     shared.conn.sender(&mut send_buf).send_headers(
                         vec![
                             Header::new(&b":status"[..], &b"500"[..]),
@@ -379,6 +384,8 @@ fn run_write(
                         ],
                         message.stream_id,
                         EndStream::Yes).unwrap();
+
+                    shared.state.remove_stream(message.stream_id).expect("unknown stream id");
                 }
             }
 
