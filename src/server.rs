@@ -23,6 +23,7 @@ use solicit::http::connection::DataChunk;
 use solicit::http::HttpScheme;
 use solicit::http::StreamId;
 use solicit::http::Header;
+use solicit::http::session::SessionState;
 
 use futures;
 use futures::Future;
@@ -367,6 +368,8 @@ fn run_write(
                         message.stream_id,
                         EndStream::Yes)
                             .unwrap();
+
+                    shared.state.remove_stream(message.stream_id).expect("unknown stream id");
                 }
                 Err(e) => {
                     shared.conn.sender(&mut send_buf).send_headers(
