@@ -54,13 +54,6 @@ impl<F : Future> Stream for FutureToStream<F> {
 
 
 #[allow(dead_code)]
-pub fn future_success<T : Send + 'static, E : Send + 'static>(t: T) -> BoxFuture<T, E> {
-    done(Ok(t))
-        .boxed()
-}
-
-
-#[allow(dead_code)]
 pub fn stream_repeat<T : Clone + Send + 'static, E>(t: T) -> BoxStream<T, E> {
     let ts = iter::repeat(t).map(|t| Ok(t));
     stream::iter(ts)

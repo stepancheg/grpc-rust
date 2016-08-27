@@ -5,7 +5,7 @@ extern crate grpc;
 
 use std::thread;
 
-use futures::*;
+use futures::Future;
 
 use grpc::futures_grpc::GrpcFuture;
 
@@ -20,7 +20,7 @@ impl GreeterAsync for GreeterImpl {
         let name = if req.get_name().is_empty() { "world" } else { req.get_name() };
         println!("greeting request from {}", name);
         r.set_message(format!("Hello {}", name));
-        done(Ok(r)).boxed()
+        futures::finished(r).boxed()
     }
 }
 

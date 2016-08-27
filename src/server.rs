@@ -132,7 +132,7 @@ impl<Req, Resp> MethodHandlerDispatch for MethodHandlerDispatchAsyncImpl<Req, Re
                     .and_then(move |resp| desc_copy.resp_marshaller.write(&resp))
                     .boxed()
             }
-            Err(..) => future_to_stream(futures::done(Err(GrpcError::Other("panic in handler"))))
+            Err(..) => future_to_stream(futures::failed(GrpcError::Other("panic in handler")))
                 .boxed(),
         }
     }
