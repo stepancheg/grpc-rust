@@ -82,10 +82,10 @@ struct CallRequestTyped<Req, Resp> {
     // the request
     req: Req,
     // channel to send response back to called
-    complete: Option<Complete<GrpcResult<Resp>>>,
+    complete: Option<Complete<GrpcFuture<Resp>>>,
 }
 
-impl<Req : Send, Resp : Send> CallRequest for CallRequestTyped<Req, Resp> {
+impl<Req : Send, Resp : Send + 'static> CallRequest for CallRequestTyped<Req, Resp> {
     fn write_req(&self) -> GrpcResult<Vec<u8>> {
         self.method.req_marshaller.write(&self.req)
     }
@@ -97,7 +97,7 @@ impl<Req : Send, Resp : Send> CallRequest for CallRequestTyped<Req, Resp> {
     fn complete(&mut self, message: GrpcResult<&[u8]>) {
         if let Some(complete) = self.complete.take() {
             let result = message.and_then(|message| self.method.resp_marshaller.read(message));
-            complete.complete(result);
+            complete.complete(futures::done(result).boxed());
         }
     }
 }
@@ -149,12 +149,10 @@ impl GrpcClient {
         }
 
         // Translate error when call completes.
-        oneshot.then(|result| {
-            match result {
-                Ok(grpc_result) => grpc_result,
-                Err(err) => Err(GrpcError::from(err)),
-            }
-        }).boxed()
+        oneshot
+            .map_err(GrpcError::from)
+            .flatten()
+            .boxed()
     }
 
     pub fn call_server_streaming<Req : Send + 'static, Resp : Send + 'static>(&self, _req: Req, _method: Arc<MethodDescriptor<Req, Resp>>)
