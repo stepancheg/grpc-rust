@@ -28,17 +28,17 @@ use futures;
 use futures::Future;
 use futures::stream;
 use futures::stream::Stream;
-use futures_io;
-use futures_io::IoFuture;
-use futures_io::TaskIo;
-use futures_io::TaskIoRead;
-use futures_io::TaskIoWrite;
-use futures_mio;
-use futures_mio::Loop;
-use futures_mio::LoopHandle;
-use futures_mio::TcpStream;
-use futures_mio::Sender;
-use futures_mio::Receiver;
+use tokio_core::io as tokio_io;
+use tokio_core::io::IoFuture;
+use tokio_core::io::TaskIo;
+use tokio_core::io::TaskIoRead;
+use tokio_core::io::TaskIoWrite;
+use tokio_core;
+use tokio_core::Loop;
+use tokio_core::LoopHandle;
+use tokio_core::TcpStream;
+use tokio_core::Sender;
+use tokio_core::Receiver;
 
 use method::*;
 use error::*;
@@ -162,7 +162,7 @@ impl ServerServiceDefinition {
 
 struct LoopToServer {
     // used only once to send shutdown signal
-    shutdown_tx: futures_mio::Sender<()>,
+    shutdown_tx: tokio_core::Sender<()>,
     local_addr: SocketAddr,
 }
 
@@ -382,7 +382,7 @@ fn run_write(
             send_buf.0
         });
 
-        futures_io::write_all(write, send_buf)
+        tokio_io::write_all(write, send_buf)
             .map(|(write, _)| (write, shared))
     });
 

@@ -12,14 +12,14 @@ use futures::stream::Stream;
 use futures::oneshot;
 use futures::Complete;
 
-use futures_io;
-use futures_io::TaskIo;
-use futures_io::TaskIoRead;
-use futures_io::TaskIoWrite;
+use tokio_core::io as tokio_io;
+use tokio_core::io::TaskIo;
+use tokio_core::io::TaskIoRead;
+use tokio_core::io::TaskIoWrite;
 
-use futures_mio;
-use futures_mio::Loop;
-use futures_mio::TcpStream;
+use tokio_core;
+use tokio_core::Loop;
+use tokio_core::TcpStream;
 
 use solicit::http::client::ClientConnection;
 use solicit::http::client::RequestStream;
@@ -54,9 +54,9 @@ use solicit_misc::*;
 // Data sent from event loop to GrpcClient
 struct LoopToClient {
     // send requests to client through this channel
-    call_tx: futures_mio::Sender<Box<CallRequest>>,
+    call_tx: tokio_core::Sender<Box<CallRequest>>,
     // used only once to send shutdown signal
-    shutdown_tx: futures_mio::Sender<()>,
+    shutdown_tx: tokio_core::Sender<()>,
 }
 
 /// gRPC client implementation.
@@ -269,7 +269,7 @@ impl ClientSharedState {
 struct ReadLoopBody {
     read: TaskIoRead<TcpStream>,
     shared: TaskDataMutex<ClientSharedState>,
-    read_to_write_tx: futures_mio::Sender<ReadToWrite>,
+    read_to_write_tx: tokio_core::Sender<ReadToWrite>,
 }
 
 impl ReadLoopBody {
@@ -302,7 +302,7 @@ impl ReadLoopBody {
 fn run_read(
     read: TaskIoRead<TcpStream>,
     shared: TaskDataMutex<ClientSharedState>,
-    read_to_write_tx: futures_mio::Sender<ReadToWrite>)
+    read_to_write_tx: tokio_core::Sender<ReadToWrite>)
         -> GrpcFuture<()>
 {
     let stream = stream_repeat(());
@@ -355,7 +355,7 @@ impl WriteLoopBody {
         let shared = self.shared;
         futures::done(send_buf)
             .and_then(move |send_buf| {
-                futures_io::write_all(write, send_buf)
+                tokio_io::write_all(write, send_buf)
                     .map(move |(write, _)| WriteLoopBody { write: write, shared: shared })
                     .map_err(GrpcError::from)
             })
@@ -367,7 +367,7 @@ impl WriteLoopBody {
 
         match read_to_write {
             ReadToWrite::SendToSocket(buf) => {
-                futures_io::write_all(self.write, buf)
+                tokio_io::write_all(self.write, buf)
                     .map(move |(write, _)| WriteLoopBody { write: write, shared: shared })
                     .map_err(GrpcError::from)
                     .boxed()
@@ -381,8 +381,8 @@ impl WriteLoopBody {
 fn run_write(
     write: TaskIoWrite<TcpStream>,
     shared: TaskDataMutex<ClientSharedState>,
-    call_rx: futures_mio::Receiver<Box<CallRequest>>,
-    read_to_write_rx: futures_mio::Receiver<ReadToWrite>)
+    call_rx: tokio_core::Receiver<Box<CallRequest>>,
+    read_to_write_rx: tokio_core::Receiver<ReadToWrite>)
     -> GrpcFuture<()>
 {
 

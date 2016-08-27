@@ -1,8 +1,7 @@
 extern crate protobuf;
 extern crate solicit;
 extern crate futures;
-extern crate futures_io;
-extern crate futures_mio;
+extern crate tokio_core;
 
 pub mod codegen;
 

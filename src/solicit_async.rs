@@ -9,10 +9,10 @@ use futures::BoxFuture;
 
 use futures::stream::BoxStream;
 
-use futures_io::read_exact;
-use futures_io::write_all;
-use futures_mio::TcpStream;
-use futures_mio::LoopHandle;
+use tokio_core::io::read_exact;
+use tokio_core::io::write_all;
+use tokio_core::TcpStream;
+use tokio_core::LoopHandle;
 
 use solicit::http::HttpError;
 use solicit::http::frame::RawFrame;
