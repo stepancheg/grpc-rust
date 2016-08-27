@@ -131,7 +131,9 @@ impl GrpcClient {
         })
     }
 
-    pub fn call<Req : Send + 'static, Resp : Send + 'static>(&self, req: Req, method: Arc<MethodDescriptor<Req, Resp>>) -> GrpcFuture<Resp> {
+    pub fn call_unary<Req : Send + 'static, Resp : Send + 'static>(&self, req: Req, method: Arc<MethodDescriptor<Req, Resp>>)
+        -> GrpcFuture<Resp>
+    {
         // A channel to send response back to caller
         let (complete, oneshot) = oneshot();
 
@@ -154,6 +156,12 @@ impl GrpcClient {
             }
         }).boxed()
     }
+
+    pub fn call_server_streaming<Req : Send + 'static, Resp : Send + 'static>(&self, _req: Req, _method: Arc<MethodDescriptor<Req, Resp>>)
+        -> GrpcStream<Resp>
+    {
+        unimplemented!()
+    }
 }
 
 // We shutdown client in destructor.
@@ -163,7 +171,7 @@ impl Drop for GrpcClient {
         self.loop_to_client.shutdown_tx.send(()).ok();
 
         // do not ignore errors because we own event loop thread
-        self.thread_join_handle.take().expect("hanle.take")
+        self.thread_join_handle.take().expect("handle.take")
             .join().expect("join thread");
     }
 }

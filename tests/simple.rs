@@ -3,19 +3,24 @@ extern crate futures;
 
 use std::sync::Arc;
 
+use futures::*;
+use futures::stream::Stream;
+
 use grpc::server::*;
 use grpc::client::*;
 use grpc::method::*;
 use grpc::marshall::*;
 use grpc::error::*;
 use grpc::futures_grpc::*;
-use futures::*;
 
-fn string_string_method(name: &str) -> Arc<MethodDescriptor<String, String>> {
+
+fn string_string_method(name: &str, client_streaming: bool, server_streaming: bool)
+    -> Arc<MethodDescriptor<String, String>>
+{
     Arc::new(MethodDescriptor {
        name: name.to_owned(),
-       client_streaming: false,
-       server_streaming: false,
+       client_streaming: client_streaming,
+       server_streaming: server_streaming,
        req_marshaller: Box::new(MarshallerString),
        resp_marshaller: Box::new(MarshallerString),
    })
@@ -26,15 +31,21 @@ fn test_server() -> GrpcServer {
         0,
         ServerServiceDefinition::new(vec![
             ServerMethod::new(
-                string_string_method("/test/Echo"),
+                string_string_method("/test/Echo", false, false),
                 MethodHandlerUnary::new(|s| Ok(s).into_future().boxed()),
             ),
             ServerMethod::new(
-                string_string_method("/test/Error"),
+                string_string_method("/test/ServerStreaming", false, true),
+                MethodHandlerServerStreaming::new(|s| {
+                    stream::iter((0..3).map(move |i| Ok(format!("{}{}", s, i)))).boxed()
+                }),
+            ),
+            ServerMethod::new(
+                string_string_method("/test/Error", false, false),
                 MethodHandlerUnary::new(|_| Err(GrpcError::Other("my error")).into_future().boxed()),
             ),
             ServerMethod::new(
-                string_string_method("/test/Panic"),
+                string_string_method("/test/Panic", false, false),
                 MethodHandlerUnary::new(|_| panic!("icnap")),
             ),
         ]),
@@ -53,7 +64,7 @@ impl TestClient {
     }
 
     fn call(&self, name: &str, param: &str) -> GrpcFuture<String> {
-        self.grpc_client.call(param.to_owned(), string_string_method(name))
+        self.grpc_client.call_unary(param.to_owned(), string_string_method(name, false, false))
     }
 
     fn call_expect_error<F : FnOnce(&GrpcError) -> bool>(&self, name: &str, param: &str, expect: F) {
@@ -86,10 +97,17 @@ fn client_and_server() -> (TestClient, GrpcServer) {
 }
 
 #[test]
-fn echo() {
+fn unary() {
     let (client, _server) = client_and_server();
 
     assert_eq!("aa", client.call("/test/Echo", "aa").wait().unwrap());
+}
+
+#[test]
+fn server_streaming() {
+    let (_client, _server) = client_and_server();
+
+    // TODO
 }
 
 #[test]

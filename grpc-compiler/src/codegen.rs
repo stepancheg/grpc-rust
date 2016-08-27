@@ -72,9 +72,20 @@ impl<'a> MethodGen<'a> {
         }
     }
 
+    fn call_suffix(&self) -> &'static str {
+        match (self.proto.get_client_streaming(), self.proto.get_server_streaming()) {
+            (false, false) => "unary",
+            (false, true) => "server_streaming",
+            (true, false) => "client_streaming",
+            (true, true) => "bidi",
+        }
+    }
+
     fn write_async_client(&self, w: &mut CodeWriter) {
         w.def_fn(&self.async_sig(), |w| {
-            w.write_line(&format!("self.grpc_client.call(p, self.{}.clone())", self.descriptor_field_name()))
+            w.write_line(&format!("self.grpc_client.call_{}(p, self.{}.clone())",
+                self.call_suffix(),
+                self.descriptor_field_name()))
         });
     }
 

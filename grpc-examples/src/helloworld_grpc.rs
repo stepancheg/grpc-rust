@@ -76,7 +76,7 @@ impl GreeterAsyncClient {
 
 impl GreeterAsync for GreeterAsyncClient {
     fn SayHello(&self, p: super::helloworld::HelloRequest) -> ::grpc::futures_grpc::GrpcFuture<super::helloworld::HelloReply> {
-        self.grpc_client.call(p, self.method_SayHello.clone())
+        self.grpc_client.call_unary(p, self.method_SayHello.clone())
     }
 }
 
