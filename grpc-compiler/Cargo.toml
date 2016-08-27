@@ -1,0 +1,16 @@
+[package]
+name = "grpc-compiler"
+version = "0.1.0"
+authors = ["Stepan Koltsov <stepan.koltsov@gmail.com>"]
+
+[dependencies]
+protobuf = { git = "http://github.com/stepancheg/rust-protobuf" }
+
+[[bin]]
+
+name = "protoc-gen-rust-grpc"
+test = false
+
+[lib]
+
+doctests = false

@@ -19,12 +19,8 @@ tokio-core  = { git = "https://github.com/tokio-rs/tokio-core" }
 [lib]
 doctest = false
 
-[[bin]]
-
-name = "protoc-gen-rust-grpc"
-test = false
-
 [workspace]
 members = [
     "grpc-examples",
+    "grpc-compiler",
 ]

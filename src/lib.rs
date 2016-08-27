@@ -3,8 +3,6 @@ extern crate solicit;
 extern crate futures;
 extern crate tokio_core;
 
-pub mod codegen;
-
 pub mod client;
 pub mod server;
 mod grpc;

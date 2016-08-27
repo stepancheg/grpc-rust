@@ -10,7 +10,7 @@ set -ex
 cd $(dirname $0)
 
 (
-    cd ..
+    cd ../grpc-compiler
     cargo build
 )
 (
