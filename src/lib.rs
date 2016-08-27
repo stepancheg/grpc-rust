@@ -18,3 +18,4 @@ mod futures_misc;
 mod futures_stream_merge2;
 mod misc;
 mod solicit_misc;
+mod tokio_oneshot;
