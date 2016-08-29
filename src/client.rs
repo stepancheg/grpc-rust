@@ -73,7 +73,7 @@ trait CallRequest : Send {
     fn method_name(&self) -> &str;
     // called when server receives response from server
     // to send it back method called
-    fn complete(&mut self, message: GrpcResult<&[&[u8]]>);
+    fn complete(&mut self, message: GrpcStream<Vec<u8>>);
 }
 
 struct CallRequestTyped<Req, Resp> {
@@ -85,7 +85,7 @@ struct CallRequestTyped<Req, Resp> {
     complete: Option<Complete<GrpcStream<Resp>>>,
 }
 
-impl<Req : Send, Resp : Send + 'static> CallRequest for CallRequestTyped<Req, Resp> {
+impl<Req : Send + 'static, Resp : Send + 'static> CallRequest for CallRequestTyped<Req, Resp> {
     fn write_req(&self) -> GrpcResult<Vec<u8>> {
         self.method.req_marshaller.write(&self.req)
     }
@@ -94,26 +94,12 @@ impl<Req : Send, Resp : Send + 'static> CallRequest for CallRequestTyped<Req, Re
         &self.method.name
     }
 
-    fn complete(&mut self, messages: GrpcResult<&[&[u8]]>) {
+    fn complete(&mut self, messages: GrpcStream<Vec<u8>>) {
         if let Some(complete) = self.complete.take() {
-            let result: GrpcResult<Vec<Resp>> = match messages {
-                Err(e) => Err(e),
-                Ok(messages) => {
-                    messages.iter().map(|message| self.method.resp_marshaller.read(message))
-                        .fold(Ok(Vec::new()), |result, item| {
-                            match (result, item) {
-                                (Err(e), _) => Err(e),
-                                (_, Err(e)) => Err(e),
-                                (Ok(mut vec), Ok(item)) => Ok({ vec.push(item); vec })
-                            }
-                        })
-                }
-            };
-            let complete_param = match result {
-                Err(e) => err_stream(e),
-                Ok(vec) => stream::iter(vec.into_iter().map(Ok)).boxed(),
-            };
-            complete.complete(complete_param);
+            let method = self.method.clone();
+            complete.complete(messages.and_then(move |message| {
+                method.resp_marshaller.read(&message)
+            }).boxed());
         }
     }
 }
@@ -226,20 +212,25 @@ impl solicit_Stream for GrpcHttp2ClientStream {
                 let status = get_header(&self.stream, ":status");
                 let grpc_status = get_header(&self.stream, HEADER_GRPC_STATUS);
                 let message = get_header(&self.stream, HEADER_GRPC_MESSAGE);
-                let result =
+                let stream: GrpcStream<Vec<u8>> =
                     if let (Some("200"), Some("0")) = (status, grpc_status) {
-                        parse_grpc_frames_completely(&self.stream.body)
+                        match parse_grpc_frames_completely(&self.stream.body) {
+                            Err(e) => err_stream(e).boxed(),
+                            Ok(messages) => {
+                                let vecs: Vec<GrpcResult<Vec<u8>>> = messages
+                                    .into_iter()
+                                    .map(|s| Ok(s.to_vec()))
+                                    .collect();
+                                stream::iter(vecs.into_iter()).boxed()
+                            }
+                        }
                     } else if let Some(message) = message {
-                        Err(GrpcError::GrpcMessage(GrpcMessageError { grpc_message: message.to_owned() }))
+                        err_stream(GrpcError::GrpcMessage(GrpcMessageError { grpc_message: message.to_owned() }))
+                            .boxed()
                     } else {
-                        Err(GrpcError::Other("not 200/0"))
+                        err_stream(GrpcError::Other("not 200/0")).boxed()
                     };
-
-                let slice = match result {
-                    Ok(ref v) => Ok(&v[..]),
-                    Err(e) => Err(e),
-                };
-                call.complete(slice);
+                call.complete(stream);
             }
         }
         self.stream.set_state(state)
