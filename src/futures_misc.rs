@@ -88,9 +88,10 @@ pub fn stream_repeat<T : Clone + Send + 'static, E>(t: T) -> BoxStream<T, E> {
 }
 
 
-pub fn future_flatten_to_stream<F, T : Send + 'static, E : Send + 'static>(f: F) -> BoxStream<T, E>
+pub fn future_flatten_to_stream<F, T : Send + 'static, E : Send + 'static, S>(f: F) -> BoxStream<T, E>
     where
-        F : Future<Item=BoxStream<T, E>, Error=E> + Send + 'static,
+        S : Stream<Item=T, Error=E> + Send + 'static,
+        F : Future<Item=S, Error=E> + Send + 'static,
 {
     FutureFlattenToStream {
         inner: FutureFlattenToStreamInner::Future(f)

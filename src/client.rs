@@ -7,10 +7,7 @@ use std::str::from_utf8;
 
 use futures;
 use futures::Future;
-use futures::stream;
 use futures::stream::Stream;
-use futures::oneshot;
-use futures::Complete;
 
 use tokio_core::io as tokio_io;
 use tokio_core::io::TaskIo;
@@ -19,6 +16,7 @@ use tokio_core::io::TaskIoWrite;
 
 use tokio_core;
 use tokio_core::Loop;
+use tokio_core::LoopHandle;
 use tokio_core::TcpStream;
 
 use solicit::http::client::ClientConnection;
@@ -57,6 +55,7 @@ struct LoopToClient {
     call_tx: tokio_core::Sender<Box<CallRequest>>,
     // used only once to send shutdown signal
     shutdown_tx: tokio_core::Sender<()>,
+    loop_handle: LoopHandle,
 }
 
 /// gRPC client implementation.
@@ -73,7 +72,7 @@ trait CallRequest : Send {
     fn method_name(&self) -> &str;
     // called when server receives response from server
     // to send it back method called
-    fn complete(&mut self, message: GrpcStream<Vec<u8>>);
+    fn process_response(&mut self, message: GrpcResult<&[u8]>);
 }
 
 struct CallRequestTyped<Req, Resp> {
@@ -82,7 +81,7 @@ struct CallRequestTyped<Req, Resp> {
     // the request
     req: Req,
     // channel to send response back to called
-    complete: Option<Complete<GrpcStream<Resp>>>,
+    complete: tokio_core::Sender<GrpcResult<Resp>>,
 }
 
 impl<Req : Send + 'static, Resp : Send + 'static> CallRequest for CallRequestTyped<Req, Resp> {
@@ -94,13 +93,9 @@ impl<Req : Send + 'static, Resp : Send + 'static> CallRequest for CallRequestTyp
         &self.method.name
     }
 
-    fn complete(&mut self, messages: GrpcStream<Vec<u8>>) {
-        if let Some(complete) = self.complete.take() {
-            let method = self.method.clone();
-            complete.complete(messages.and_then(move |message| {
-                method.resp_marshaller.read(&message)
-            }).boxed());
-        }
+    fn process_response(&mut self, message: GrpcResult<&[u8]>) {
+        let resp = message.and_then(|message| self.method.resp_marshaller.read(&message));
+        self.complete.send(resp).ok();
     }
 }
 
@@ -133,6 +128,14 @@ impl GrpcClient {
         })
     }
 
+    pub fn new_resp_channel<Resp : Send + 'static>(&self) -> (tokio_core::Sender<GrpcResult<Resp>>, GrpcStream<Resp>) {
+        let (sender, receiver) = self.loop_to_client.loop_handle.clone().channel();
+        let receiver: GrpcStream<Resp> = future_flatten_to_stream(receiver)
+            .map_err(GrpcError::from)
+            .and_then(|r| r).boxed();
+        (sender, receiver)
+    }
+
     pub fn call_unary<Req : Send + 'static, Resp : Send + 'static>(&self, req: Req, method: Arc<MethodDescriptor<Req, Resp>>)
         -> GrpcFuture<Resp>
     {
@@ -143,22 +146,20 @@ impl GrpcClient {
         -> GrpcStream<Resp>
     {
         // A channel to send response back to caller
-        let (complete, oneshot) = oneshot();
+        let (complete, receiver) = self.new_resp_channel();
 
         // Send call to event loop.
         let send = self.loop_to_client.call_tx.send(Box::new(CallRequestTyped {
             method: method,
             req: req,
-            complete: Some(complete),
+            complete: complete,
         }));
         match send {
             Ok(..) => {},
             Err(e) => return err_stream(GrpcError::from(e)),
         }
 
-        // Translate error when call completes.
-        future_flatten_to_stream(oneshot.map_err(GrpcError::from))
-            .boxed()
+        receiver
     }
 }
 
@@ -212,25 +213,20 @@ impl solicit_Stream for GrpcHttp2ClientStream {
                 let status = get_header(&self.stream, ":status");
                 let grpc_status = get_header(&self.stream, HEADER_GRPC_STATUS);
                 let message = get_header(&self.stream, HEADER_GRPC_MESSAGE);
-                let stream: GrpcStream<Vec<u8>> =
-                    if let (Some("200"), Some("0")) = (status, grpc_status) {
-                        match parse_grpc_frames_completely(&self.stream.body) {
-                            Err(e) => err_stream(e).boxed(),
-                            Ok(messages) => {
-                                let vecs: Vec<GrpcResult<Vec<u8>>> = messages
-                                    .into_iter()
-                                    .map(|s| Ok(s.to_vec()))
-                                    .collect();
-                                stream::iter(vecs.into_iter()).boxed()
+                if let (Some("200"), Some("0")) = (status, grpc_status) {
+                    match parse_grpc_frames_completely(&self.stream.body) {
+                        Err(e) => call.process_response(Err(e)),
+                        Ok(messages) => {
+                            for message in messages {
+                                call.process_response(Ok(message));
                             }
                         }
-                    } else if let Some(message) = message {
-                        err_stream(GrpcError::GrpcMessage(GrpcMessageError { grpc_message: message.to_owned() }))
-                            .boxed()
-                    } else {
-                        err_stream(GrpcError::Other("not 200/0")).boxed()
-                    };
-                call.complete(stream);
+                    }
+                } else if let Some(message) = message {
+                    call.process_response(Err(GrpcError::GrpcMessage(GrpcMessageError { grpc_message: message.to_owned() })));
+                } else {
+                    call.process_response(Err(GrpcError::Other("not 200/0")));
+                };
             }
         }
         self.stream.set_state(state)
@@ -443,7 +439,11 @@ fn run_client_event_loop(
 
     // Send channels back to GrpcClient
     send_to_back
-        .send(LoopToClient { call_tx: call_tx, shutdown_tx: shutdown_tx })
+        .send(LoopToClient {
+            call_tx: call_tx,
+            shutdown_tx: shutdown_tx,
+            loop_handle: lp.handle(),
+        })
         .expect("send back");
 
     let shutdown_rx = shutdown_rx.map_err(GrpcError::from);
