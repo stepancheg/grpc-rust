@@ -7,7 +7,7 @@ use std::str::from_utf8;
 
 use futures;
 use futures::Future;
-use futures::IntoFuture;
+use futures::stream;
 use futures::stream::Stream;
 use futures::oneshot;
 use futures::Complete;
@@ -73,7 +73,7 @@ trait CallRequest : Send {
     fn method_name(&self) -> &str;
     // called when server receives response from server
     // to send it back method called
-    fn complete(&mut self, message: GrpcResult<&[u8]>);
+    fn complete(&mut self, message: GrpcResult<&[&[u8]]>);
 }
 
 struct CallRequestTyped<Req, Resp> {
@@ -82,7 +82,7 @@ struct CallRequestTyped<Req, Resp> {
     // the request
     req: Req,
     // channel to send response back to called
-    complete: Option<Complete<GrpcFuture<Resp>>>,
+    complete: Option<Complete<GrpcStream<Resp>>>,
 }
 
 impl<Req : Send, Resp : Send + 'static> CallRequest for CallRequestTyped<Req, Resp> {
@@ -94,10 +94,26 @@ impl<Req : Send, Resp : Send + 'static> CallRequest for CallRequestTyped<Req, Re
         &self.method.name
     }
 
-    fn complete(&mut self, message: GrpcResult<&[u8]>) {
+    fn complete(&mut self, messages: GrpcResult<&[&[u8]]>) {
         if let Some(complete) = self.complete.take() {
-            let result = message.and_then(|message| self.method.resp_marshaller.read(message));
-            complete.complete(futures::done(result).boxed());
+            let result: GrpcResult<Vec<Resp>> = match messages {
+                Err(e) => Err(e),
+                Ok(messages) => {
+                    messages.iter().map(|message| self.method.resp_marshaller.read(message))
+                        .fold(Ok(Vec::new()), |result, item| {
+                            match (result, item) {
+                                (Err(e), _) => Err(e),
+                                (_, Err(e)) => Err(e),
+                                (Ok(mut vec), Ok(item)) => Ok({ vec.push(item); vec })
+                            }
+                        })
+                }
+            };
+            let complete_param = match result {
+                Err(e) => err_stream(e),
+                Ok(vec) => stream::iter(vec.into_iter().map(Ok)).boxed(),
+            };
+            complete.complete(complete_param);
         }
     }
 }
@@ -134,6 +150,12 @@ impl GrpcClient {
     pub fn call_unary<Req : Send + 'static, Resp : Send + 'static>(&self, req: Req, method: Arc<MethodDescriptor<Req, Resp>>)
         -> GrpcFuture<Resp>
     {
+        single_element(self.call_server_streaming(req, method))
+    }
+
+    pub fn call_server_streaming<Req : Send + 'static, Resp : Send + 'static>(&self, req: Req, method: Arc<MethodDescriptor<Req, Resp>>)
+        -> GrpcStream<Resp>
+    {
         // A channel to send response back to caller
         let (complete, oneshot) = oneshot();
 
@@ -145,20 +167,12 @@ impl GrpcClient {
         }));
         match send {
             Ok(..) => {},
-            Err(e) => return Err(e).into_future().map_err(GrpcError::from).boxed(),
+            Err(e) => return err_stream(GrpcError::from(e)),
         }
 
         // Translate error when call completes.
-        oneshot
-            .map_err(GrpcError::from)
-            .flatten()
+        future_flatten_to_stream(oneshot.map_err(GrpcError::from))
             .boxed()
-    }
-
-    pub fn call_server_streaming<Req : Send + 'static, Resp : Send + 'static>(&self, _req: Req, _method: Arc<MethodDescriptor<Req, Resp>>)
-        -> GrpcStream<Resp>
-    {
-        unimplemented!()
     }
 }
 
@@ -214,13 +228,18 @@ impl solicit_Stream for GrpcHttp2ClientStream {
                 let message = get_header(&self.stream, HEADER_GRPC_MESSAGE);
                 let result =
                     if let (Some("200"), Some("0")) = (status, grpc_status) {
-                        parse_grpc_frame_completely(&self.stream.body)
+                        parse_grpc_frames_completely(&self.stream.body)
                     } else if let Some(message) = message {
                         Err(GrpcError::GrpcMessage(GrpcMessageError { grpc_message: message.to_owned() }))
                     } else {
                         Err(GrpcError::Other("not 200/0"))
                     };
-                call.complete(result);
+
+                let slice = match result {
+                    Ok(ref v) => Ok(&v[..]),
+                    Err(e) => Err(e),
+                };
+                call.complete(slice);
             }
         }
         self.stream.set_state(state)

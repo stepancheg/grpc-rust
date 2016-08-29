@@ -63,12 +63,16 @@ impl TestClient {
         }
     }
 
-    fn call(&self, name: &str, param: &str) -> GrpcFuture<String> {
+    fn call_unary(&self, name: &str, param: &str) -> GrpcFuture<String> {
         self.grpc_client.call_unary(param.to_owned(), string_string_method(name, false, false))
     }
 
+    fn call_server_streaming(&self, name: &str, param: &str) -> GrpcStream<String> {
+        self.grpc_client.call_server_streaming(param.to_owned(), string_string_method(name, false, true))
+    }
+
     fn call_expect_error<F : FnOnce(&GrpcError) -> bool>(&self, name: &str, param: &str, expect: F) {
-        match self.call(name, param).wait() {
+        match self.call_unary(name, param).wait() {
             Ok(r) => panic!("expecting error, got: {:?}", r),
             Err(e) => assert!(expect(&e), "wrong error: {:?}", e),
         }
@@ -100,14 +104,18 @@ fn client_and_server() -> (TestClient, GrpcServer) {
 fn unary() {
     let (client, _server) = client_and_server();
 
-    assert_eq!("aa", client.call("/test/Echo", "aa").wait().unwrap());
+    assert_eq!("aa", client.call_unary("/test/Echo", "aa").wait().unwrap());
 }
 
 #[test]
 fn server_streaming() {
-    let (_client, _server) = client_and_server();
+    let (client, _server) = client_and_server();
 
-    // TODO
+    let rs = client.call_server_streaming("/test/ServerStreaming", "x").collect().wait().unwrap();
+    // TODO: test it is really streaming (it is actually not)
+    let expected = vec!["x0", "x1", "x2"];
+
+    assert_eq!(expected, rs);
 }
 
 #[test]

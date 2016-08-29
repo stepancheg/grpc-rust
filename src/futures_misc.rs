@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::iter;
 
+use futures;
 use futures::*;
 use futures::stream::Stream;
 use futures::stream::BoxStream;
@@ -53,11 +54,87 @@ impl<F : Future> Stream for FutureToStream<F> {
 }
 
 
+pub fn single_element<S>(stream: S) -> BoxFuture<S::Item, S::Error>
+    where
+        S : Stream + Send + 'static,
+        S::Item : Send + 'static,
+        S::Error : Send + 'static,
+{
+    stream
+        .fold(None, |option, item| {
+            match option {
+                Some(..) => panic!("more than one element"), // TODO: better error
+                None => futures::finished::<_, S::Error>(Some(item))
+            }
+        })
+        .map(|option| {
+            option.expect("expecting one element, found none") // TODO: better error
+        })
+        .boxed()
+}
+
+
+pub fn err_stream<T : Send + 'static, E : Send + 'static>(error: E) -> BoxStream<T, E> {
+    future_to_stream(failed(error))
+        .boxed()
+}
+
+
 #[allow(dead_code)]
 pub fn stream_repeat<T : Clone + Send + 'static, E>(t: T) -> BoxStream<T, E> {
     let ts = iter::repeat(t).map(|t| Ok(t));
     stream::iter(ts)
         .boxed()
+}
+
+
+pub fn future_flatten_to_stream<F, T : Send + 'static, E : Send + 'static>(f: F) -> BoxStream<T, E>
+    where
+        F : Future<Item=BoxStream<T, E>, Error=E> + Send + 'static,
+{
+    FutureFlattenToStream {
+        inner: FutureFlattenToStreamInner::Future(f)
+    }.boxed()
+}
+
+enum FutureFlattenToStreamInner<F, S> {
+    Future(F),
+    Stream(S),
+}
+
+pub struct FutureFlattenToStream<F, E> {
+    inner: FutureFlattenToStreamInner<F, E>,
+}
+
+impl<F, S> Stream for FutureFlattenToStream<F, S>
+    where
+        S : Stream,
+        F : Future<Item=S, Error=S::Error>,
+{
+    type Item = S::Item;
+    type Error = S::Error;
+
+    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+        let next = match &mut self.inner {
+            &mut FutureFlattenToStreamInner::Future(ref mut f) => {
+                match f.poll() {
+                    Poll::NotReady => return Poll::NotReady,
+                    Poll::Err(e) => return Poll::Err(e),
+                    Poll::Ok(stream) => stream,
+                }
+            }
+            &mut FutureFlattenToStreamInner::Stream(ref mut s) => {
+                return s.poll();
+            }
+        };
+
+        self.inner = FutureFlattenToStreamInner::Stream(next);
+        if let &mut FutureFlattenToStreamInner::Stream(ref mut s) = &mut self.inner {
+            s.poll()
+        } else {
+            unreachable!()
+        }
+    }
 }
 
 

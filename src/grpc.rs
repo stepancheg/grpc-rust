@@ -47,11 +47,28 @@ pub fn parse_grpc_frame(stream: &[u8]) -> GrpcResult<Option<(&[u8], usize)>> {
     Ok(Some((&stream[header_len..end], end)))
 }
 
+pub fn parse_grpc_frames_completely(stream: &[u8]) -> GrpcResult<Vec<&[u8]>> {
+    let mut r = Vec::new();
+    let mut pos = 0;
+    while pos < stream.len() {
+        let frame_opt = try!(parse_grpc_frame(&stream[pos..]));
+        match frame_opt {
+            None => return Err(GrpcError::Other("not complete frames")),
+            Some((frame, len)) => {
+                r.push(frame);
+                pos += len;
+            }
+        }
+    }
+    Ok(r)
+}
+
 pub fn parse_grpc_frame_completely(stream: &[u8]) -> GrpcResult<&[u8]> {
-    match parse_grpc_frame(stream) {
-        Ok(Some((bytes, pos))) if pos == stream.len() => Ok(bytes),
-        Ok(..) => Err(GrpcError::Other("not complete single frame")),
-        Err(e) => Err(e),
+    let frames = try!(parse_grpc_frames_completely(stream));
+    if frames.len() == 1 {
+        Ok(frames[0])
+    } else {
+        Err(GrpcError::Other("expecting exactly one frame"))
     }
 }
 
