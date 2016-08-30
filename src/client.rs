@@ -42,7 +42,6 @@ use result::*;
 
 use futures_misc::*;
 use futures_grpc::*;
-use futures_stream_merge2;
 
 use grpc::*;
 use solicit_async::*;
@@ -416,7 +415,7 @@ fn run_write(
     -> GrpcFuture<()>
 {
 
-    let merge = futures_stream_merge2::new(call_rx, read_to_write_rx)
+    let merge = stream_merge2(call_rx, read_to_write_rx)
         .map_err(GrpcError::from);
 
     let loop_body = WriteLoopBody {
@@ -426,10 +425,10 @@ fn run_write(
 
     let future = merge.fold(loop_body, |loop_body: WriteLoopBody, req| {
         match req {
-            futures_stream_merge2::MergedItem::First(call) => {
+            Merged2Item::First(call) => {
                 loop_body.process_call(call)
             }
-            futures_stream_merge2::MergedItem::Second(read_to_write) => {
+            Merged2Item::Second(read_to_write) => {
                 loop_body.process_read_to_write(read_to_write)
             }
         }
