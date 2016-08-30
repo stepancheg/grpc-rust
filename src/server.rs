@@ -88,7 +88,7 @@ impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerUnary<F>
         F : Fn(Req) -> GrpcFuture<Resp>,
 {
     fn handle(&self, req: Req) -> GrpcStream<Resp> {
-        future_to_stream((self.f)(req))
+        future_to_stream_once((self.f)(req))
             .boxed()
     }
 }
@@ -121,7 +121,7 @@ impl<Req, Resp> MethodHandlerDispatch for MethodHandlerDispatchAsyncImpl<Req, Re
     fn on_message(&self, message: &[u8]) -> GrpcStream<Vec<u8>> {
         let req = match self.desc.req_marshaller.read(message) {
             Ok(req) => req,
-            Err(e) => return future_to_stream(futures::done(Err(e))).boxed(),
+            Err(e) => return future_to_stream_once(futures::done(Err(e))).boxed(),
         };
         let resp =
             catch_unwind(AssertUnwindSafe(|| self.method_handler.handle(req)));
@@ -132,7 +132,7 @@ impl<Req, Resp> MethodHandlerDispatch for MethodHandlerDispatchAsyncImpl<Req, Re
                     .and_then(move |resp| desc_copy.resp_marshaller.write(&resp))
                     .boxed()
             }
-            Err(..) => future_to_stream(futures::failed(GrpcError::Other("panic in handler")))
+            Err(..) => future_to_stream_once(futures::failed(GrpcError::Other("panic in handler")))
                 .boxed(),
         }
     }

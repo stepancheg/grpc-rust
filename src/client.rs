@@ -139,7 +139,7 @@ impl GrpcClient {
     pub fn call_unary<Req : Send + 'static, Resp : Send + 'static>(&self, req: Req, method: Arc<MethodDescriptor<Req, Resp>>)
         -> GrpcFuture<Resp>
     {
-        single_element(self.call_server_streaming(req, method))
+        stream_once(self.call_server_streaming(req, method))
     }
 
     pub fn call_server_streaming<Req : Send + 'static, Resp : Send + 'static>(&self, req: Req, method: Arc<MethodDescriptor<Req, Resp>>)
@@ -156,7 +156,7 @@ impl GrpcClient {
         }));
         match send {
             Ok(..) => {},
-            Err(e) => return err_stream(GrpcError::from(e)),
+            Err(e) => return stream_err(GrpcError::from(e)),
         }
 
         receiver
