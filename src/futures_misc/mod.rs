@@ -7,6 +7,8 @@ mod stream_once;
 mod stream_repeat;
 mod stream_err;
 mod stream_merge2;
+mod stream_with_eof;
+mod stream_with_eof_and_error;
 
 pub use self::task_data::TaskDataMut;
 pub use self::task_data::TaskDataMutex;
@@ -26,3 +28,6 @@ pub use self::future_to_stream_once::FutureToStreamOnce;
 pub use self::stream_merge2::stream_merge2;
 pub use self::stream_merge2::StreamMerge2;
 pub use self::stream_merge2::Merged2Item;
+
+pub use self::stream_with_eof::*;
+pub use self::stream_with_eof_and_error::*;

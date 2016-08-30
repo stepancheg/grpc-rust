@@ -71,7 +71,7 @@ trait CallRequest : Send {
     fn method_name(&self) -> &str;
     // called when server receives response from server
     // to send it back method called
-    fn process_response(&mut self, message: GrpcResult<&[u8]>);
+    fn process_response(&mut self, message: ResultOrEof<&[u8], GrpcError>);
 }
 
 struct CallRequestTyped<Req, Resp> {
@@ -80,7 +80,7 @@ struct CallRequestTyped<Req, Resp> {
     // the request
     req: Req,
     // channel to send response back to called
-    complete: tokio_core::Sender<GrpcResult<Resp>>,
+    complete: tokio_core::Sender<ResultOrEof<Resp, GrpcError>>,
 }
 
 impl<Req : Send + 'static, Resp : Send + 'static> CallRequest for CallRequestTyped<Req, Resp> {
@@ -92,7 +92,7 @@ impl<Req : Send + 'static, Resp : Send + 'static> CallRequest for CallRequestTyp
         &self.method.name
     }
 
-    fn process_response(&mut self, message: GrpcResult<&[u8]>) {
+    fn process_response(&mut self, message: ResultOrEof<&[u8], GrpcError>) {
         let resp = message.and_then(|message| self.method.resp_marshaller.read(&message));
         self.complete.send(resp).ok();
     }
@@ -127,11 +127,16 @@ impl GrpcClient {
         })
     }
 
-    pub fn new_resp_channel<Resp : Send + 'static>(&self) -> (tokio_core::Sender<GrpcResult<Resp>>, GrpcStream<Resp>) {
-        let (sender, receiver) = self.loop_to_client.loop_handle.clone().channel();
-        let receiver: GrpcStream<Resp> = future_flatten_to_stream(receiver)
+    pub fn new_resp_channel<Resp : Send + 'static>(&self)
+        -> (tokio_core::Sender<ResultOrEof<Resp, GrpcError>>, GrpcStream<Resp>)
+    {
+        let (sender, receiver) = self.loop_to_client.loop_handle.clone().channel::<ResultOrEof<Resp, GrpcError>>();
+        let receiver: GrpcStream<ResultOrEof<Resp, GrpcError>> = future_flatten_to_stream(receiver)
             .map_err(GrpcError::from)
-            .and_then(|r| r).boxed();
+            .boxed();
+
+        let receiver: GrpcStream<Resp> = stream_with_eof_and_error(receiver).boxed();
+
         (sender, receiver)
     }
 
@@ -202,12 +207,12 @@ impl GrpcHttp2ClientStream {
             loop {
                 let len = match parse_grpc_frame(&self.stream.body) {
                     Err(e) => {
-                        call.process_response(Err(e));
+                        call.process_response(ResultOrEof::Error(e));
                         break;
                     }
                     Ok(None) => break,
                     Ok(Some((message, len))) => {
-                        call.process_response(Ok(message));
+                        call.process_response(ResultOrEof::Item(message));
                         len
                     }
                 };
@@ -236,14 +241,17 @@ impl solicit_Stream for GrpcHttp2ClientStream {
                 self.process_buf();
                 if !self.stream.body.is_empty() {
                     let call = self.call.as_mut().unwrap();
-                    call.process_response(Err(GrpcError::Other("partial frame")));
+                    call.process_response(ResultOrEof::Error(GrpcError::Other("partial frame")));
+                } else {
+                    let call = self.call.as_mut().unwrap();
+                    call.process_response(ResultOrEof::Eof);
                 }
             } else if let Some(message) = get_header(&self.stream, HEADER_GRPC_MESSAGE) {
                 let call = self.call.as_mut().unwrap();
-                call.process_response(Err(GrpcError::GrpcMessage(GrpcMessageError { grpc_message: message.to_owned() })));
+                call.process_response(ResultOrEof::Error(GrpcError::GrpcMessage(GrpcMessageError { grpc_message: message.to_owned() })));
             } else {
                 let call = self.call.as_mut().unwrap();
-                call.process_response(Err(GrpcError::Other("not 200/0")));
+                call.process_response(ResultOrEof::Error(GrpcError::Other("not 200/0")));
             };
         }
         self.stream.set_state(state)
