@@ -196,11 +196,33 @@ impl GrpcHttp2ClientStream {
             call: None,
         }
     }
+
+    fn process_buf(&mut self) {
+        let call = self.call.as_mut().unwrap();
+        if let Some("200") = get_header(&self.stream, ":status") {
+            loop {
+                let len = match parse_grpc_frame(&self.stream.body) {
+                    Err(e) => {
+                        call.process_response(Err(e));
+                        break;
+                    }
+                    Ok(None) => break,
+                    Ok(Some((message, len))) => {
+                        call.process_response(Ok(message));
+                        len
+                    }
+                };
+                self.stream.body.drain(..len);
+            }
+        }
+    }
 }
 
 impl solicit_Stream for GrpcHttp2ClientStream {
     fn new_data_chunk(&mut self, data: &[u8]) {
-        self.stream.new_data_chunk(data)
+        self.stream.body.extend(data.into_iter());
+
+        self.process_buf();
     }
 
     fn set_headers<'n, 'v>(&mut self, headers: Vec<Header<'n, 'v>>) {
@@ -209,25 +231,21 @@ impl solicit_Stream for GrpcHttp2ClientStream {
 
     fn set_state(&mut self, state: StreamState) {
         if state == StreamState::Closed {
-            if let Some(mut call) = self.call.take() {
-                let status = get_header(&self.stream, ":status");
-                let grpc_status = get_header(&self.stream, HEADER_GRPC_STATUS);
-                let message = get_header(&self.stream, HEADER_GRPC_MESSAGE);
-                if let (Some("200"), Some("0")) = (status, grpc_status) {
-                    match parse_grpc_frames_completely(&self.stream.body) {
-                        Err(e) => call.process_response(Err(e)),
-                        Ok(messages) => {
-                            for message in messages {
-                                call.process_response(Ok(message));
-                            }
-                        }
-                    }
-                } else if let Some(message) = message {
-                    call.process_response(Err(GrpcError::GrpcMessage(GrpcMessageError { grpc_message: message.to_owned() })));
-                } else {
-                    call.process_response(Err(GrpcError::Other("not 200/0")));
-                };
-            }
+            let status_200 = get_header(&self.stream, ":status") == Some("200");
+            let grpc_status_0 = get_header(&self.stream, HEADER_GRPC_STATUS) == Some("0");
+            if status_200 && grpc_status_0 {
+                self.process_buf();
+                if !self.stream.body.is_empty() {
+                    let call = self.call.as_mut().unwrap();
+                    call.process_response(Err(GrpcError::Other("partial frame")));
+                }
+            } else if let Some(message) = get_header(&self.stream, HEADER_GRPC_MESSAGE) {
+                let call = self.call.as_mut().unwrap();
+                call.process_response(Err(GrpcError::GrpcMessage(GrpcMessageError { grpc_message: message.to_owned() })));
+            } else {
+                let call = self.call.as_mut().unwrap();
+                call.process_response(Err(GrpcError::Other("not 200/0")));
+            };
         }
         self.stream.set_state(state)
     }
