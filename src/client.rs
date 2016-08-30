@@ -182,6 +182,7 @@ impl Drop for GrpcClient {
 struct GrpcHttp2ClientStream {
     stream: DefaultStream,
     call: Option<Box<CallRequest>>,
+    _shared: TaskDataMutex<ClientSharedState>,
 }
 
 fn get_header<'a>(stream: &'a DefaultStream, name: &str) -> Option<&'a str> {
@@ -194,10 +195,13 @@ fn get_header<'a>(stream: &'a DefaultStream, name: &str) -> Option<&'a str> {
 }
 
 impl GrpcHttp2ClientStream {
-    fn new() -> GrpcHttp2ClientStream {
+    fn new(shared: TaskDataMutex<ClientSharedState>)
+        -> GrpcHttp2ClientStream
+    {
         GrpcHttp2ClientStream {
             stream: DefaultStream::new(),
             call: None,
+            _shared: shared,
         }
     }
 
@@ -278,10 +282,11 @@ impl ClientSharedState {
         method: &'v [u8],
         path: &'v [u8],
         extras: &[Header<'n, 'v>],
-        body: Option<Vec<u8>>)
+        body: Option<Vec<u8>>,
+        shared: TaskDataMutex<ClientSharedState>)
             -> RequestStream<'n, 'v, GrpcHttp2ClientStream>
     {
-        let mut stream = GrpcHttp2ClientStream::new();
+        let mut stream = GrpcHttp2ClientStream::new(shared);
         match body {
             Some(body) => stream.stream.set_full_data(body),
             None => stream.close_local(),
@@ -366,6 +371,7 @@ struct WriteLoopBody {
 
 impl WriteLoopBody {
     fn process_call(self, req: Box<CallRequest>) -> GrpcFuture<Self> {
+        let shared_copy = self.shared.clone();
         let send_buf: GrpcResult<Vec<u8>> = self.shared.with(|shared: &mut ClientSharedState| {
             let mut body = Vec::new();
             write_grpc_frame(&mut body, &try!(req.write_req()));
@@ -374,7 +380,8 @@ impl WriteLoopBody {
                 b"POST",
                 &path,
                 &[],
-                Some(body));
+                Some(body),
+                shared_copy);
 
             stream.stream.call = Some(req);
 
