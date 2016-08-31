@@ -4,7 +4,9 @@ use futures::Future;
 use futures;
 
 
-pub fn stream_once<S>(stream: S) -> BoxFuture<S::Item, S::Error>
+/// Convert a stream into single element future.
+/// It is an error, is stream is empty or has more than one element.
+pub fn stream_single<S>(stream: S) -> BoxFuture<S::Item, S::Error>
     where
         S : Stream + Send + 'static,
         S::Item : Send + 'static,

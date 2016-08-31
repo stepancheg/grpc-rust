@@ -143,7 +143,7 @@ impl GrpcClient {
     pub fn call_unary<Req : Send + 'static, Resp : Send + 'static>(&self, req: Req, method: Arc<MethodDescriptor<Req, Resp>>)
         -> GrpcFuture<Resp>
     {
-        stream_once(self.call_server_streaming(req, method))
+        stream_single(self.call_server_streaming(req, method))
     }
 
     pub fn call_server_streaming<Req : Send + 'static, Resp : Send + 'static>(&self, req: Req, method: Arc<MethodDescriptor<Req, Resp>>)
