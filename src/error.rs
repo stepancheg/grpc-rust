@@ -22,6 +22,7 @@ pub enum GrpcError {
     GrpcMessage(GrpcMessageError),
     Canceled(futures::Canceled),
     Protobuf(ProtobufError),
+    Panic(String),
     Other(&'static str),
 }
 
@@ -33,6 +34,7 @@ impl Error for GrpcError {
             &GrpcError::GrpcMessage(ref err) => &err.grpc_message,
             &GrpcError::Protobuf(ref err) => err.description(),
             &GrpcError::Canceled(..) => "canceled",
+            &GrpcError::Panic(ref message) => &message,
             &GrpcError::Other(ref message) => message,
         }
     }
@@ -46,6 +48,7 @@ impl fmt::Display for GrpcError {
             &GrpcError::GrpcMessage(ref err) => write!(f, "grpc message error: {}", err.grpc_message),
             &GrpcError::Protobuf(ref err) => write!(f, "protobuf error: {}", err.description()),
             &GrpcError::Canceled(..) => write!(f, "canceled"),
+            &GrpcError::Panic(ref message) => write!(f, "panic: {}", message),
             &GrpcError::Other(ref message) => write!(f, "other error: {}", message),
         }
     }

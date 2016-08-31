@@ -178,5 +178,5 @@ fn panic_in_handler() {
     let tester = client_and_server();
 
     tester.client.call_expect_grpc_error("/test/Panic", "aa",
-        |m| m.find("panic").is_some() /* && m.find("icnap").is_some() */);
+        |m| m.find("Panic").is_some() && m.find("icnap").is_some());
 }

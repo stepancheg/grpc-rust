@@ -7,6 +7,7 @@ use std::iter;
 use std::sync::mpsc;
 use std::panic::catch_unwind;
 use std::panic::AssertUnwindSafe;
+use std::any::Any;
 
 use solicit::http::server::StreamFactory;
 use solicit::http::server::ServerSession;
@@ -113,6 +114,16 @@ struct MethodHandlerDispatchAsyncImpl<Req, Resp> {
     method_handler: Box<MethodHandler<Req, Resp> + Sync + Send>,
 }
 
+fn any_to_string(any: Box<Any + Send + 'static>) -> String {
+    if any.is::<String>() {
+        *any.downcast::<String>().unwrap()
+    } else if any.is::<&str>() {
+        (*any.downcast::<&str>().unwrap()).to_owned()
+    } else {
+        "unknown any".to_owned()
+    }
+}
+
 impl<Req, Resp> MethodHandlerDispatch for MethodHandlerDispatchAsyncImpl<Req, Resp>
     where
         Req : Send + 'static,
@@ -132,8 +143,11 @@ impl<Req, Resp> MethodHandlerDispatch for MethodHandlerDispatchAsyncImpl<Req, Re
                     .and_then(move |resp| desc_copy.resp_marshaller.write(&resp))
                     .boxed()
             }
-            Err(..) => future_to_stream_once(futures::failed(GrpcError::Other("panic in handler")))
-                .boxed(),
+            Err(e) => {
+                let message = any_to_string(e);
+                future_to_stream_once(futures::failed(GrpcError::Panic(message)))
+                    .boxed()
+            }
         }
     }
 }
