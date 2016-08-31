@@ -4,7 +4,7 @@ use futures::Future;
 use futures::stream::channel;
 use futures::stream::Sender;
 use futures::stream::Receiver;
-//use futures::stream::FutureSender;
+
 
 #[allow(dead_code)]
 pub fn channel_sync_sender<T, E>() -> (SyncSender<T, E>, Receiver<T, E>) {

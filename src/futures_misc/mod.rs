@@ -9,6 +9,7 @@ mod stream_err;
 mod stream_merge2;
 mod stream_with_eof;
 mod stream_with_eof_and_error;
+mod channel_sync_sender;
 
 pub use self::task_data::TaskDataMut;
 pub use self::task_data::TaskDataMutex;
@@ -31,3 +32,6 @@ pub use self::stream_merge2::Merged2Item;
 
 pub use self::stream_with_eof::*;
 pub use self::stream_with_eof_and_error::*;
+
+pub use self::channel_sync_sender::channel_sync_sender;
+pub use self::channel_sync_sender::SyncSender;
