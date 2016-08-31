@@ -30,88 +30,67 @@ fn string_string_method(name: &str, client_streaming: bool, server_streaming: bo
    })
 }
 
-
-struct TestCommon {
-    server_streaming_sync: Arc<TestSync>,
+/// Single method server on random port
+fn new_server<H>(name: &str, client_streaming: bool, server_streaming: bool, handler: H) -> GrpcServer
+    where H : MethodHandler<String, String> + 'static + Sync + Send
+{
+    let mut methods = Vec::new();
+    methods.push(ServerMethod::new(
+        string_string_method(name, client_streaming, server_streaming),
+        handler,
+    ));
+    GrpcServer::new(0, ServerServiceDefinition::new(methods))
 }
 
-impl TestCommon {
-    fn new() -> TestCommon {
-        TestCommon {
-            server_streaming_sync: Arc::new(TestSync::new()),
-        }
-    }
+/// Single unary method server
+fn new_server_unary<H>(name: &str, handler: H) -> GrpcServer
+    where H : Fn(String) -> GrpcFuture<String> + Sync + Send + 'static
+{
+    new_server(name, false, false, MethodHandlerUnary::new(handler))
+}
+
+/// Single server streaming method server
+fn new_server_server_streaming<H>(name: &str, handler: H) -> GrpcServer
+    where H : Fn(String) -> GrpcStream<String> + Sync + Send + 'static
+{
+    new_server(name, false, true, MethodHandlerServerStreaming::new(handler))
 }
 
 
-struct TestServer {
-    grpc_server: GrpcServer,
+/// Tester for unary methods
+struct TesterUnary {
+    name: String,
+    client: GrpcClient,
+    _server: GrpcServer,
 }
 
-impl TestServer {
-    fn new(common: Arc<TestCommon>) -> Self {
-        let mut methods = Vec::new();
-        methods.push(ServerMethod::new(
-            string_string_method("/test/Echo", false, false),
-            MethodHandlerUnary::new(|s| Ok(s).into_future().boxed()),
-        ));
-        methods.push(ServerMethod::new(
-            string_string_method("/test/ServerStreaming", false, true),
-            MethodHandlerServerStreaming::new(move |s| {
-                let sync = common.server_streaming_sync.clone();
-                test_misc::stream_thread_spawn_iter(move || {
-                    (0..3).map(move |i| {
-                        sync.take(i * 2 + 1);
-                        format!("{}{}", s, i)
-                    })
-                })
-            }),
-        ));
-        methods.push(ServerMethod::new(
-            string_string_method("/test/Error", false, false),
-            MethodHandlerUnary::new(|_| Err(GrpcError::Other("my error")).into_future().boxed()),
-        ));
-        methods.push(ServerMethod::new(
-            string_string_method("/test/Panic", false, false),
-            MethodHandlerUnary::new(|_| panic!("icnap")),
-        ));
-        TestServer {
-            grpc_server: GrpcServer::new(
-                0,
-                ServerServiceDefinition::new(methods),
-            ),
-        }
-    }
-}
-
-struct TestClient {
-    grpc_client: GrpcClient,
-}
-
-impl TestClient {
-    fn new(port: u16, _common: Arc<TestCommon>) -> TestClient {
-        TestClient {
-            grpc_client: GrpcClient::new("::", port).expect("GrpcClient::new"),
+impl TesterUnary {
+    fn new<H>(handler: H) -> TesterUnary
+        where H : Fn(String) -> GrpcFuture<String> + Sync + Send + 'static
+    {
+        let name = "/text/Unary";
+        let server = new_server_unary(name, handler);
+        let port = server.local_addr().port();
+        TesterUnary {
+            name: name.to_owned(),
+            _server: server,
+            client: GrpcClient::new("::1", port).unwrap()
         }
     }
 
-    fn call_unary(&self, name: &str, param: &str) -> GrpcFuture<String> {
-        self.grpc_client.call_unary(param.to_owned(), string_string_method(name, false, false))
+    fn call(&self, param: &str) -> GrpcFuture<String> {
+        self.client.call_unary(param.to_owned(), string_string_method(&self.name, false, false))
     }
 
-    fn call_server_streaming(&self, name: &str, param: &str) -> GrpcStream<String> {
-        self.grpc_client.call_server_streaming(param.to_owned(), string_string_method(name, false, true))
-    }
-
-    fn call_expect_error<F : FnOnce(&GrpcError) -> bool>(&self, name: &str, param: &str, expect: F) {
-        match self.call_unary(name, param).wait() {
+    fn call_expect_error<F : FnOnce(&GrpcError) -> bool>(&self, param: &str, expect: F) {
+        match self.call(param).wait() {
             Ok(r) => panic!("expecting error, got: {:?}", r),
             Err(e) => assert!(expect(&e), "wrong error: {:?}", e),
         }
     }
 
-    fn call_expect_grpc_error<F : FnOnce(&str) -> bool>(&self, name: &str, param: &str, expect: F) {
-        self.call_expect_error(name, param, |e| {
+    fn call_expect_grpc_error<F : FnOnce(&str) -> bool>(&self, param: &str, expect: F) {
+        self.call_expect_error(param, |e| {
             match e {
                 &GrpcError::GrpcMessage(GrpcMessageError { ref grpc_message }) if expect(&grpc_message) => true,
                 _ => false,
@@ -119,64 +98,82 @@ impl TestClient {
         });
     }
 
-    fn call_expect_grpc_error_contain(&self, name: &str, param: &str, expect: &str) {
-        self.call_expect_grpc_error(name, param, |m| m.find(expect).is_some());
+    fn call_expect_grpc_error_contain(&self, param: &str, expect: &str) {
+        self.call_expect_grpc_error(param, |m| m.find(expect).is_some());
     }
 }
 
-struct Tester {
-    client: TestClient,
-    _server: TestServer,
-    common: Arc<TestCommon>,
+
+/// Tester for server streaming methods
+struct TesterServerStreaming {
+    name: String,
+    client: GrpcClient,
+    _server: GrpcServer,
 }
 
-fn client_and_server() -> Tester {
-    let common = Arc::new(TestCommon::new());
+impl TesterServerStreaming {
+    fn new<H>(handler: H) -> TesterServerStreaming
+        where H : Fn(String) -> GrpcStream<String> + Sync + Send + 'static
+    {
+        let name = "/test/ServerStreaming";
+        let server = new_server_server_streaming(name, handler);
+        let port = server.local_addr().port();
+        TesterServerStreaming {
+            name: name.to_owned(),
+            _server: server,
+            client: GrpcClient::new("::1", port).unwrap()
+        }
+    }
 
-    let server = TestServer::new(common.clone());
-
-    let client = TestClient::new(server.grpc_server.local_addr().port(), common.clone());
-
-    Tester {
-        client: client,
-        _server: server,
-        common: common,
+    fn call(&self, param: &str) -> GrpcStream<String> {
+        self.client.call_server_streaming(param.to_owned(), string_string_method(&self.name, false, true))
     }
 }
 
 #[test]
 fn unary() {
-    let tester = client_and_server();
+    let tester = TesterUnary::new(|s| Ok(s).into_future().boxed());
 
-    assert_eq!("aa", tester.client.call_unary("/test/Echo", "aa").wait().unwrap());
-}
-
-#[test]
-fn server_streaming() {
-    let tester = client_and_server();
-
-    let mut rs = tester.client.call_server_streaming("/test/ServerStreaming", "x").wait();
-
-    tester.common.server_streaming_sync.take(0);
-    assert_eq!("x0", rs.next().unwrap().unwrap());
-    tester.common.server_streaming_sync.take(2);
-    assert_eq!("x1", rs.next().unwrap().unwrap());
-    tester.common.server_streaming_sync.take(4);
-    assert_eq!("x2", rs.next().unwrap().unwrap());
-    assert!(rs.next().is_none());
+    assert_eq!("aa", tester.call("aa").wait().unwrap());
 }
 
 #[test]
 fn error_in_handler() {
-    let tester = client_and_server();
+    let tester = TesterUnary::new(|_| Err(GrpcError::Other("my error")).into_future().boxed());
 
-    tester.client.call_expect_grpc_error_contain("/test/Error", "aa", "my error");
+    tester.call_expect_grpc_error_contain("aa", "my error");
 }
 
 #[test]
 fn panic_in_handler() {
-    let tester = client_and_server();
+    let tester = TesterUnary::new(|_| panic!("icnap"));
 
-    tester.client.call_expect_grpc_error("/test/Panic", "aa",
+    tester.call_expect_grpc_error("aa",
         |m| m.find("Panic").is_some() && m.find("icnap").is_some());
+}
+
+#[test]
+fn server_streaming() {
+    let test_sync = Arc::new(TestSync::new());
+    let test_sync_server = test_sync.clone();
+
+    let tester = TesterServerStreaming::new(move |s| {
+        let sync = test_sync_server.clone();
+        test_misc::stream_thread_spawn_iter(move || {
+            (0..3).map(move |i| {
+                sync.take(i * 2 + 1);
+                format!("{}{}", s, i)
+            })
+        })
+    });
+
+    let mut rs = tester.call("x").wait();
+
+    test_sync.take(0);
+    assert_eq!("x0", rs.next().unwrap().unwrap());
+    test_sync.take(2);
+    assert_eq!("x1", rs.next().unwrap().unwrap());
+    test_sync.take(4);
+    assert_eq!("x2", rs.next().unwrap().unwrap());
+    assert!(rs.next().is_none());
 }
