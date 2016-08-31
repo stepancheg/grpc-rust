@@ -19,8 +19,8 @@ use tokio_core::Loop;
 use tokio_core::LoopHandle;
 use tokio_core::TcpStream;
 
-use solicit::http::client::ClientConnection;
 use solicit::http::client::RequestStream;
+use solicit::http::client::ClientSession;
 use solicit::http::session::Client;
 use solicit::http::session::SessionState;
 use solicit::http::session::DefaultSessionState;
@@ -31,6 +31,8 @@ use solicit::http::session::StreamDataError;
 use solicit::http::session::Stream as solicit_Stream;
 use solicit::http::connection::HttpConnection;
 use solicit::http::connection::SendStatus;
+use solicit::http::connection::EndStream;
+use solicit::http::priority::SimplePrioritizer;
 use solicit::http::HttpScheme;
 use solicit::http::Header;
 
@@ -272,7 +274,8 @@ impl solicit_Stream for GrpcHttp2ClientStream {
 
 struct ClientSharedState {
     host: String,
-    conn: ClientConnection<DefaultSessionState<Client, GrpcHttp2ClientStream>>,
+    conn: HttpConnection,
+    state: DefaultSessionState<Client, GrpcHttp2ClientStream>,
 }
 
 
@@ -296,7 +299,7 @@ impl ClientSharedState {
             Header::new(b":method", method),
             Header::new(b":path", path),
             Header::new(b":authority", self.host.clone().into_bytes()),
-            Header::new(b":scheme", self.conn.scheme().as_bytes().to_vec()),
+            Header::new(b":scheme", self.conn.scheme.as_bytes().to_vec()),
         ];
 
         headers.extend(extras.iter().cloned());
@@ -323,11 +326,13 @@ impl ReadLoopBody {
             shared.with(|shared: &mut ClientSharedState| {
                 let mut send = VecSendFrame(Vec::new());
 
-                shared.conn.handle_next_frame(
-                    &mut OnceReceiveFrame::new(raw_frame),
-                    &mut send).unwrap();
+                {
+                    let mut session = ClientSession::new(&mut shared.state, &mut send);
+                    shared.conn.handle_next_frame(&mut OnceReceiveFrame::new(raw_frame), &mut session)
+                        .unwrap();
+                }
 
-                shared.conn.state.get_closed();
+                shared.state.get_closed();
 
                 if !send.0.is_empty() {
                     read_to_write_tx.send(ReadToWrite::SendToSocket(send.0))
@@ -387,9 +392,28 @@ impl WriteLoopBody {
 
             let mut send_buf = VecSendFrame(Vec::new());
 
-            // TODO: do not unwrap
-            let _stream_id = shared.conn.start_request(stream, &mut send_buf).unwrap();
-            while let SendStatus::Sent = shared.conn.send_next_data(&mut send_buf).unwrap() {
+
+
+            // start_request
+            let end_stream = if stream.stream.is_closed_local() {
+                EndStream::Yes
+            } else {
+                EndStream::No
+            };
+            let stream_id = shared.state.insert_outgoing(stream.stream);
+            shared.conn.sender(&mut send_buf).send_headers(stream.headers, stream_id, end_stream).unwrap();
+
+
+            loop {
+                // send_next_data
+                const MAX_CHUNK_SIZE: usize = 8 * 1024;
+                let mut buf = [0; MAX_CHUNK_SIZE];
+
+                let mut prioritizer = SimplePrioritizer::new(&mut shared.state, &mut buf);
+                let send_status = shared.conn.sender(&mut send_buf).send_next_data(&mut prioritizer).unwrap();
+                if send_status == SendStatus::Nothing {
+                    break;
+                }
             }
 
             Ok(send_buf.0)
@@ -492,11 +516,10 @@ fn run_client_event_loop(
         let conn = HttpConnection::new(HttpScheme::Http);
         let state = DefaultSessionState::<Client, _>::new();
 
-        let conn = ClientConnection::with_connection(conn, state);
-
         let shared_for_read = TaskDataMutex::new(ClientSharedState {
             host: host,
             conn: conn,
+            state: state,
         });
         let shared_for_write = shared_for_read.clone();
         run_read(read, shared_for_read, read_to_write_tx)
