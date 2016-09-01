@@ -25,9 +25,9 @@ pub trait RouteGuide {
 
     fn ListFeatures(&self, p: super::route_guide::Rectangle) -> ::grpc::iter::GrpcIterator<super::route_guide::Feature>;
 
-    fn RecordRoute(&self, p: ::std::vec::Vec<::grpc::result::GrpcResult<super::route_guide::Point>>) -> ::grpc::result::GrpcResult<super::route_guide::RouteSummary>;
+    fn RecordRoute(&self, p: ::grpc::iter::GrpcIterator<super::route_guide::Point>) -> ::grpc::result::GrpcResult<super::route_guide::RouteSummary>;
 
-    fn RouteChat(&self, p: ::std::vec::Vec<::grpc::result::GrpcResult<super::route_guide::RouteNote>>) -> ::grpc::iter::GrpcIterator<super::route_guide::RouteNote>;
+    fn RouteChat(&self, p: ::grpc::iter::GrpcIterator<super::route_guide::RouteNote>) -> ::grpc::iter::GrpcIterator<super::route_guide::RouteNote>;
 }
 
 pub trait RouteGuideAsync {
@@ -65,12 +65,12 @@ impl RouteGuide for RouteGuideClient {
         ::grpc::rt::stream_to_iter(self.async_client.ListFeatures(p))
     }
 
-    fn RecordRoute(&self, p: ::std::vec::Vec<::grpc::result::GrpcResult<super::route_guide::Point>>) -> ::grpc::result::GrpcResult<super::route_guide::RouteSummary> {
+    fn RecordRoute(&self, p: ::grpc::iter::GrpcIterator<super::route_guide::Point>) -> ::grpc::result::GrpcResult<super::route_guide::RouteSummary> {
         let p = ::futures::stream::Stream::boxed(::futures::stream::iter(::std::iter::IntoIterator::into_iter(p)));
         ::futures::Future::wait(self.async_client.RecordRoute(p))
     }
 
-    fn RouteChat(&self, p: ::std::vec::Vec<::grpc::result::GrpcResult<super::route_guide::RouteNote>>) -> ::grpc::iter::GrpcIterator<super::route_guide::RouteNote> {
+    fn RouteChat(&self, p: ::grpc::iter::GrpcIterator<super::route_guide::RouteNote>) -> ::grpc::iter::GrpcIterator<super::route_guide::RouteNote> {
         let p = ::futures::stream::Stream::boxed(::futures::stream::iter(::std::iter::IntoIterator::into_iter(p)));
         ::grpc::rt::stream_to_iter(self.async_client.RouteChat(p))
     }
@@ -156,21 +156,30 @@ struct RouteGuideServerHandlerToAsync {
 impl RouteGuideAsync for RouteGuideServerHandlerToAsync {
     fn GetFeature(&self, p: super::route_guide::Point) -> ::grpc::futures_grpc::GrpcFuture<super::route_guide::Feature> {
         let h = self.handler.clone();
-        ::grpc::rt::sync_to_async_unary(&self.cpupool, move || {
+        ::grpc::rt::sync_to_async_unary(&self.cpupool, p, move |p| {
             h.GetFeature(p)
         })
     }
 
     fn ListFeatures(&self, p: super::route_guide::Rectangle) -> ::grpc::futures_grpc::GrpcStream<super::route_guide::Feature> {
-        unimplemented!()
+        let h = self.handler.clone();
+        ::grpc::rt::sync_to_async_server_streaming(&self.cpupool, p, move |p| {
+            h.ListFeatures(p)
+        })
     }
 
     fn RecordRoute(&self, p: ::grpc::futures_grpc::GrpcStream<super::route_guide::Point>) -> ::grpc::futures_grpc::GrpcFuture<super::route_guide::RouteSummary> {
-        unimplemented!()
+        let h = self.handler.clone();
+        ::grpc::rt::sync_to_async_client_streaming(&self.cpupool, p, move |p| {
+            h.RecordRoute(p)
+        })
     }
 
     fn RouteChat(&self, p: ::grpc::futures_grpc::GrpcStream<super::route_guide::RouteNote>) -> ::grpc::futures_grpc::GrpcStream<super::route_guide::RouteNote> {
-        unimplemented!()
+        let h = self.handler.clone();
+        ::grpc::rt::sync_to_async_bidi(&self.cpupool, p, move |p| {
+            h.RouteChat(p)
+        })
     }
 }
 

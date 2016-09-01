@@ -1,6 +1,14 @@
 use marshall::*;
 
 
+pub enum GrpcStreaming {
+    UNARY,
+    CLIENT_STREAMING,
+    SERVER_STREAMING,
+    BIDI,
+}
+
+
 pub struct MethodDescriptor<Req, Resp> {
     pub name: String,
     pub client_streaming: bool,

@@ -46,8 +46,7 @@ impl<'a> MethodGen<'a> {
     fn input_sync(&self) -> String {
         match self.proto.get_client_streaming() {
             false => self.input(),
-            // TODO: iterator
-            true  => format!("::std::vec::Vec<::grpc::result::GrpcResult<{}>>", self.input()),
+            true  => format!("::grpc::iter::GrpcIterator<{}>", self.input()),
         }
     }
 
@@ -135,14 +134,10 @@ impl<'a> MethodGen<'a> {
 
     fn write_server_sync_to_async_delegate(&self, w: &mut CodeWriter) {
         w.def_fn(&self.async_sig(), |w| {
-            if self.proto.get_client_streaming() || self.proto.get_server_streaming() {
-                w.write_line("unimplemented!()");
-            } else {
-                w.write_line("let h = self.handler.clone();");
-                w.write_line("::grpc::rt::sync_to_async_unary(&self.cpupool, move || {");
-                w.write_line(format!("    h.{}(p)", self.proto.get_name()));
-                w.write_line("})");
-            }
+            w.write_line("let h = self.handler.clone();");
+            w.write_line(format!("::grpc::rt::sync_to_async_{}(&self.cpupool, p, move |p| {{", self.call_suffix()));
+            w.write_line(format!("    h.{}(p)", self.proto.get_name()));
+            w.write_line(format!("}})"));
         });
     }
 }
