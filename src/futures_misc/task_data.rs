@@ -2,12 +2,12 @@ use std::cell::RefCell;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use futures::task::TaskData;
+use futures::task::TaskRc;
 
 
 //#[derive(Clone)]
 #[allow(dead_code)]
-pub struct TaskDataMut<A>(TaskData<RefCell<A>>);
+pub struct TaskDataMut<A>(TaskRc<RefCell<A>>);
 
 impl<A> Clone for TaskDataMut<A> {
     fn clone(&self) -> Self {
@@ -19,7 +19,7 @@ impl<A> Clone for TaskDataMut<A> {
 impl<A> TaskDataMut<A> {
 
     pub fn new(a: A) -> TaskDataMut<A> {
-        TaskDataMut(TaskData::new(RefCell::new(a)))
+        TaskDataMut(TaskRc::new(RefCell::new(a)))
     }
 
     pub fn with<F, R>(&self, f: F) -> R
@@ -30,7 +30,7 @@ impl<A> TaskDataMut<A> {
 
 }
 
-pub struct TaskDataMutex<A>(TaskData<Arc<Mutex<A>>>);
+pub struct TaskDataMutex<A>(TaskRc<Arc<Mutex<A>>>);
 
 impl<A> Clone for TaskDataMutex<A> {
     fn clone(&self) -> Self {
@@ -41,7 +41,7 @@ impl<A> Clone for TaskDataMutex<A> {
 impl<A> TaskDataMutex<A> {
 
     pub fn new(a: A) -> TaskDataMutex<A> {
-        TaskDataMutex(TaskData::new(Arc::new(Mutex::new(a))))
+        TaskDataMutex(TaskRc::new(Arc::new(Mutex::new(a))))
     }
 
     pub fn with<F, R>(&self, f: F) -> R

@@ -1,5 +1,6 @@
 //! Functions used by generated code.
 
+use futures;
 use futures::Future;
 use futures::stream;
 use futures::stream::Stream;
@@ -28,9 +29,10 @@ pub fn sync_to_async_unary<Req, Resp, H>(cpupool: &CpuPool, req: Req, sync_handl
         Resp : Send + 'static,
         H : FnOnce(Req) -> GrpcResult<Resp> + Send + 'static,
 {
-    cpupool.execute(move || sync_handler(req))
-        .map_err(|_| GrpcError::Other("cpupool"))
-        .and_then(|r| r)
+    cpupool
+        .spawn(futures::lazy(move || {
+            sync_handler(req)
+        }))
         .boxed()
 }
 
@@ -40,9 +42,10 @@ pub fn sync_to_async_client_streaming<Req, Resp, H>(cpupool: &CpuPool, req: Grpc
         Resp : Send + 'static,
         H : FnOnce(GrpcIterator<Req>) -> GrpcResult<Resp> + Send + 'static,
 {
-    cpupool.execute(move || sync_handler(Box::new(req.wait())))
-        .map_err(|_| GrpcError::Other("cpupool"))
-        .and_then(|r| r)
+    cpupool
+        .spawn(futures::lazy(move || {
+            sync_handler(Box::new(req.wait()))
+        }))
         .boxed()
 }
 
@@ -54,15 +57,15 @@ pub fn sync_to_async_server_streaming<Req, Resp, H>(cpupool: &CpuPool, req: Req,
 {
     let (sender, receiver) = stream::channel();
     cpupool
-        .execute(move || {
+        .spawn(futures::lazy(move || {
             let mut sender = sender;
             for result in sync_handler(req) {
                 // TODO: do not unwrap
                 sender = sender.send(result).wait().ok().expect("failed to send");
             }
-        })
-        .map_err(|_| GrpcError::Other("cpupool"))
-        .forget(); // TODO: handle cpupool error
+            futures::finished::<_, GrpcError>(())
+        }));
+        // TODO: handle cpupool error
     receiver.boxed()
 }
 
@@ -74,14 +77,14 @@ pub fn sync_to_async_bidi<Req, Resp, H>(cpupool: &CpuPool, req: GrpcStream<Req>,
 {
     let (sender, receiver) = stream::channel();
     cpupool
-        .execute(move || {
+        .spawn(futures::lazy(move || {
             let mut sender = sender;
             for result in sync_handler(Box::new(req.wait())) {
                 // TODO: do not unwrap
                 sender = sender.send(result).wait().ok().expect("failed to send");
             }
-        })
-        .map_err(|_| GrpcError::Other("cpupool"))
-        .forget(); // TODO: handle cpupool error
+            futures::finished::<_, GrpcError>(())
+        }));
+        // TODO: handle cpupool error
     receiver.boxed()
 }

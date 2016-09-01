@@ -296,6 +296,7 @@ struct GrpcHttp2ServerStream {
     service_definition: Arc<ServerServiceDefinition>,
     path: String,
     sender: Sender<ReadToWriteMessage>,
+    loop_handle: LoopHandle,
 }
 
 impl solicit_Stream for GrpcHttp2ServerStream {
@@ -320,27 +321,32 @@ impl solicit_Stream for GrpcHttp2ServerStream {
 
             let message = parse_grpc_frame_completely(&self.stream.body).unwrap();
 
-            let sender = self.sender.clone();
-            self.service_definition.handle_method(&self.path, message)
-                .fold((sender.clone(), 0), move |(sender, i), resp| {
-                    sender.send(ReadToWriteMessage {
-                        stream_id: stream_id,
-                        content: ResponseChunk::Resp(resp, i == 0),
-                    }).unwrap();
-                    futures::done::<_, GrpcError>(Ok((sender, i + 1)))
-                })
-                .then(move |result| {
-                    sender.send(ReadToWriteMessage {
-                        stream_id: stream_id,
-                        content: match result {
-                            Ok(..) => ResponseChunk::DoneSuccess,
-                            Err(e) => ResponseChunk::Error(e),
-                        }
-                    }).expect("send to write");
+            let stream = self.service_definition.handle_method(&self.path, message);
 
-                    futures::done::<_, GrpcError>(Ok(()))
-                })
-                .forget();
+            let sender = self.sender.clone();
+            self.loop_handle.spawn(move |pin| {
+                Ok(pin.spawn(stream
+                    .fold((sender.clone(), 0), move |(sender, i), resp| {
+                        sender.send(ReadToWriteMessage {
+                            stream_id: stream_id,
+                            content: ResponseChunk::Resp(resp, i == 0),
+                        }).unwrap();
+                        futures::done::<_, GrpcError>(Ok((sender, i + 1)))
+                    })
+                    .then(move |result| {
+                        sender.send(ReadToWriteMessage {
+                            stream_id: stream_id,
+                            content: match result {
+                                Ok(..) => ResponseChunk::DoneSuccess,
+                                Err(e) => ResponseChunk::Error(e),
+                            }
+                        }).expect("send to write");
+
+                        futures::done::<_, GrpcError>(Ok(()))
+                    })
+                    .then(|_| Ok(())) // TODO: should not probably ignore errors
+                ))
+            });
         }
         self.stream.set_state(state)
     }
@@ -357,6 +363,7 @@ impl solicit_Stream for GrpcHttp2ServerStream {
 struct GrpcStreamFactory {
     service_definition: Arc<ServerServiceDefinition>,
     sender: Sender<ReadToWriteMessage>,
+    loop_handle: LoopHandle,
 }
 
 impl StreamFactory for GrpcStreamFactory {
@@ -369,6 +376,7 @@ impl StreamFactory for GrpcStreamFactory {
             service_definition: self.service_definition.clone(),
             path: String::new(),
             sender: self.sender.clone(),
+            loop_handle: self.loop_handle.clone(),
         }
 	}
 }
@@ -518,6 +526,7 @@ fn run_connection(
             factory: GrpcStreamFactory {
                 service_definition: service_defintion,
                 sender: sender,
+                loop_handle: loop_handle,
             },
         });
         let shared_for_write = shared_for_read.clone();
@@ -560,7 +569,10 @@ fn run_server_event_loop(
             .expect("send back");
 
         socket.incoming().zip(stuff).for_each(|((socket, peer_addr), (service_definition, loop_handle))| {
-            run_connection(socket, peer_addr, service_definition, loop_handle).forget();
+            let loop_handle_for_conn = loop_handle.clone();
+            loop_handle.spawn(move |pin| {
+                Ok(pin.spawn(run_connection(socket, peer_addr, service_definition, loop_handle_for_conn).map_err(|_| ())))
+            });
             Ok(())
         })
     }).map_err(GrpcError::from);
