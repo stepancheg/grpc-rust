@@ -40,7 +40,10 @@ pub fn sync_to_async_client_streaming<Req, Resp, H>(cpupool: &CpuPool, req: Grpc
         Resp : Send + 'static,
         H : FnOnce(GrpcIterator<Req>) -> GrpcResult<Resp> + Send + 'static,
 {
-    unimplemented!()
+    cpupool.execute(move || sync_handler(Box::new(req.wait())))
+        .map_err(|_| GrpcError::Other("cpupool"))
+        .and_then(|r| r)
+        .boxed()
 }
 
 pub fn sync_to_async_server_streaming<Req, Resp, H>(cpupool: &CpuPool, req: Req, sync_handler: H) -> GrpcStream<Resp>
