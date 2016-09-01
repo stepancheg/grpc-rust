@@ -26,6 +26,12 @@ pub enum GrpcError {
     Other(&'static str),
 }
 
+fn _assert_debug<D : ::std::fmt::Debug>(_: &D) {}
+
+fn _assert_grpc_error_debug(e: &GrpcError) {
+    _assert_debug(e);
+}
+
 impl Error for GrpcError {
     fn description(&self) -> &str {
         match self {

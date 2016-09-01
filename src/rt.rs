@@ -52,7 +52,18 @@ pub fn sync_to_async_server_streaming<Req, Resp, H>(cpupool: &CpuPool, req: Req,
         Resp : Send + 'static,
         H : FnOnce(Req) -> GrpcIterator<Resp> + Send + 'static,
 {
-    unimplemented!()
+    let (sender, receiver) = stream::channel();
+    cpupool
+        .execute(move || {
+            let mut sender = sender;
+            for result in sync_handler(req) {
+                // TODO: do not unwrap
+                sender = sender.send(result).wait().ok().expect("failed to send");
+            }
+        })
+        .map_err(|_| GrpcError::Other("cpupool"))
+        .forget(); // TODO: handle cpupool error
+    receiver.boxed()
 }
 
 pub fn sync_to_async_bidi<Req, Resp, H>(cpupool: &CpuPool, req: GrpcStream<Req>, sync_handler: H) -> GrpcStream<Resp>
@@ -61,5 +72,16 @@ pub fn sync_to_async_bidi<Req, Resp, H>(cpupool: &CpuPool, req: GrpcStream<Req>,
         Resp : Send + 'static,
         H : FnOnce(GrpcIterator<Req>) -> GrpcIterator<Resp> + Send + 'static,
 {
-    unimplemented!()
+    let (sender, receiver) = stream::channel();
+    cpupool
+        .execute(move || {
+            let mut sender = sender;
+            for result in sync_handler(Box::new(req.wait())) {
+                // TODO: do not unwrap
+                sender = sender.send(result).wait().ok().expect("failed to send");
+            }
+        })
+        .map_err(|_| GrpcError::Other("cpupool"))
+        .forget(); // TODO: handle cpupool error
+    receiver.boxed()
 }
