@@ -167,6 +167,18 @@ impl GrpcClient {
 
         receiver
     }
+
+    pub fn call_client_streaming<Req : Send + 'static, Resp : Send + 'static>(&self, req: GrpcStream<Req>, method: Arc<MethodDescriptor<Req, Resp>>)
+        -> GrpcFuture<Resp>
+    {
+        unimplemented!();
+    }
+
+    pub fn call_bidi<Req : Send + 'static, Resp : Send + 'static>(&self, req: GrpcStream<Req>, method: Arc<MethodDescriptor<Req, Resp>>)
+        -> GrpcStream<Resp>
+    {
+        unimplemented!();
+    }
 }
 
 // We shutdown client in destructor.

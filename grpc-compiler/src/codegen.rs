@@ -29,15 +29,43 @@ impl<'a> MethodGen<'a> {
         format!("super::{}", self.root_scope.find_message(self.proto.get_output_type()).rust_fq_name())
     }
 
+    fn input_async(&self) -> String {
+        match self.proto.get_client_streaming() {
+            false => self.input(),
+            true  => format!("::grpc::futures_grpc::GrpcStream<{}>", self.input()),
+        }
+    }
+
+    fn output_async(&self) -> String {
+        match self.proto.get_server_streaming() {
+            false => format!("::grpc::futures_grpc::GrpcFuture<{}>", self.output()),
+            true  => format!("::grpc::futures_grpc::GrpcStream<{}>", self.output()),
+        }
+    }
+
+    fn input_sync(&self) -> String {
+        match self.proto.get_client_streaming() {
+            false => self.input(),
+            // TODO: iterator
+            true  => format!("::std::vec::Vec<::grpc::result::GrpcResult<{}>>", self.input()),
+        }
+    }
+
+    fn output_sync(&self) -> String {
+        match self.proto.get_server_streaming() {
+            false => format!("::grpc::result::GrpcResult<{}>", self.output()),
+            true  => format!("::futures::stream::Wait<{}>", self.output_async()),
+        }
+    }
+
     fn sync_sig(&self) -> String {
-        format!("{}(&self, p: {}) -> ::grpc::result::GrpcResult<{}>",
-            self.proto.get_name(), self.input(), self.output())
+        format!("{}(&self, p: {}) -> {}",
+            self.proto.get_name(), self.input_sync(), self.output_sync())
     }
 
     fn async_sig(&self) -> String {
-        // TODO: streams
-        format!("{}(&self, p: {}) -> ::grpc::futures_grpc::GrpcFuture<{}>",
-            self.proto.get_name(), self.input(), self.output())
+        format!("{}(&self, p: {}) -> {}",
+                self.proto.get_name(), self.input_async(), self.output_async())
     }
 
     fn write_sync_intf(&self, w: &mut CodeWriter) {
@@ -50,8 +78,14 @@ impl<'a> MethodGen<'a> {
 
     fn write_sync_client(&self, w: &mut CodeWriter) {
         w.def_fn(&self.sync_sig(), |w| {
-            // https://github.com/alexcrichton/futures-rs/issues/97
-            w.write_line(&format!("::futures::Future::wait(self.async_client.{}(p))", self.proto.get_name()));
+            let wait = match self.proto.get_server_streaming() {
+                false => "::futures::Future::wait",
+                true  => "::futures::stream::Stream::wait",
+            };
+            if self.proto.get_client_streaming() {
+                w.write_line("let p = ::futures::stream::Stream::boxed(::futures::stream::iter(::std::iter::IntoIterator::into_iter(p)));");
+            }
+            w.write_line(&format!("{}(self.async_client.{}(p))", wait, self.proto.get_name()));
         });
     }
 
@@ -101,10 +135,14 @@ impl<'a> MethodGen<'a> {
 
     fn write_server_sync_to_async_delegate(&self, w: &mut CodeWriter) {
         w.def_fn(&self.async_sig(), |w| {
-            w.write_line("let h = self.handler.clone();");
-            w.write_line("::futures::Future::boxed(::futures::Future::map_err(self.cpupool.execute(move || {");
-            w.write_line(format!("    h.{}(p).unwrap()", self.proto.get_name()));
-            w.write_line("}), |_| ::grpc::error::GrpcError::Other(\"cpupool\")))");
+            if self.proto.get_client_streaming() || self.proto.get_server_streaming() {
+                w.write_line("unimplemented!()");
+            } else {
+                w.write_line("let h = self.handler.clone();");
+                w.write_line("::futures::Future::boxed(::futures::Future::map_err(self.cpupool.execute(move || {");
+                w.write_line(format!("    h.{}(p).unwrap()", self.proto.get_name()));
+                w.write_line("}), |_| ::grpc::error::GrpcError::Other(\"cpupool\")))");
+            }
         });
     }
 }

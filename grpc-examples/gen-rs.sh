@@ -31,7 +31,7 @@ case "$protoc_ver" in
     *) die "protoc version 3 required: $protoc_ver" ;;
 esac
 
-protoc --rust_out=src helloworld.proto
-protoc --rust-grpc_out=src helloworld.proto
+protoc --rust_out=src helloworld.proto route_guide.proto
+protoc --rust-grpc_out=src helloworld.proto route_guide.proto
 
 # vim: set ts=4 sw=4 et:

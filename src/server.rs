@@ -63,6 +63,14 @@ pub struct MethodHandlerServerStreaming<F> {
     f: F
 }
 
+pub struct MethodHandlerClientStreaming<F> {
+    f: F
+}
+
+pub struct MethodHandlerBidi<F> {
+    f: F
+}
+
 impl<F> MethodHandlerUnary<F> {
     pub fn new<Req, Resp>(f: F) -> Self
         where F : Fn(Req) -> GrpcFuture<Resp>
@@ -73,11 +81,31 @@ impl<F> MethodHandlerUnary<F> {
     }
 }
 
+impl<F> MethodHandlerClientStreaming<F> {
+    pub fn new<Req, Resp>(f: F) -> Self
+        where F : Fn(GrpcStream<Req>) -> GrpcFuture<Resp>
+    {
+        MethodHandlerClientStreaming {
+            f: f,
+        }
+    }
+}
+
 impl<F> MethodHandlerServerStreaming<F> {
     pub fn new<Req, Resp>(f: F) -> Self
         where F : Fn(Req) -> GrpcStream<Resp>
     {
         MethodHandlerServerStreaming {
+            f: f,
+        }
+    }
+}
+
+impl<F> MethodHandlerBidi<F> {
+    pub fn new<Req, Resp>(f: F) -> Self
+        where F : Fn(GrpcStream<Req>) -> GrpcStream<Resp>
+    {
+        MethodHandlerBidi {
             f: f,
         }
     }
@@ -94,6 +122,16 @@ impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerUnary<F>
     }
 }
 
+impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerClientStreaming<F>
+    where
+        Resp : Send + 'static,
+        F : Fn(GrpcStream<Req>) -> GrpcFuture<Resp>,
+{
+    fn handle(&self, req: Req) -> GrpcStream<Resp> {
+        unimplemented!()
+    }
+}
+
 impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerServerStreaming<F>
     where
         Resp : Send + 'static,
@@ -102,6 +140,16 @@ impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerServerStreaming<F>
     fn handle(&self, req: Req) -> GrpcStream<Resp> {
         (self.f)(req)
             .boxed()
+    }
+}
+
+impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerBidi<F>
+    where
+        Resp : Send + 'static,
+        F : Fn(GrpcStream<Req>) -> GrpcStream<Resp>,
+{
+    fn handle(&self, req: Req) -> GrpcStream<Resp> {
+        unimplemented!()
     }
 }
 
