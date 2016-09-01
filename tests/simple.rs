@@ -138,6 +138,17 @@ fn unary() {
 }
 
 #[test]
+fn server_is_not_running() {
+    let client = GrpcClient::new("::1", 2).unwrap();
+
+    // TODO: https://github.com/tokio-rs/tokio-core/issues/12
+    if false {
+        let result = client.call_unary("aa".to_owned(), string_string_method("/does/not/matter", false, false)).wait();
+        assert!(result.is_err(), result);
+    }
+}
+
+#[test]
 fn error_in_handler() {
     let tester = TesterUnary::new(|_| Err(GrpcError::Other("my error")).into_future().boxed());
 
