@@ -10,11 +10,12 @@ readme = "README.md"
 keywords = ["grpc"]
 
 [dependencies]
-solicit     = { git = "http://github.com/mlalic/solicit.git" }
-#protobuf   = { path = "../rust-protobuf" }
-protobuf    = { git = "http://github.com/stepancheg/rust-protobuf" }
-futures     = { git = "https://github.com/alexcrichton/futures-rs" }
-tokio-core  = { git = "https://github.com/tokio-rs/tokio-core" }
+solicit         = { git = "http://github.com/mlalic/solicit.git" }
+#protobuf       = { path = "../rust-protobuf" }
+protobuf        = { git = "http://github.com/stepancheg/rust-protobuf" }
+futures         = { git = "https://github.com/alexcrichton/futures-rs" }
+futures-cpupool = { git = "https://github.com/alexcrichton/futures-rs" }
+tokio-core      = { git = "https://github.com/tokio-rs/tokio-core" }
 
 [lib]
 doctest = false

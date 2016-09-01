@@ -1,6 +1,7 @@
 extern crate protobuf;
 extern crate solicit;
 extern crate futures;
+extern crate futures_cpupool;
 extern crate tokio_core;
 
 pub mod client;
@@ -12,6 +13,9 @@ pub mod marshall;
 pub mod futures_grpc;
 pub mod result;
 pub mod error;
+pub mod iter;
+pub mod rt;
+
 mod solicit_async;
 pub mod futures_misc;
 mod misc;

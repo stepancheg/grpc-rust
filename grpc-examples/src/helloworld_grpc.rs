@@ -94,9 +94,9 @@ struct GreeterServerHandlerToAsync {
 impl GreeterAsync for GreeterServerHandlerToAsync {
     fn SayHello(&self, p: super::helloworld::HelloRequest) -> ::grpc::futures_grpc::GrpcFuture<super::helloworld::HelloReply> {
         let h = self.handler.clone();
-        ::futures::Future::boxed(::futures::Future::map_err(self.cpupool.execute(move || {
-            h.SayHello(p).unwrap()
-        }), |_| ::grpc::error::GrpcError::Other("cpupool")))
+        ::grpc::rt::sync_to_async_unary(&self.cpupool, move || {
+            h.SayHello(p)
+        })
     }
 }
 

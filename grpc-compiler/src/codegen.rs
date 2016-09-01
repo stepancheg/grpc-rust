@@ -54,7 +54,7 @@ impl<'a> MethodGen<'a> {
     fn output_sync(&self) -> String {
         match self.proto.get_server_streaming() {
             false => format!("::grpc::result::GrpcResult<{}>", self.output()),
-            true  => format!("::futures::stream::Wait<{}>", self.output_async()),
+            true  => format!("::grpc::iter::GrpcIterator<{}>", self.output()),
         }
     }
 
@@ -80,7 +80,7 @@ impl<'a> MethodGen<'a> {
         w.def_fn(&self.sync_sig(), |w| {
             let wait = match self.proto.get_server_streaming() {
                 false => "::futures::Future::wait",
-                true  => "::futures::stream::Stream::wait",
+                true  => "::grpc::rt::stream_to_iter",
             };
             if self.proto.get_client_streaming() {
                 w.write_line("let p = ::futures::stream::Stream::boxed(::futures::stream::iter(::std::iter::IntoIterator::into_iter(p)));");
@@ -139,9 +139,9 @@ impl<'a> MethodGen<'a> {
                 w.write_line("unimplemented!()");
             } else {
                 w.write_line("let h = self.handler.clone();");
-                w.write_line("::futures::Future::boxed(::futures::Future::map_err(self.cpupool.execute(move || {");
-                w.write_line(format!("    h.{}(p).unwrap()", self.proto.get_name()));
-                w.write_line("}), |_| ::grpc::error::GrpcError::Other(\"cpupool\")))");
+                w.write_line("::grpc::rt::sync_to_async_unary(&self.cpupool, move || {");
+                w.write_line(format!("    h.{}(p)", self.proto.get_name()));
+                w.write_line("})");
             }
         });
     }
