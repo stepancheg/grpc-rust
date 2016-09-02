@@ -7,19 +7,19 @@ use futures::task::TaskRc;
 
 //#[derive(Clone)]
 #[allow(dead_code)]
-pub struct TaskDataMut<A>(TaskRc<RefCell<A>>);
+pub struct TaskRcMut<A>(TaskRc<RefCell<A>>);
 
-impl<A> Clone for TaskDataMut<A> {
+impl<A> Clone for TaskRcMut<A> {
     fn clone(&self) -> Self {
-        TaskDataMut(self.0.clone())
+        TaskRcMut(self.0.clone())
     }
 }
 
 #[allow(dead_code)]
-impl<A> TaskDataMut<A> {
+impl<A> TaskRcMut<A> {
 
-    pub fn new(a: A) -> TaskDataMut<A> {
-        TaskDataMut(TaskRc::new(RefCell::new(a)))
+    pub fn new(a: A) -> TaskRcMut<A> {
+        TaskRcMut(TaskRc::new(RefCell::new(a)))
     }
 
     pub fn with<F, R>(&self, f: F) -> R
@@ -30,18 +30,18 @@ impl<A> TaskDataMut<A> {
 
 }
 
-pub struct TaskDataMutex<A>(TaskRc<Arc<Mutex<A>>>);
+pub struct TaskRcMutex<A>(TaskRc<Arc<Mutex<A>>>);
 
-impl<A> Clone for TaskDataMutex<A> {
+impl<A> Clone for TaskRcMutex<A> {
     fn clone(&self) -> Self {
-        TaskDataMutex(self.0.clone())
+        TaskRcMutex(self.0.clone())
     }
 }
 
-impl<A> TaskDataMutex<A> {
+impl<A> TaskRcMutex<A> {
 
-    pub fn new(a: A) -> TaskDataMutex<A> {
-        TaskDataMutex(TaskRc::new(Arc::new(Mutex::new(a))))
+    pub fn new(a: A) -> TaskRcMutex<A> {
+        TaskRcMutex(TaskRc::new(Arc::new(Mutex::new(a))))
     }
 
     pub fn with<F, R>(&self, f: F) -> R

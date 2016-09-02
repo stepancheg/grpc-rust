@@ -400,7 +400,7 @@ struct ReadToWriteMessage {
 
 fn run_read(
     read: TaskIoRead<TcpStream>,
-    shared: TaskDataMutex<ServerSharedState>)
+    shared: TaskRcMutex<ServerSharedState>)
         -> GrpcFuture<()>
 {
     let stream = stream::iter(iter::repeat(()).map(|x| Ok(x)));
@@ -432,9 +432,9 @@ fn run_read(
 
 fn run_write(
     write: TaskIoWrite<TcpStream>,
-    shared: TaskDataMutex<ServerSharedState>,
+    shared: TaskRcMutex<ServerSharedState>,
     receiver: Receiver<ReadToWriteMessage>)
-        -> GrpcFuture<()>
+    -> GrpcFuture<()>
 {
     println!("run_write");
     let future = receiver.fold((write, shared), |(write, shared), message: ReadToWriteMessage| {
@@ -520,7 +520,7 @@ fn run_connection(
     let run = three.and_then(|(conn, sender, receiver_stream)| {
         let (read, write) = TaskIo::new(conn).split();
 
-        let shared_for_read = TaskDataMutex::new(ServerSharedState {
+        let shared_for_read = TaskRcMutex::new(ServerSharedState {
             conn: HttpConnection::new(HttpScheme::Http),
             state: DefaultSessionState::<Server, _>::new(),
             factory: GrpcStreamFactory {

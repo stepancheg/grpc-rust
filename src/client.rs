@@ -198,7 +198,7 @@ impl Drop for GrpcClient {
 struct GrpcHttp2ClientStream {
     stream: DefaultStream,
     call: Option<Box<CallRequest>>,
-    _shared: TaskDataMutex<ClientSharedState>,
+    _shared: TaskRcMutex<ClientSharedState>,
 }
 
 fn get_header<'a>(stream: &'a DefaultStream, name: &str) -> Option<&'a str> {
@@ -285,7 +285,7 @@ struct ClientSharedState {
 
 struct ReadLoopBody {
     read: TaskIoRead<TcpStream>,
-    shared: TaskDataMutex<ClientSharedState>,
+    shared: TaskRcMutex<ClientSharedState>,
     read_to_write_tx: tokio_core::Sender<ReadToWrite>,
 }
 
@@ -320,9 +320,9 @@ impl ReadLoopBody {
 // All read from the socket happens in this function.
 fn run_read(
     read: TaskIoRead<TcpStream>,
-    shared: TaskDataMutex<ClientSharedState>,
+    shared: TaskRcMutex<ClientSharedState>,
     read_to_write_tx: tokio_core::Sender<ReadToWrite>)
-        -> GrpcFuture<()>
+    -> GrpcFuture<()>
 {
     let stream = stream_repeat(());
 
@@ -342,7 +342,7 @@ enum ReadToWrite {
 
 struct WriteLoopBody {
     write: TaskIoWrite<TcpStream>,
-    shared: TaskDataMutex<ClientSharedState>,
+    shared: TaskRcMutex<ClientSharedState>,
 }
 
 
@@ -426,7 +426,7 @@ impl WriteLoopBody {
 // All write to socket happens in this function.
 fn run_write(
     write: TaskIoWrite<TcpStream>,
-    shared: TaskDataMutex<ClientSharedState>,
+    shared: TaskRcMutex<ClientSharedState>,
     call_rx: tokio_core::Receiver<Box<CallRequest>>,
     read_to_write_rx: tokio_core::Receiver<ReadToWrite>)
     -> GrpcFuture<()>
@@ -494,7 +494,7 @@ fn run_client_event_loop(
         let conn = HttpConnection::new(HttpScheme::Http);
         let state = DefaultSessionState::<Client, _>::new();
 
-        let shared_for_read = TaskDataMutex::new(ClientSharedState {
+        let shared_for_read = TaskRcMutex::new(ClientSharedState {
             host: host,
             conn: conn,
             state: state,

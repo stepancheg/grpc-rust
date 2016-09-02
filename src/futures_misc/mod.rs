@@ -12,8 +12,8 @@ mod stream_with_eof;
 mod stream_with_eof_and_error;
 mod channel_sync_sender;
 
-pub use self::task_data::TaskDataMut;
-pub use self::task_data::TaskDataMutex;
+pub use self::task_data::TaskRcMut;
+pub use self::task_data::TaskRcMutex;
 
 pub use self::future_flatten_to_stream::future_flatten_to_stream;
 pub use self::future_flatten_to_stream::FutureFlattenToStream;
