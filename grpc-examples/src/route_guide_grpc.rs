@@ -93,29 +93,25 @@ impl RouteGuideAsyncClient {
                 grpc_client: c,
                 method_GetFeature: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
                     name: "/proto.RouteGuide/GetFeature".to_string(),
-                    client_streaming: false,
-                    server_streaming: false,
+                    streaming: ::grpc::method::GrpcStreaming::Unary,
                     req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
                     resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
                 }),
                 method_ListFeatures: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
                     name: "/proto.RouteGuide/ListFeatures".to_string(),
-                    client_streaming: false,
-                    server_streaming: true,
+                    streaming: ::grpc::method::GrpcStreaming::ServerStreaming,
                     req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
                     resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
                 }),
                 method_RecordRoute: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
                     name: "/proto.RouteGuide/RecordRoute".to_string(),
-                    client_streaming: true,
-                    server_streaming: false,
+                    streaming: ::grpc::method::GrpcStreaming::ClientStreaming,
                     req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
                     resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
                 }),
                 method_RouteChat: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
                     name: "/proto.RouteGuide/RouteChat".to_string(),
-                    client_streaming: true,
-                    server_streaming: true,
+                    streaming: ::grpc::method::GrpcStreaming::Bidi,
                     req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
                     resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
                 }),
@@ -209,8 +205,7 @@ impl RouteGuideAsyncServer {
                 ::grpc::server::ServerMethod::new(
                     ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
                         name: "/proto.RouteGuide/GetFeature".to_string(),
-                        client_streaming: false,
-                        server_streaming: false,
+                        streaming: ::grpc::method::GrpcStreaming::Unary,
                         req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
                         resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
                     }),
@@ -222,8 +217,7 @@ impl RouteGuideAsyncServer {
                 ::grpc::server::ServerMethod::new(
                     ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
                         name: "/proto.RouteGuide/ListFeatures".to_string(),
-                        client_streaming: false,
-                        server_streaming: true,
+                        streaming: ::grpc::method::GrpcStreaming::ServerStreaming,
                         req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
                         resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
                     }),
@@ -235,8 +229,7 @@ impl RouteGuideAsyncServer {
                 ::grpc::server::ServerMethod::new(
                     ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
                         name: "/proto.RouteGuide/RecordRoute".to_string(),
-                        client_streaming: true,
-                        server_streaming: false,
+                        streaming: ::grpc::method::GrpcStreaming::ClientStreaming,
                         req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
                         resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
                     }),
@@ -248,8 +241,7 @@ impl RouteGuideAsyncServer {
                 ::grpc::server::ServerMethod::new(
                     ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
                         name: "/proto.RouteGuide/RouteChat".to_string(),
-                        client_streaming: true,
-                        server_streaming: true,
+                        streaming: ::grpc::method::GrpcStreaming::Bidi,
                         req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
                         resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
                     }),

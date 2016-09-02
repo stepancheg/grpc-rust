@@ -64,8 +64,7 @@ impl GreeterAsyncClient {
                 grpc_client: c,
                 method_SayHello: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
                     name: "/helloworld.Greeter/SayHello".to_string(),
-                    client_streaming: false,
-                    server_streaming: false,
+                    streaming: ::grpc::method::GrpcStreaming::Unary,
                     req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
                     resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
                 }),
@@ -126,8 +125,7 @@ impl GreeterAsyncServer {
                 ::grpc::server::ServerMethod::new(
                     ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
                         name: "/helloworld.Greeter/SayHello".to_string(),
-                        client_streaming: false,
-                        server_streaming: false,
+                        streaming: ::grpc::method::GrpcStreaming::Unary,
                         req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
                         resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
                     }),

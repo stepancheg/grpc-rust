@@ -96,7 +96,7 @@ impl<'a> MethodGen<'a> {
         format!("::grpc::method::MethodDescriptor<{}, {}>", self.input(), self.output())
     }
 
-    fn method_handler_suffix(&self) -> &'static str {
+    fn streaming_upper(&self) -> &'static str {
         match (self.proto.get_client_streaming(), self.proto.get_server_streaming()) {
             (false, false) => "Unary",
             (false, true) => "ServerStreaming",
@@ -105,7 +105,7 @@ impl<'a> MethodGen<'a> {
         }
     }
 
-    fn call_suffix(&self) -> &'static str {
+    fn streaming_lower(&self) -> &'static str {
         match (self.proto.get_client_streaming(), self.proto.get_server_streaming()) {
             (false, false) => "unary",
             (false, true) => "server_streaming",
@@ -117,7 +117,7 @@ impl<'a> MethodGen<'a> {
     fn write_async_client(&self, w: &mut CodeWriter) {
         w.def_fn(&self.async_sig(), |w| {
             w.write_line(&format!("self.grpc_client.call_{}(p, self.{}.clone())",
-                self.call_suffix(),
+                self.streaming_lower(),
                 self.descriptor_field_name()))
         });
     }
@@ -125,8 +125,7 @@ impl<'a> MethodGen<'a> {
     fn write_descriptor(&self, w: &mut CodeWriter, before: &str, after: &str) {
         w.block(format!("{}{}", before, "::grpc::method::MethodDescriptor {"), format!("{}{}", "}", after), |w| {
             w.field_entry("name", format!("\"{}/{}\".to_string()", self.service_path, self.proto.get_name()));
-            w.field_entry("client_streaming", if self.proto.get_client_streaming() { "true" } else { "false" });
-            w.field_entry("server_streaming", if self.proto.get_server_streaming() { "true" } else { "false" });
+            w.field_entry("streaming", format!("::grpc::method::GrpcStreaming::{}", self.streaming_upper()));
             w.field_entry("req_marshaller", "Box::new(::grpc::grpc_protobuf::MarshallerProtobuf)");
             w.field_entry("resp_marshaller", "Box::new(::grpc::grpc_protobuf::MarshallerProtobuf)");
         });
@@ -135,7 +134,7 @@ impl<'a> MethodGen<'a> {
     fn write_server_sync_to_async_delegate(&self, w: &mut CodeWriter) {
         w.def_fn(&self.async_sig(), |w| {
             w.write_line("let h = self.handler.clone();");
-            w.write_line(format!("::grpc::rt::sync_to_async_{}(&self.cpupool, p, move |p| {{", self.call_suffix()));
+            w.write_line(format!("::grpc::rt::sync_to_async_{}(&self.cpupool, p, move |p| {{", self.streaming_lower()));
             w.write_line(format!("    h.{}(p)", self.proto.get_name()));
             w.write_line(format!("}})"));
         });
@@ -352,7 +351,7 @@ impl<'a> ServiceGen<'a> {
                                 w.block("{", "},", |w| {
                                     w.write_line("let handler_copy = handler_arc.clone();");
                                     w.write_line(format!("::grpc::server::MethodHandler{}::new(move |p| handler_copy.{}(p))",
-                                        method.method_handler_suffix(),
+                                        method.streaming_upper(),
                                         method.proto.get_name()));
                                 });
                             });

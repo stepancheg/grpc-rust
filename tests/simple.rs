@@ -18,25 +18,24 @@ use grpc::futures_grpc::*;
 use test_misc::TestSync;
 
 
-fn string_string_method(name: &str, client_streaming: bool, server_streaming: bool)
+fn string_string_method(name: &str, streaming: GrpcStreaming)
     -> Arc<MethodDescriptor<String, String>>
 {
     Arc::new(MethodDescriptor {
        name: name.to_owned(),
-       client_streaming: client_streaming,
-       server_streaming: server_streaming,
+       streaming: streaming,
        req_marshaller: Box::new(MarshallerString),
        resp_marshaller: Box::new(MarshallerString),
    })
 }
 
 /// Single method server on random port
-fn new_server<H>(name: &str, client_streaming: bool, server_streaming: bool, handler: H) -> GrpcServer
+fn new_server<H>(name: &str, streaming: GrpcStreaming, handler: H) -> GrpcServer
     where H : MethodHandler<String, String> + 'static + Sync + Send
 {
     let mut methods = Vec::new();
     methods.push(ServerMethod::new(
-        string_string_method(name, client_streaming, server_streaming),
+        string_string_method(name, streaming),
         handler,
     ));
     GrpcServer::new(0, ServerServiceDefinition::new(methods))
@@ -46,14 +45,14 @@ fn new_server<H>(name: &str, client_streaming: bool, server_streaming: bool, han
 fn new_server_unary<H>(name: &str, handler: H) -> GrpcServer
     where H : Fn(String) -> GrpcFuture<String> + Sync + Send + 'static
 {
-    new_server(name, false, false, MethodHandlerUnary::new(handler))
+    new_server(name, GrpcStreaming::Unary, MethodHandlerUnary::new(handler))
 }
 
 /// Single server streaming method server
 fn new_server_server_streaming<H>(name: &str, handler: H) -> GrpcServer
     where H : Fn(String) -> GrpcStream<String> + Sync + Send + 'static
 {
-    new_server(name, false, true, MethodHandlerServerStreaming::new(handler))
+    new_server(name, GrpcStreaming::ServerStreaming, MethodHandlerServerStreaming::new(handler))
 }
 
 
@@ -79,7 +78,7 @@ impl TesterUnary {
     }
 
     fn call(&self, param: &str) -> GrpcFuture<String> {
-        self.client.call_unary(param.to_owned(), string_string_method(&self.name, false, false))
+        self.client.call_unary(param.to_owned(), string_string_method(&self.name, GrpcStreaming::Unary))
     }
 
     fn call_expect_error<F : FnOnce(&GrpcError) -> bool>(&self, param: &str, expect: F) {
@@ -126,7 +125,7 @@ impl TesterServerStreaming {
     }
 
     fn call(&self, param: &str) -> GrpcStream<String> {
-        self.client.call_server_streaming(param.to_owned(), string_string_method(&self.name, false, true))
+        self.client.call_server_streaming(param.to_owned(), string_string_method(&self.name, GrpcStreaming::ServerStreaming))
     }
 }
 
@@ -143,7 +142,7 @@ fn server_is_not_running() {
 
     // TODO: https://github.com/tokio-rs/tokio-core/issues/12
     if false {
-        let result = client.call_unary("aa".to_owned(), string_string_method("/does/not/matter", false, false)).wait();
+        let result = client.call_unary("aa".to_owned(), string_string_method("/does/not/matter", GrpcStreaming::Unary)).wait();
         assert!(result.is_err(), result);
     }
 }
