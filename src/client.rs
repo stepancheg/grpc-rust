@@ -34,6 +34,7 @@ use solicit::http::connection::HttpConnection;
 use solicit::http::connection::SendStatus;
 use solicit::http::connection::EndStream;
 use solicit::http::priority::SimplePrioritizer;
+use solicit::http::StreamId;
 use solicit::http::HttpScheme;
 use solicit::http::Header;
 use solicit::http::StaticHeader;
@@ -195,12 +196,6 @@ impl Drop for GrpcClient {
     }
 }
 
-struct GrpcHttp2ClientStream {
-    stream: DefaultStream,
-    call: Option<Box<CallRequest>>,
-    _shared: TaskRcMut<ClientSharedState>,
-}
-
 fn get_header<'a>(stream: &'a DefaultStream, name: &str) -> Option<&'a str> {
     stream.headers.as_ref()
         .and_then(|headers| {
@@ -210,19 +205,24 @@ fn get_header<'a>(stream: &'a DefaultStream, name: &str) -> Option<&'a str> {
         })
 }
 
+struct GrpcHttp2ClientStream {
+    stream: DefaultStream,
+    call: Box<CallRequest>,
+    shared: TaskRcMut<ClientSharedState>,
+}
+
 impl GrpcHttp2ClientStream {
     fn process_buf(&mut self) {
-        let call = self.call.as_mut().unwrap();
         if let Some("200") = get_header(&self.stream, ":status") {
             loop {
                 let len = match parse_grpc_frame(&self.stream.body) {
                     Err(e) => {
-                        call.process_response(ResultOrEof::Error(e));
+                        self.call.process_response(ResultOrEof::Error(e));
                         break;
                     }
                     Ok(None) => break,
                     Ok(Some((message, len))) => {
-                        call.process_response(ResultOrEof::Item(message));
+                        self.call.process_response(ResultOrEof::Item(message));
                         len
                     }
                 };
@@ -230,6 +230,35 @@ impl GrpcHttp2ClientStream {
             }
         }
     }
+
+}
+
+fn write_headers(shared: &mut ClientSharedState, stream_id: StreamId, write: TaskIoWrite<TcpStream>)
+    -> GrpcFuture<(TaskIoWrite<TcpStream>, StreamId)>
+{
+    let stream: &mut GrpcHttp2ClientStream = shared.state.get_stream_mut(stream_id).unwrap();
+
+    let path = stream.call.method_name().as_bytes().to_vec();
+
+    let send_buf = {
+
+        let headers = vec![
+            Header::new(b":method", b"POST"),
+            Header::new(b":path", path.to_owned()),
+            Header::new(b":authority", shared.host.clone().into_bytes()),
+            Header::new(b":scheme", shared.conn.scheme.as_bytes().to_vec()),
+        ];
+
+        let mut send_buf = VecSendFrame(Vec::new());
+
+        shared.conn.sender(&mut send_buf).send_headers(headers, stream_id, EndStream::No).unwrap();
+
+        send_buf.0
+    };
+    tokio_io::write_all(write, send_buf)
+        .map(move |(write, _buf)| (write, stream_id))
+        .map_err(GrpcError::from)
+        .boxed()
 }
 
 impl solicit_Stream for GrpcHttp2ClientStream {
@@ -250,18 +279,14 @@ impl solicit_Stream for GrpcHttp2ClientStream {
             if status_200 && grpc_status_0 {
                 self.process_buf();
                 if !self.stream.body.is_empty() {
-                    let call = self.call.as_mut().unwrap();
-                    call.process_response(ResultOrEof::Error(GrpcError::Other("partial frame")));
+                    self.call.process_response(ResultOrEof::Error(GrpcError::Other("partial frame")));
                 } else {
-                    let call = self.call.as_mut().unwrap();
-                    call.process_response(ResultOrEof::Eof);
+                    self.call.process_response(ResultOrEof::Eof);
                 }
             } else if let Some(message) = get_header(&self.stream, HEADER_GRPC_MESSAGE) {
-                let call = self.call.as_mut().unwrap();
-                call.process_response(ResultOrEof::Error(GrpcError::GrpcMessage(GrpcMessageError { grpc_message: message.to_owned() })));
+                self.call.process_response(ResultOrEof::Error(GrpcError::GrpcMessage(GrpcMessageError { grpc_message: message.to_owned() })));
             } else {
-                let call = self.call.as_mut().unwrap();
-                call.process_response(ResultOrEof::Error(GrpcError::Other("not 200/0")));
+                self.call.process_response(ResultOrEof::Error(GrpcError::Other("not 200/0")));
             };
         }
         self.stream.set_state(state)
@@ -348,64 +373,65 @@ struct WriteLoopBody {
 
 impl WriteLoopBody {
     fn process_call(self, req: Box<CallRequest>) -> GrpcFuture<Self> {
-        let shared_copy = self.shared.clone();
-        let send_buf: GrpcResult<Vec<u8>> = self.shared.with(|shared: &mut ClientSharedState| {
-            let mut body = Vec::new();
-            write_grpc_frame(&mut body, &try!(req.write_req()));
-            let path = req.method_name().as_bytes().to_vec();
+        let write = self.write;
+
+        let shared_for_headers = self.shared.clone();
+        let shared_for_headers2 = shared_for_headers.clone();
+        let shared_for_body = shared_for_headers.clone();
+
+        let write_headers = shared_for_headers.with(move |shared: &mut ClientSharedState| {
 
             let mut stream = GrpcHttp2ClientStream {
                 stream: DefaultStream::new(),
-                call: Some(req),
-                _shared: shared_copy,
-            };
-
-            stream.stream.set_full_data(body);
-
-            let headers = vec![
-                Header::new(b":method", b"POST"),
-                Header::new(b":path", path.to_owned()),
-                Header::new(b":authority", shared.host.clone().into_bytes()),
-                Header::new(b":scheme", shared.conn.scheme.as_bytes().to_vec()),
-            ];
-
-            let mut send_buf = VecSendFrame(Vec::new());
-
-            // start_request
-            let end_stream = if stream.is_closed_local() {
-                EndStream::Yes
-            } else {
-                EndStream::No
+                call: req,
+                shared: shared_for_headers2,
             };
 
             let stream_id = shared.state.insert_outgoing(stream);
-            shared.conn.sender(&mut send_buf).send_headers(headers, stream_id, end_stream).unwrap();
-
-
-            loop {
-                // send_next_data
-                const MAX_CHUNK_SIZE: usize = 8 * 1024;
-                let mut buf = [0; MAX_CHUNK_SIZE];
-
-                let mut prioritizer = SimplePrioritizer::new(&mut shared.state, &mut buf);
-                let send_status = shared.conn.sender(&mut send_buf).send_next_data(&mut prioritizer).unwrap();
-                if send_status == SendStatus::Nothing {
-                    break;
-                }
+            {
+                let stream: &mut GrpcHttp2ClientStream = shared.state.get_stream_mut(stream_id).unwrap();
+                stream.stream.stream_id = Some(stream_id);
             }
-
-            Ok(send_buf.0)
+            write_headers(shared, stream_id, write)
         });
 
-        let write = self.write;
-        let shared = self.shared;
-        futures::done(send_buf)
-            .and_then(move |send_buf| {
-                tokio_io::write_all(write, send_buf)
-                    .map(move |(write, _)| WriteLoopBody { write: write, shared: shared })
-                    .map_err(GrpcError::from)
-            })
-            .boxed()
+        write_headers.and_then(move |(write, stream_id)| {
+            let shared = shared_for_body;
+
+            let send_buf: GrpcResult<Vec<u8>> = shared.with(|shared: &mut ClientSharedState| {
+                let mut send_buf = VecSendFrame(Vec::new());
+
+                {
+                    let stream: &mut GrpcHttp2ClientStream = shared.state.get_stream_mut(stream_id).unwrap();
+
+                    let mut body = Vec::new();
+                    write_grpc_frame(&mut body, &try!(stream.call.write_req()));
+
+                    stream.stream.set_full_data(body);
+                }
+
+                loop {
+                    // send_next_data
+                    const MAX_CHUNK_SIZE: usize = 8 * 1024;
+                    let mut buf = [0; MAX_CHUNK_SIZE];
+
+                    let mut prioritizer = SimplePrioritizer::new(&mut shared.state, &mut buf);
+                    let send_status = shared.conn.sender(&mut send_buf).send_next_data(&mut prioritizer).unwrap();
+                    if send_status == SendStatus::Nothing {
+                        break;
+                    }
+                }
+
+                Ok(send_buf.0)
+            });
+
+            futures::done(send_buf)
+                .and_then(move |send_buf| {
+                    tokio_io::write_all(write, send_buf)
+                        .map(move |(write, _)| WriteLoopBody { write: write, shared: shared })
+                        .map_err(GrpcError::from)
+                })
+        }).boxed()
     }
 
     fn process_read_to_write(self, read_to_write: ReadToWrite) -> GrpcFuture<Self> {
