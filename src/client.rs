@@ -4,6 +4,7 @@ use std::net::ToSocketAddrs;
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::str::from_utf8;
+use std::mem;
 
 use futures;
 use futures::Future;
@@ -35,6 +36,7 @@ use solicit::http::connection::EndStream;
 use solicit::http::priority::SimplePrioritizer;
 use solicit::http::HttpScheme;
 use solicit::http::Header;
+use solicit::http::StaticHeader;
 
 
 use method::MethodDescriptor;
@@ -209,16 +211,6 @@ fn get_header<'a>(stream: &'a DefaultStream, name: &str) -> Option<&'a str> {
 }
 
 impl GrpcHttp2ClientStream {
-    fn new(shared: TaskDataMutex<ClientSharedState>)
-        -> GrpcHttp2ClientStream
-    {
-        GrpcHttp2ClientStream {
-            stream: DefaultStream::new(),
-            call: None,
-            _shared: shared,
-        }
-    }
-
     fn process_buf(&mut self) {
         let call = self.call.as_mut().unwrap();
         if let Some("200") = get_header(&self.stream, ":status") {
@@ -291,38 +283,6 @@ struct ClientSharedState {
 }
 
 
-impl ClientSharedState {
-    fn new_stream<'n, 'v>(
-        &self,
-        method: &'v [u8],
-        path: &'v [u8],
-        extras: &[Header<'n, 'v>],
-        body: Option<Vec<u8>>,
-        shared: TaskDataMutex<ClientSharedState>)
-            -> RequestStream<'n, 'v, GrpcHttp2ClientStream>
-    {
-        let mut stream = GrpcHttp2ClientStream::new(shared);
-        match body {
-            Some(body) => stream.stream.set_full_data(body),
-            None => stream.close_local(),
-        };
-
-        let mut headers: Vec<Header> = vec![
-            Header::new(b":method", method),
-            Header::new(b":path", path),
-            Header::new(b":authority", self.host.clone().into_bytes()),
-            Header::new(b":scheme", self.conn.scheme.as_bytes().to_vec()),
-        ];
-
-        headers.extend(extras.iter().cloned());
-
-        RequestStream {
-            headers: headers,
-            stream: stream,
-        }
-    }
-}
-
 struct ReadLoopBody {
     read: TaskIoRead<TcpStream>,
     shared: TaskDataMutex<ClientSharedState>,
@@ -393,27 +353,33 @@ impl WriteLoopBody {
             let mut body = Vec::new();
             write_grpc_frame(&mut body, &try!(req.write_req()));
             let path = req.method_name().as_bytes().to_vec();
-            let mut stream = shared.new_stream(
-                b"POST",
-                &path,
-                &[],
-                Some(body),
-                shared_copy);
 
-            stream.stream.call = Some(req);
+            let mut stream = GrpcHttp2ClientStream {
+                stream: DefaultStream::new(),
+                call: Some(req),
+                _shared: shared_copy,
+            };
+
+            stream.stream.set_full_data(body);
+
+            let headers = vec![
+                Header::new(b":method", b"POST"),
+                Header::new(b":path", path.to_owned()),
+                Header::new(b":authority", shared.host.clone().into_bytes()),
+                Header::new(b":scheme", shared.conn.scheme.as_bytes().to_vec()),
+            ];
 
             let mut send_buf = VecSendFrame(Vec::new());
 
-
-
             // start_request
-            let end_stream = if stream.stream.is_closed_local() {
+            let end_stream = if stream.is_closed_local() {
                 EndStream::Yes
             } else {
                 EndStream::No
             };
-            let stream_id = shared.state.insert_outgoing(stream.stream);
-            shared.conn.sender(&mut send_buf).send_headers(stream.headers, stream_id, end_stream).unwrap();
+
+            let stream_id = shared.state.insert_outgoing(stream);
+            shared.conn.sender(&mut send_buf).send_headers(headers, stream_id, end_stream).unwrap();
 
 
             loop {
