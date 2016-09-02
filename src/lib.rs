@@ -17,6 +17,7 @@ pub mod iter;
 pub mod rt;
 
 mod solicit_async;
+mod http_client;
 pub mod futures_misc;
 mod misc;
 mod solicit_misc;
