@@ -27,12 +27,13 @@ use solicit::http::session::SessionState;
 use solicit::http::session::DefaultSessionState;
 use solicit::http::session::DefaultStream;
 use solicit::http::session::StreamState;
-use solicit::http::session::StreamDataChunk;
 use solicit::http::session::StreamDataError;
+use solicit::http::session::StreamDataChunk;
 use solicit::http::session::Stream as solicit_Stream;
 use solicit::http::connection::HttpConnection;
 use solicit::http::connection::SendStatus;
 use solicit::http::connection::EndStream;
+use solicit::http::connection::DataChunk;
 use solicit::http::priority::SimplePrioritizer;
 use solicit::http::StreamId;
 use solicit::http::HttpScheme;
@@ -408,17 +409,26 @@ impl WriteLoopBody {
                     write_grpc_frame(&mut body, &try!(stream.call.write_req()));
 
                     stream.stream.set_full_data(body);
-                }
 
-                loop {
-                    // send_next_data
-                    const MAX_CHUNK_SIZE: usize = 8 * 1024;
-                    let mut buf = [0; MAX_CHUNK_SIZE];
+                    loop {
+                        // send_next_data
+                        const MAX_CHUNK_SIZE: usize = 8 * 1024;
+                        let mut buf = [0; MAX_CHUNK_SIZE];
 
-                    let mut prioritizer = SimplePrioritizer::new(&mut shared.state, &mut buf);
-                    let send_status = shared.conn.sender(&mut send_buf).send_next_data(&mut prioritizer).unwrap();
-                    if send_status == SendStatus::Nothing {
-                        break;
+                        let chunk: StreamDataChunk = stream.get_data_chunk(&mut buf).unwrap();
+                        let (size, last) = match chunk {
+                            StreamDataChunk::Chunk(size) => (size, EndStream::No),
+                            StreamDataChunk::Last(size) => (size, EndStream::Yes),
+                            StreamDataChunk::Unavailable => panic!(),
+                        };
+
+                        let data_chunk = DataChunk::new_borrowed(&buf[..size], stream_id, last);
+
+                        shared.conn.sender(&mut send_buf).send_data(data_chunk).unwrap();
+
+                        if last == EndStream::Yes {
+                            break;
+                        }
                     }
                 }
 
