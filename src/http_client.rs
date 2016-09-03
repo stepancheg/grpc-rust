@@ -30,6 +30,7 @@ use futures::stream::Stream;
 
 use tokio_core;
 use tokio_core::TcpStream;
+use tokio_core::io as tokio_io;
 use tokio_core::io::TaskIo;
 use tokio_core::io::TaskIoRead;
 use tokio_core::io::TaskIoWrite;
@@ -66,14 +67,15 @@ impl solicit_Stream for GrpcHttp2ClientStream2 {
     }
 }
 
-struct Inner {
+struct Inner<H : ResponseHandler> {
     host: String,
     conn: HttpConnection,
     streams: HashMap<StreamId, GrpcHttp2ClientStream2>,
     next_stream_id: StreamId,
+    _phantom_data: marker::PhantomData<H>,
 }
 
-impl SessionState for Inner {
+impl<H : ResponseHandler> SessionState for Inner<H> {
     type Stream = GrpcHttp2ClientStream2;
 
     fn insert_outgoing(&mut self, stream: Self::Stream) -> StreamId {
@@ -119,8 +121,7 @@ impl SessionState for Inner {
 }
 
 struct HttpConnectionAsync<H : ResponseHandler> {
-    _marker: marker::PhantomData<H>,
-    inner: TaskRcMut<Inner>,
+    inner: TaskRcMut<Inner<H>>,
     call_tx: tokio_core::Sender<ToWriteMessage<H>>,
 }
 
@@ -137,7 +138,7 @@ struct StartRequestMessage<H : ResponseHandler> {
 }
 
 struct ReadToWriteMessage {
-
+    buf: Vec<u8>,
 }
 
 enum ToWriteMessage<H : ResponseHandler> {
@@ -145,24 +146,49 @@ enum ToWriteMessage<H : ResponseHandler> {
     FromRead(ReadToWriteMessage),
 }
 
-fn run_write<H : ResponseHandler>(
+struct WriteLoop<H : ResponseHandler> {
     write: TaskIoWrite<TcpStream>,
-    inner: TaskRcMut<Inner>,
-    requests: tokio_core::Receiver<ToWriteMessage<H>>)
-        -> HttpFuture<()>
-{
-    let requests = requests.map_err(HttpError::from);
-    requests.fold((), |_, _| {
-        futures::finished::<_, HttpError>(())
-    }).boxed()
+    inner: TaskRcMut<Inner<H>>,
 }
 
-struct ReadLoop {
+impl<H : ResponseHandler> WriteLoop<H> {
+    fn process_from_read(self, message: ReadToWriteMessage) -> HttpFuture<Self> {
+        let WriteLoop { write, inner } = self;
+
+        tokio_io::write_all(write, message.buf)
+            .map(move |(write, _)| WriteLoop { write: write, inner: inner })
+            .map_err(HttpError::from)
+            .boxed()
+    }
+
+    fn process_start(self, start: StartRequestMessage<H>) -> HttpFuture<Self> {
+        futures::finished(self).boxed()
+    }
+
+    fn process_message(self, message: ToWriteMessage<H>) -> HttpFuture<Self> {
+        match message {
+            ToWriteMessage::Start(start) => self.process_start(start),
+            ToWriteMessage::FromRead(from_read) => self.process_from_read(from_read),
+        }
+    }
+
+    fn run(self, requests: tokio_core::Receiver<ToWriteMessage<H>>) -> HttpFuture<()> {
+        let requests = requests.map_err(HttpError::from);
+        requests
+            .fold(self, move |wl, message: ToWriteMessage<H>| {
+                wl.process_message(message)
+            })
+            .map(|_| ())
+            .boxed()
+    }
+}
+
+struct ReadLoop<H : ResponseHandler> {
     read: TaskIoRead<TcpStream>,
-    inner: TaskRcMut<Inner>,
+    inner: TaskRcMut<Inner<H>>,
 }
 
-impl ReadLoop {
+impl<H : ResponseHandler> ReadLoop<H> {
     fn recv_raw_frame(self) -> HttpFuture<(Self, RawFrame<'static>)> {
         let ReadLoop { read, inner } = self;
         recv_raw_frame(read)
@@ -201,14 +227,14 @@ impl<H : ResponseHandler> HttpConnectionAsync<H> {
                 conn: HttpConnection::new(HttpScheme::Http),
                 next_stream_id: 1,
                 streams: HashMap::new(),
+                _phantom_data: marker::PhantomData,
             });
 
             let write_inner = inner.clone();
-            let run_write = call_rx.map_err(HttpError::from).and_then(move |call_rx| run_write(write, write_inner, call_rx));
+            let run_write = call_rx.map_err(HttpError::from).and_then(move |call_rx| WriteLoop { write: write, inner: write_inner }.run(call_rx));
             let run_read = ReadLoop { read: read, inner: inner.clone() }.run();
 
             let c = HttpConnectionAsync {
-                _marker: marker::PhantomData,
                 inner: inner,
                 call_tx: call_tx,
             };
