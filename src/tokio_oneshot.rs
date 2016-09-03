@@ -2,6 +2,7 @@ use std::io;
 
 use futures::Future;
 use futures::Poll;
+use futures::Async;
 use futures::stream::Stream;
 
 use tokio_core;
@@ -44,12 +45,10 @@ impl<T> Future for Receiver<T> {
         let t = match &mut self.receiver {
             &mut None => panic!("cannot be polled twice"),
             &mut Some(ref mut receiver) => {
-                match receiver.poll() {
-                    Poll::NotReady => return Poll::NotReady,
-                    Poll::Err(e) => return Poll::Err(e),
-                    Poll::Ok(Some(t)) => t,
-                    Poll::Ok(None) =>
-                        return Poll::Err(io::Error::new(io::ErrorKind::Other,
+                match try_ready!(receiver.poll()) {
+                    Some(t) => t,
+                    None =>
+                        return Err(io::Error::new(io::ErrorKind::Other,
                             "channel has been disconnected")),
                 }
             }
@@ -57,6 +56,6 @@ impl<T> Future for Receiver<T> {
 
         self.receiver = None;
 
-        Poll::Ok(t)
+        Ok(Async::Ready(t))
     }
 }

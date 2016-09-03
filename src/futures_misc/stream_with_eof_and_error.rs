@@ -1,5 +1,6 @@
 use futures::stream::Stream;
 use futures::Poll;
+use futures::Async;
 
 
 pub enum ResultOrEof<T, E> {
@@ -44,25 +45,21 @@ impl<T, E, S> Stream for StreamWithEofAndError<S>
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
         loop {
             if self.seen_eof {
-                match self.stream.poll() {
-                    Poll::NotReady => return Poll::NotReady,
-                    Poll::Ok(None) => return Poll::Ok(None),
-                    Poll::Ok(Some(ResultOrEof::Error(e))) => return Poll::Err(e),
-                    Poll::Ok(Some(ResultOrEof::Eof)) => panic!("eof after eof"),
-                    Poll::Ok(Some(ResultOrEof::Item(_))) => panic!("item after eof"),
-                    Poll::Err(e) => return Poll::Err(e),
+                match try_ready!(self.stream.poll()) {
+                    None => return Ok(Async::Ready(None)),
+                    Some(ResultOrEof::Error(e)) => return Err(e),
+                    Some(ResultOrEof::Eof) => panic!("eof after eof"),
+                    Some(ResultOrEof::Item(_)) => panic!("item after eof"),
                 }
             } else {
-                match self.stream.poll() {
-                    Poll::NotReady => return Poll::NotReady,
-                    Poll::Ok(None) => panic!("expecting explicit eof"),
-                    Poll::Ok(Some(ResultOrEof::Eof)) => {
+                match try_ready!(self.stream.poll()) {
+                    None => panic!("expecting explicit eof"),
+                    Some(ResultOrEof::Eof) => {
                         self.seen_eof = true;
                         continue;
                     }
-                    Poll::Ok(Some(ResultOrEof::Error(e))) => return Poll::Err(e),
-                    Poll::Ok(Some(ResultOrEof::Item(item))) => return Poll::Ok(Some(item)),
-                    Poll::Err(e) => return Poll::Err(e),
+                    Some(ResultOrEof::Error(e)) => return Err(e),
+                    Some(ResultOrEof::Item(item)) => return Ok(Async::Ready(Some(item))),
                 }
             }
         }

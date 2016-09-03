@@ -34,11 +34,7 @@ impl<F, S> Stream for FutureFlattenToStream<F, S>
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
         let next = match &mut self.inner {
             &mut FutureFlattenToStreamInner::Future(ref mut f) => {
-                match f.poll() {
-                    Poll::NotReady => return Poll::NotReady,
-                    Poll::Err(e) => return Poll::Err(e),
-                    Poll::Ok(stream) => stream,
-                }
+                try_ready!(f.poll())
             }
             &mut FutureFlattenToStreamInner::Stream(ref mut s) => {
                 return s.poll();

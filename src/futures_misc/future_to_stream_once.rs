@@ -1,5 +1,6 @@
 use futures::Future;
 use futures::Poll;
+use futures::Async;
 use futures::stream::Stream;
 
 
@@ -27,20 +28,16 @@ impl<F : Future> Stream for FutureToStreamOnce<F> {
         let r = match &mut self.future {
             r @ &mut FutureToStreamState::Eof => {
                 *r = FutureToStreamState::Done;
-                return Poll::Ok(None)
+                return Ok(Async::Ready(None))
             },
             &mut FutureToStreamState::Done => {
                 panic!("cannot poll after eof");
             },
-            &mut FutureToStreamState::Future(ref mut future) => match future.poll() {
-                Poll::NotReady => return Poll::NotReady,
-                Poll::Err(e) => return Poll::Err(e),
-                Poll::Ok(r) => r,
-            }
+            &mut FutureToStreamState::Future(ref mut future) => try_ready!(future.poll()),
         };
 
         self.future = FutureToStreamState::Eof;
 
-        Poll::Ok(Some(r))
+        Ok(Async::Ready(Some(r)))
     }
 }

@@ -35,19 +35,15 @@ fn poll2<S1, S2>(s1: &mut S1, s2: &mut S2)
             S2 : Stream<Error = S1::Error>,
 {
     match s1.poll() {
-        Poll::Err(e) => Poll::Err(e),
-        Poll::NotReady => match s2.poll() {
-            Poll::Err(e) => Poll::Err(e),
-            Poll::NotReady => Poll::NotReady,
-            Poll::Ok(Some(item2)) => Poll::Ok(Some(Merged2Item::Second(item2))),
-            Poll::Ok(None) => Poll::NotReady,
+        Err(e) => Err(e),
+        Ok(Async::NotReady) => match try_ready!(s2.poll()) {
+            Some(item2) => Ok(Async::Ready(Some(Merged2Item::Second(item2)))),
+            None => Ok(Async::NotReady),
         },
-        Poll::Ok(Some(item1)) => Poll::Ok(Some(Merged2Item::First(item1))),
-        Poll::Ok(None) => match s2.poll() {
-            Poll::Err(e) => Poll::Err(e),
-            Poll::NotReady => Poll::NotReady,
-            Poll::Ok(Some(item2)) => Poll::Ok(Some(Merged2Item::Second(item2))),
-            Poll::Ok(None) => Poll::Ok(None),
+        Ok(Async::Ready(Some(item1))) => Ok(Async::Ready(Some(Merged2Item::First(item1)))),
+        Ok(Async::Ready(None)) => match try_ready!(s2.poll()) {
+            Some(item2) => Ok(Async::Ready(Some(Merged2Item::Second(item2)))),
+            None => Ok(Async::Ready(None)),
         },
     }
 }
@@ -60,19 +56,21 @@ impl<S1, S2> Stream for StreamMerge2<S1, S2>
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
         if let Some(e) = self.queued_error.take() {
-            return Poll::Err(e);
+            return Err(e);
         }
 
         let r = if self.next_try_2 {
             poll2(&mut self.stream1, &mut self.stream2)
         } else {
             poll2(&mut self.stream2, &mut self.stream1)
-                .map(|option| {
-                    option.map(|merged_item| {
-                        match merged_item {
-                            Merged2Item::First(a) => Merged2Item::Second(a),
-                            Merged2Item::Second(a) => Merged2Item::First(a),
-                        }
+                .map(|async: Async<Option<Merged2Item<S2::Item, S1::Item>>>| {
+                    async.map(|option| {
+                        option.map(|merged_item| {
+                            match merged_item {
+                                Merged2Item::First(a) => Merged2Item::Second(a),
+                                Merged2Item::Second(a) => Merged2Item::First(a),
+                            }
+                        })
                     })
                 })
         };

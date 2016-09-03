@@ -1,5 +1,6 @@
 use futures::stream::Stream;
 use futures::Poll;
+use futures::Async;
 
 
 #[allow(dead_code)]
@@ -31,22 +32,18 @@ impl<T, E, S> Stream for StreamWithEof<S>
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
         loop {
             if self.seen_eof {
-                match self.stream.poll() {
-                    Poll::NotReady => return Poll::NotReady,
-                    Poll::Ok(None) => return Poll::Ok(None),
-                    Poll::Ok(Some(_)) => panic!("item after eof"),
-                    Poll::Err(e) => return Poll::Err(e),
+                match try_ready!(self.stream.poll()) {
+                    None => return Ok(Async::Ready(None)),
+                    Some(_) => panic!("item after eof"),
                 }
             } else {
-                match self.stream.poll() {
-                    Poll::NotReady => return Poll::NotReady,
-                    Poll::Ok(None) => panic!("expecting explicit eof"),
-                    Poll::Ok(Some(StreamWithEofMessage::Eof)) => {
+                match try_ready!(self.stream.poll()) {
+                    None => panic!("expecting explicit eof"),
+                    Some(StreamWithEofMessage::Eof) => {
                         self.seen_eof = true;
                         continue;
                     }
-                    Poll::Ok(Some(StreamWithEofMessage::Item(item))) => return Poll::Ok(Some(item)),
-                    Poll::Err(e) => return Poll::Err(e),
+                    Some(StreamWithEofMessage::Item(item)) => return Ok(Async::Ready(Some(item))),
                 }
             }
         }
