@@ -40,6 +40,7 @@ use error::*;
 use futures_misc::*;
 
 use solicit_async::*;
+use solicit_misc::*;
 
 
 
@@ -132,7 +133,7 @@ trait ResponseHandler : Send + 'static {
 }
 
 struct StartRequestMessage<H : ResponseHandler> {
-    headers: Vec<()>,
+    headers: Vec<StaticHeader>,
     body: HttpStream<Vec<u8>>,
     response_handler: H,
 }
@@ -152,17 +153,48 @@ struct WriteLoop<H : ResponseHandler> {
 }
 
 impl<H : ResponseHandler> WriteLoop<H> {
-    fn process_from_read(self, message: ReadToWriteMessage) -> HttpFuture<Self> {
+    fn write_all(self, buf: Vec<u8>) -> HttpFuture<Self> {
         let WriteLoop { write, inner } = self;
 
-        tokio_io::write_all(write, message.buf)
+        tokio_io::write_all(write, buf)
             .map(move |(write, _)| WriteLoop { write: write, inner: inner })
             .map_err(HttpError::from)
             .boxed()
     }
 
+    fn process_from_read(self, message: ReadToWriteMessage) -> HttpFuture<Self> {
+        self.write_all(message.buf)
+    }
+
     fn process_start(self, start: StartRequestMessage<H>) -> HttpFuture<Self> {
-        futures::finished(self).boxed()
+        let buf = self.inner.with(|inner: &mut Inner<H>| {
+
+            let stream = GrpcHttp2ClientStream2 {
+                state: StreamState::Open,
+            };
+            let stream_id = inner.insert_outgoing(stream);
+
+            let send_buf = {
+
+                let headers = vec![
+                    // TODO
+                    Header::new(b":method", b"POST"),
+                    Header::new(b":path", b"/aaa"),
+                    Header::new(b":authority", b"localhost"),
+                    Header::new(b":scheme", inner.conn.scheme.as_bytes().to_vec()),
+                ];
+
+                let mut send_buf = VecSendFrame(Vec::new());
+
+                inner.conn.sender(&mut send_buf).send_headers(headers, stream_id, EndStream::No).unwrap();
+
+                send_buf.0
+            };
+
+            send_buf
+        });
+
+        self.write_all(buf) // TODO: more
     }
 
     fn process_message(self, message: ToWriteMessage<H>) -> HttpFuture<Self> {
@@ -244,7 +276,7 @@ impl<H : ResponseHandler> HttpConnectionAsync<H> {
 
     fn start_request(
         &self,
-        headers: Vec<()>,
+        headers: Vec<StaticHeader>,
         body: HttpStream<Vec<u8>>,
         response_handler: H)
             -> HttpFuture<()>
