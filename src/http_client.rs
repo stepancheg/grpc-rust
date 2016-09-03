@@ -1,4 +1,5 @@
 use std::marker;
+use std::collections::HashMap;
 
 use solicit::http::client::RequestStream;
 use solicit::http::client::ClientSession;
@@ -10,6 +11,7 @@ use solicit::http::session::StreamState;
 use solicit::http::session::StreamDataError;
 use solicit::http::session::StreamDataChunk;
 use solicit::http::session::Stream as solicit_Stream;
+use solicit::http::session::StreamIter;
 use solicit::http::connection::HttpConnection;
 use solicit::http::connection::SendStatus;
 use solicit::http::connection::EndStream;
@@ -38,9 +40,82 @@ use futures_misc::*;
 
 use solicit_async::*;
 
+
+
+struct GrpcHttp2ClientStream2 {
+    state: StreamState,
+}
+
+impl solicit_Stream for GrpcHttp2ClientStream2 {
+    fn new_data_chunk(&mut self, data: &[u8]) {
+    }
+
+    fn set_headers<'n, 'v>(&mut self, headers: Vec<Header<'n, 'v>>) {
+    }
+
+    fn set_state(&mut self, state: StreamState) {
+        self.state = state;
+    }
+
+    fn get_data_chunk(&mut self, buf: &mut [u8]) -> Result<StreamDataChunk, StreamDataError> {
+        unimplemented!()
+    }
+
+    fn state(&self) -> StreamState {
+        self.state
+    }
+}
+
 struct Inner {
     host: String,
     conn: HttpConnection,
+    streams: HashMap<StreamId, GrpcHttp2ClientStream2>,
+    next_stream_id: StreamId,
+}
+
+impl SessionState for Inner {
+    type Stream = GrpcHttp2ClientStream2;
+
+    fn insert_outgoing(&mut self, stream: Self::Stream) -> StreamId {
+        let id = self.next_stream_id;
+        self.streams.insert(id, stream);
+        self.next_stream_id += 2;
+        id
+    }
+
+    fn insert_incoming(&mut self, stream_id: StreamId, stream: Self::Stream) -> Result<(), ()> {
+        // TODO: assert parity
+        // TODO: Assert that the stream IDs are monotonically increasing!
+        self.streams.insert(stream_id, stream);
+        Ok(())
+    }
+
+    #[inline]
+    fn get_stream_ref(&self, stream_id: StreamId) -> Option<&Self::Stream> {
+        self.streams.get(&stream_id)
+    }
+
+    #[inline]
+    fn get_stream_mut(&mut self, stream_id: StreamId) -> Option<&mut Self::Stream> {
+        self.streams.get_mut(&stream_id)
+    }
+
+    #[inline]
+    fn remove_stream(&mut self, stream_id: StreamId) -> Option<Self::Stream> {
+        self.streams.remove(&stream_id)
+    }
+
+    #[inline]
+    fn iter(&mut self) -> StreamIter<GrpcHttp2ClientStream2> {
+        // https://github.com/mlalic/solicit/pull/34
+        unimplemented!()
+    }
+
+    /// Number of currently active streams
+    #[inline]
+    fn len(&self) -> usize {
+        self.streams.len()
+    }
 }
 
 struct HttpConnectionAsync<H : ResponseHandler> {
@@ -124,6 +199,8 @@ impl<H : ResponseHandler> HttpConnectionAsync<H> {
             let inner = TaskRcMut::new(Inner {
                 host: "localhost".to_owned(), // TODO
                 conn: HttpConnection::new(HttpScheme::Http),
+                next_stream_id: 1,
+                streams: HashMap::new(),
             });
 
             let write_inner = inner.clone();
