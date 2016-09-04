@@ -1,4 +1,5 @@
 use std::marker;
+use std::cmp;
 use std::collections::HashMap;
 
 use solicit::http::client::RequestStream;
@@ -43,12 +44,18 @@ use solicit_async::*;
 use solicit_misc::*;
 
 
-
-struct GrpcHttp2ClientStream2 {
-    state: StreamState,
+trait ResponseHandler : Send + 'static {
+    fn headers(self) -> HttpFuture<Self>;
+    fn body_chunk(self) -> HttpFuture<Self>;
+    fn end(self) -> HttpFuture<()>;
 }
 
-impl solicit_Stream for GrpcHttp2ClientStream2 {
+struct GrpcHttp2ClientStream2<H : ResponseHandler> {
+    state: StreamState,
+    response_handler: H,
+}
+
+impl<H : ResponseHandler> solicit_Stream for GrpcHttp2ClientStream2<H> {
     fn new_data_chunk(&mut self, data: &[u8]) {
     }
 
@@ -71,13 +78,13 @@ impl solicit_Stream for GrpcHttp2ClientStream2 {
 struct Inner<H : ResponseHandler> {
     host: String,
     conn: HttpConnection,
-    streams: HashMap<StreamId, GrpcHttp2ClientStream2>,
+    streams: HashMap<StreamId, GrpcHttp2ClientStream2<H>>,
     next_stream_id: StreamId,
-    _phantom_data: marker::PhantomData<H>,
+    call_tx: tokio_core::Sender<ToWriteMessage<H>>,
 }
 
 impl<H : ResponseHandler> SessionState for Inner<H> {
-    type Stream = GrpcHttp2ClientStream2;
+    type Stream = GrpcHttp2ClientStream2<H>;
 
     fn insert_outgoing(&mut self, stream: Self::Stream) -> StreamId {
         let id = self.next_stream_id;
@@ -109,7 +116,7 @@ impl<H : ResponseHandler> SessionState for Inner<H> {
     }
 
     #[inline]
-    fn iter(&mut self) -> StreamIter<GrpcHttp2ClientStream2> {
+    fn iter(&mut self) -> StreamIter<GrpcHttp2ClientStream2<H>> {
         // https://github.com/mlalic/solicit/pull/34
         unimplemented!()
     }
@@ -123,13 +130,6 @@ impl<H : ResponseHandler> SessionState for Inner<H> {
 
 struct HttpConnectionAsync<H : ResponseHandler> {
     inner: TaskRcMut<Inner<H>>,
-    call_tx: tokio_core::Sender<ToWriteMessage<H>>,
-}
-
-trait ResponseHandler : Send + 'static {
-    fn headers(self) -> HttpFuture<Self>;
-    fn body_chunk(self) -> HttpFuture<Self>;
-    fn end(self) -> HttpFuture<()>;
 }
 
 struct StartRequestMessage<H : ResponseHandler> {
@@ -142,9 +142,15 @@ struct ReadToWriteMessage {
     buf: Vec<u8>,
 }
 
+struct BodyChunkMessage {
+    stream_id: StreamId,
+    chunk: Vec<u8>,
+}
+
 enum ToWriteMessage<H : ResponseHandler> {
     Start(StartRequestMessage<H>),
     FromRead(ReadToWriteMessage),
+    BodyChunk(BodyChunkMessage),
 }
 
 struct WriteLoop<H : ResponseHandler> {
@@ -167,10 +173,12 @@ impl<H : ResponseHandler> WriteLoop<H> {
     }
 
     fn process_start(self, start: StartRequestMessage<H>) -> HttpFuture<Self> {
-        let buf = self.inner.with(|inner: &mut Inner<H>| {
+        let StartRequestMessage { headers, body, response_handler } = start;
+        let (buf, stream_id) = self.inner.with(move |inner: &mut Inner<H>| {
 
             let stream = GrpcHttp2ClientStream2 {
                 state: StreamState::Open,
+                response_handler: response_handler,
             };
             let stream_id = inner.insert_outgoing(stream);
 
@@ -188,19 +196,61 @@ impl<H : ResponseHandler> WriteLoop<H> {
 
                 inner.conn.sender(&mut send_buf).send_headers(headers, stream_id, EndStream::No).unwrap();
 
-                send_buf.0
+                (send_buf.0, stream_id)
             };
 
             send_buf
         });
 
-        self.write_all(buf) // TODO: more
+        self.write_all(buf)
+            .and_then(move |wl: WriteLoop<H>| {
+                body.fold(wl, move |wl: WriteLoop<H>, chunk| {
+                    wl.inner.with(|inner: &mut Inner<H>| {
+                        inner.call_tx.send(ToWriteMessage::BodyChunk(BodyChunkMessage {
+                            stream_id: stream_id,
+                            chunk: chunk,
+                        }))
+                    });
+                    futures::finished::<_, HttpError>(wl)
+                })
+            })
+            .boxed()
+    }
+
+    fn process_body_chunk(self, body_chunk: BodyChunkMessage) -> HttpFuture<Self> {
+        let BodyChunkMessage { stream_id, chunk } = body_chunk;
+
+        let buf = self.inner.with(move |inner: &mut Inner<H>| {
+            {
+                let stream = inner.get_stream_mut(stream_id);
+                // TODO: check stream state
+            }
+
+            let mut send_buf = VecSendFrame(Vec::new());
+
+            let mut pos = 0;
+            const MAX_CHUNK_SIZE: usize = 8 * 1024;
+            while pos < chunk.len() {
+                let end = cmp::min(chunk.len(), pos + MAX_CHUNK_SIZE);
+
+                let data_chunk = DataChunk::new_borrowed(&chunk[pos..end], stream_id, EndStream::No);
+
+                inner.conn.sender(&mut send_buf).send_data(data_chunk).unwrap();
+
+                pos = end;
+            }
+
+            send_buf.0
+        });
+
+        self.write_all(buf)
     }
 
     fn process_message(self, message: ToWriteMessage<H>) -> HttpFuture<Self> {
         match message {
             ToWriteMessage::Start(start) => self.process_start(start),
             ToWriteMessage::FromRead(from_read) => self.process_from_read(from_read),
+            ToWriteMessage::BodyChunk(body_chunk) => self.process_body_chunk(body_chunk),
         }
     }
 
@@ -259,7 +309,7 @@ impl<H : ResponseHandler> HttpConnectionAsync<H> {
                 conn: HttpConnection::new(HttpScheme::Http),
                 next_stream_id: 1,
                 streams: HashMap::new(),
-                _phantom_data: marker::PhantomData,
+                call_tx: call_tx,
             });
 
             let write_inner = inner.clone();
@@ -268,7 +318,6 @@ impl<H : ResponseHandler> HttpConnectionAsync<H> {
 
             let c = HttpConnectionAsync {
                 inner: inner,
-                call_tx: call_tx,
             };
             Ok((c, run_write.join(run_read).map(|_| ()).boxed()))
         }).boxed()
@@ -281,11 +330,13 @@ impl<H : ResponseHandler> HttpConnectionAsync<H> {
         response_handler: H)
             -> HttpFuture<()>
     {
-        self.call_tx.send(ToWriteMessage::Start(StartRequestMessage {
-            headers: headers,
-            body: body,
-            response_handler: response_handler,
-        }));
+        self.inner.with(|inner: &mut Inner<H>| {
+            inner.call_tx.send(ToWriteMessage::Start(StartRequestMessage {
+                headers: headers,
+                body: body,
+                response_handler: response_handler,
+            }));
+        });
         futures::finished(()).boxed()
     }
 }
