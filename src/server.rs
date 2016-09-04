@@ -319,7 +319,7 @@ impl solicit_Stream for GrpcHttp2ServerStream {
         if state == StreamState::HalfClosedRemote {
             let stream_id = self.stream.stream_id.unwrap();
 
-            let message = parse_grpc_frame_completely(&self.stream.body).unwrap();
+            let message = parse_grpc_frame_completely(&self.stream.body).expect("parse req body");
 
             let stream = self.service_definition.handle_method(&self.path, message);
 
@@ -408,7 +408,7 @@ fn run_read(
     let future = stream.fold((read, shared), |(read, shared), _| {
         recv_raw_frame(read)
             .map(|(read, raw_frame)| {
-                println!("received frame");
+                println!("server: received frame");
 
                 shared.with(|shared: &mut ServerSharedState| {
 
@@ -446,6 +446,7 @@ fn run_write(
             match message.content {
                 ResponseChunk::Resp(resp_bytes, first) => {
                     if first {
+                        println!("server: sending headers");
                         shared.conn.sender(&mut send_buf).send_headers(
                             vec![
                             Header::new(b":status", b"200"),

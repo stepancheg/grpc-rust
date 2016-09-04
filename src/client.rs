@@ -37,6 +37,8 @@ use solicit::http::connection::DataChunk;
 use solicit::http::priority::SimplePrioritizer;
 use solicit::http::StreamId;
 use solicit::http::HttpScheme;
+use solicit::http::HttpError;
+use solicit::http::HttpResult;
 use solicit::http::Header;
 use solicit::http::StaticHeader;
 
@@ -53,14 +55,109 @@ use grpc::*;
 use solicit_async::*;
 use solicit_misc::*;
 
+use http_client::*;
+
+
+
+trait GrpcResponseHandlerTrait : Send + 'static + HttpResponseHandler {
+}
+
+struct GrpcResponseHandlerTyped<Req : Send + 'static, Resp : Send + 'static> {
+    method: Arc<MethodDescriptor<Req, Resp>>,
+    complete: tokio_core::Sender<ResultOrEof<Resp, GrpcError>>,
+    remaining_response: Vec<u8>,
+}
+
+impl<Req : Send + 'static, Resp : Send + 'static> GrpcResponseHandlerTrait for GrpcResponseHandlerTyped<Req, Resp> {
+}
+
+impl<Req : Send + 'static, Resp : Send + 'static> HttpResponseHandler for GrpcResponseHandlerTyped<Req, Resp> {
+    fn headers(&mut self, headers: Vec<StaticHeader>) -> HttpResult<()> {
+        println!("client: received headers");
+        if slice_get_header(&headers, ":status") != Some("200") {
+            if let Some(message) = slice_get_header(&headers, HEADER_GRPC_MESSAGE) {
+                self.complete.send(ResultOrEof::Error(GrpcError::GrpcMessage(GrpcMessageError { grpc_message: message.to_owned() })));
+                Err(HttpError::Other(Box::new(GrpcError::GrpcMessage(GrpcMessageError { grpc_message: message.to_owned() }))))
+            } else {
+                self.complete.send(ResultOrEof::Error(GrpcError::Other("not 200")));
+                Err(HttpError::Other(Box::new(GrpcError::Other("not 200"))))
+            }
+        } else {
+            Ok(())
+        }
+    }
+
+    fn data_frame(&mut self, chunk: Vec<u8>) -> HttpResult<()> {
+        self.remaining_response.extend(&chunk);
+        loop {
+            let len = match parse_grpc_frame(&self.remaining_response) {
+                Err(e) => {
+                    self.complete.send(ResultOrEof::Error(e));
+                    break;
+                }
+                Ok(None) => break,
+                Ok(Some((message, len))) => {
+                    let resp = self.method.resp_marshaller.read(&message);
+                    self.complete.send(From::from(resp)).ok();
+                    len
+                }
+            };
+            self.remaining_response.drain(..len);
+        }
+        Ok(())
+    }
+
+    fn trailers(&mut self, headers: Vec<StaticHeader>) -> HttpResult<()> {
+        let status_200 = slice_get_header(&headers, ":status") == Some("200");
+        let grpc_status_0 = slice_get_header(&headers, HEADER_GRPC_STATUS) == Some("0");
+        if /* status_200 && */ grpc_status_0 {
+            Ok(())
+        } else {
+            if let Some(message) = slice_get_header(&headers, HEADER_GRPC_MESSAGE) {
+                self.complete.send(ResultOrEof::Error(GrpcError::GrpcMessage(GrpcMessageError { grpc_message: message.to_owned() })));
+                Err(HttpError::Other(Box::new(GrpcError::GrpcMessage(GrpcMessageError { grpc_message: message.to_owned() }))))
+            } else {
+                self.complete.send(ResultOrEof::Error(GrpcError::Other("not xxx")));
+                Err(HttpError::Other(Box::new(GrpcError::Other("not xxx"))))
+            }
+        }
+    }
+
+    fn end(&mut self) -> HttpResult<()> {
+        self.complete.send(ResultOrEof::Eof);
+        Ok(())
+    }
+}
+
+struct GrpcResponseHandler {
+    tr: Box<GrpcResponseHandlerTrait>,
+}
+
+impl HttpResponseHandler for GrpcResponseHandler {
+    fn headers(&mut self, headers: Vec<StaticHeader>) -> HttpResult<()> {
+        self.tr.headers(headers)
+    }
+
+    fn data_frame(&mut self, chunk: Vec<u8>) -> HttpResult<()> {
+        self.tr.data_frame(chunk)
+    }
+
+    fn trailers(&mut self, headers: Vec<StaticHeader>) -> HttpResult<()> {
+        self.tr.trailers(headers)
+    }
+
+    fn end(&mut self) -> HttpResult<()> {
+        self.tr.end()
+    }
+}
+
 
 // Data sent from event loop to GrpcClient
 struct LoopToClient {
-    // send requests to client through this channel
-    call_tx: tokio_core::Sender<Box<CallRequest>>,
     // used only once to send shutdown signal
     shutdown_tx: tokio_core::Sender<()>,
     loop_handle: LoopHandle,
+    http_conn: HttpConnectionAsync<GrpcResponseHandler>,
 }
 
 /// gRPC client implementation.
@@ -78,6 +175,10 @@ trait CallRequest : Send {
     // called when server receives response from server
     // to send it back method called
     fn process_response(&mut self, message: ResultOrEof<&[u8], GrpcError>);
+}
+
+struct CallRequestHolder {
+    request: Box<CallRequest>,
 }
 
 struct CallRequestTyped<Req, Resp> {
@@ -158,15 +259,45 @@ impl GrpcClient {
         // A channel to send response back to caller
         let (complete, receiver) = self.new_resp_channel();
 
-        // Send call to event loop.
-        let send = self.loop_to_client.call_tx.send(Box::new(CallRequestTyped {
-            method: method,
-            req: req,
-            complete: complete,
-        }));
-        match send {
-            Ok(..) => {},
-            Err(e) => return stream_err(GrpcError::from(e)),
+        if true {
+            fn header(name: &str, value: &str) -> StaticHeader {
+                Header::new(name.as_bytes().to_owned(), value.as_bytes().to_owned())
+            }
+
+            let headers = vec![
+                header(":method", "POST"),
+                header(":path", &method.name),
+                header(":authority", "localhost"), // TODO
+                header(":scheme", "http"), // TODO
+            ];
+
+            let send2 = self.loop_to_client.http_conn.start_request(
+                headers,
+                // TODO: do not unwrap
+                // TODO: serialize in event loop
+                stream_once(write_grpc_frame_to_vec(&method.req_marshaller.write(&req).unwrap())),
+                GrpcResponseHandler {
+                    tr: Box::new(GrpcResponseHandlerTyped {
+                        method: method.clone(),
+                        complete: complete,
+                        remaining_response: Vec::new(),
+                    }),
+                }
+            );
+        } else {
+            /*
+            // Send call to event loop.
+            let send = self.loop_to_client.call_tx.send(Box::new(CallRequestTyped {
+                method: method,
+                req: req,
+                complete: complete,
+            }));
+            match send {
+                Ok(..) => {},
+                Err(e) => return stream_err(GrpcError::from(e)),
+            }
+            */
+            panic!()
         }
 
         receiver
@@ -197,13 +328,17 @@ impl Drop for GrpcClient {
     }
 }
 
-fn get_header<'a>(stream: &'a DefaultStream, name: &str) -> Option<&'a str> {
-    stream.headers.as_ref()
-        .and_then(|headers| {
-            headers.iter()
-                .find(|h| h.name() == name.as_bytes())
-                .and_then(|h| from_utf8(h.value()).ok())
-        })
+fn slice_get_header<'a>(headers: &'a [Header<'a, 'a>], name: &str) -> Option<&'a str> {
+    headers.iter()
+        .find(|h| h.name() == name.as_bytes())
+        .and_then(|h| from_utf8(h.value()).ok())
+}
+
+fn default_stream_get_header<'a>(stream: &'a DefaultStream, name: &str) -> Option<&'a str> {
+    match stream.headers {
+        Some(ref v) => slice_get_header(v, name),
+        None => None,
+    }
 }
 
 struct GrpcHttp2ClientStream {
@@ -214,7 +349,7 @@ struct GrpcHttp2ClientStream {
 
 impl GrpcHttp2ClientStream {
     fn process_buf(&mut self) {
-        if let Some("200") = get_header(&self.stream, ":status") {
+        if let Some("200") = default_stream_get_header(&self.stream, ":status") {
             loop {
                 let len = match parse_grpc_frame(&self.stream.body) {
                     Err(e) => {
@@ -275,8 +410,8 @@ impl solicit_Stream for GrpcHttp2ClientStream {
 
     fn set_state(&mut self, state: StreamState) {
         if state == StreamState::Closed {
-            let status_200 = get_header(&self.stream, ":status") == Some("200");
-            let grpc_status_0 = get_header(&self.stream, HEADER_GRPC_STATUS) == Some("0");
+            let status_200 = default_stream_get_header(&self.stream, ":status") == Some("200");
+            let grpc_status_0 = default_stream_get_header(&self.stream, HEADER_GRPC_STATUS) == Some("0");
             if status_200 && grpc_status_0 {
                 self.process_buf();
                 if !self.stream.body.is_empty() {
@@ -284,7 +419,7 @@ impl solicit_Stream for GrpcHttp2ClientStream {
                 } else {
                     self.call.process_response(ResultOrEof::Eof);
                 }
-            } else if let Some(message) = get_header(&self.stream, HEADER_GRPC_MESSAGE) {
+            } else if let Some(message) = default_stream_get_header(&self.stream, HEADER_GRPC_MESSAGE) {
                 self.call.process_response(ResultOrEof::Error(GrpcError::GrpcMessage(GrpcMessageError { grpc_message: message.to_owned() })));
             } else {
                 self.call.process_response(ResultOrEof::Error(GrpcError::Other("not 200/0")));
@@ -500,45 +635,22 @@ fn run_client_event_loop(
     // Create an event loop.
     let mut lp = Loop::new().unwrap();
 
-    // Create a channel to receive method calls.
-    let (call_tx, call_rx) = lp.handle().channel();
-    let call_rx = call_rx.map_err(GrpcError::from);
-
     // Create a channel to receive shutdown signal.
     let (shutdown_tx, shutdown_rx) = lp.handle().channel();
+
+    let (http_conn, http_conn_future) = HttpConnectionAsync::new(lp.handle(), &socket_addr, host.clone());
+    let http_conn_future = http_conn_future.map_err(GrpcError::from);
 
     // Send channels back to GrpcClient
     send_to_back
         .send(LoopToClient {
-            call_tx: call_tx,
             shutdown_tx: shutdown_tx,
             loop_handle: lp.handle(),
+            http_conn: http_conn,
         })
         .expect("send back");
 
     let shutdown_rx = shutdown_rx.map_err(GrpcError::from);
-
-    let handshake = connect_and_handshake(lp.handle(), &socket_addr)
-        .map_err(GrpcError::from);
-
-    let (read_to_write_tx, read_to_write_rx) = lp.handle().channel();
-    let read_to_write_rx = read_to_write_rx.map_err(GrpcError::from);
-
-    let run_read_write = handshake.join3(call_rx, read_to_write_rx).and_then(|(conn, call_rx, read_to_write_rx)| {
-        let (read, write) = TaskIo::new(conn).split();
-
-        let conn = HttpConnection::new(HttpScheme::Http);
-        let state = DefaultSessionState::<Client, _>::new();
-
-        let shared_for_read = TaskRcMut::new(ClientSharedState {
-            host: host,
-            conn: conn,
-            state: state,
-        });
-        let shared_for_write = shared_for_read.clone();
-        run_read(read, shared_for_read, read_to_write_tx)
-            .join(run_write(write, shared_for_write, call_rx, read_to_write_rx))
-    });
 
     let shutdown = shutdown_rx.and_then(|shutdown_rx| {
         shutdown_rx.into_future()
@@ -553,7 +665,7 @@ fn run_client_event_loop(
 
     // Wait for either completion of connection (i. e. error)
     // or shutdown signal.
-    let done = run_read_write.join(shutdown);
+    let done = http_conn_future.join(shutdown);
 
     // TODO: do not ignore error
     lp.run(done).ok();

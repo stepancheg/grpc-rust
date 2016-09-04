@@ -78,6 +78,12 @@ pub fn write_grpc_frame(stream: &mut Vec<u8>, frame: &[u8]) {
 	stream.extend(frame);
 }
 
+pub fn write_grpc_frame_to_vec(frame: &[u8]) -> Vec<u8> {
+    let mut r = Vec::new();
+    write_grpc_frame(&mut r, frame);
+    r
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

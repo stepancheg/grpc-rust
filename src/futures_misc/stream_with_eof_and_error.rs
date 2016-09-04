@@ -22,6 +22,15 @@ impl<T, E> ResultOrEof<T, E> {
     }
 }
 
+impl<T, E> From<Result<T, E>> for ResultOrEof<T, E> {
+    fn from(result: Result<T, E>) -> Self {
+        match result {
+            Ok(r) => ResultOrEof::Item(r),
+            Err(e) => ResultOrEof::Error(e),
+        }
+    }
+}
+
 
 
 pub fn stream_with_eof_and_error<S>(s: S) -> StreamWithEofAndError<S> {
@@ -53,7 +62,7 @@ impl<T, E, S> Stream for StreamWithEofAndError<S>
                 }
             } else {
                 match try_ready!(self.stream.poll()) {
-                    None => panic!("expecting explicit eof"),
+                    None => panic!("expecting explicit eof, got stream eof"),
                     Some(ResultOrEof::Eof) => {
                         self.seen_eof = true;
                         continue;
