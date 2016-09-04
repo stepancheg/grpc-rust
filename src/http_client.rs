@@ -1,5 +1,6 @@
 use std::marker;
 use std::cmp;
+use std::mem;
 use std::collections::HashMap;
 use std::iter::FromIterator;
 
@@ -45,22 +46,49 @@ use solicit_async::*;
 use solicit_misc::*;
 
 
+// TODO: make async
 trait ResponseHandler : Send + 'static {
-    fn headers(self) -> HttpFuture<Self>;
-    fn body_chunk(self) -> HttpFuture<Self>;
-    fn end(self) -> HttpFuture<()>;
+    fn headers(&mut self, headers: Vec<StaticHeader>);
+    fn body_chunk(&mut self, chunk: Vec<u8>);
+    fn trailers(&mut self, headers: Vec<StaticHeader>);
+    fn end(&mut self);
+}
+
+enum ResponseState {
+    Init,
+    GotHeaders,
+    GotBodyChunk,
+    GotTrailers,
+}
+
+enum LastChunk {
+    Empty,
+    Headers(Vec<StaticHeader>),
+    Chunk(Vec<u8>),
+    Trailers(Vec<StaticHeader>),
 }
 
 struct GrpcHttp2ClientStream2<H : ResponseHandler> {
     state: StreamState,
-    response_handler: H,
+    response_state: ResponseState,
+    last_chunk: LastChunk,
+    response_handler: Option<H>,
 }
 
 impl<H : ResponseHandler> solicit_Stream for GrpcHttp2ClientStream2<H> {
-    fn new_data_chunk(&mut self, data: &[u8]) {
+    fn set_headers<'n, 'v>(&mut self, headers: Vec<Header<'n, 'v>>) {
+        let headers = headers.into_iter().map(|h| Header::new(h.name().to_owned(), h.value().to_owned())).collect();
+        self.last_chunk = LastChunk::Headers(headers);
+        self.response_state = match self.response_state {
+            ResponseState::Init => ResponseState::GotHeaders,
+            ResponseState::GotHeaders => panic!(),
+            ResponseState::GotBodyChunk => ResponseState::GotTrailers,
+            ResponseState::GotTrailers => panic!(),
+        };
     }
 
-    fn set_headers<'n, 'v>(&mut self, headers: Vec<Header<'n, 'v>>) {
+    fn new_data_chunk(&mut self, data: &[u8]) {
+        self.last_chunk = LastChunk::Chunk(data.to_owned());
     }
 
     fn set_state(&mut self, state: StreamState) {
@@ -82,18 +110,30 @@ struct MySessionState<H : ResponseHandler> {
 }
 
 impl<H : ResponseHandler> MySessionState<H> {
-    fn remove_closed_streams(&mut self) {
-        let ids: Vec<StreamId> = self.streams
-            .iter()
-            .filter_map(|(id, s)| {
-                if s.is_closed() {
-                    Some(*id)
-                } else {
-                    None
+    fn process_streams_after_handle_next_frame(&mut self) {
+        let mut remove_ids = Vec::new();
+
+        for (id, s) in &mut self.streams {
+            let last_chunk = mem::replace(&mut s.last_chunk, LastChunk::Empty);
+            match last_chunk {
+                LastChunk::Empty => (),
+                LastChunk::Chunk(chunk) => {
+                    s.response_handler.as_mut().unwrap().body_chunk(chunk);
                 }
-            })
-            .collect();
-        Vec::from_iter(ids.into_iter().map(|i| self.remove_stream(i).unwrap()));
+                LastChunk::Headers(headers) => {
+                    s.response_handler.as_mut().unwrap().headers(headers);
+                }
+                LastChunk::Trailers(headers) => {
+                    s.response_handler.as_mut().unwrap().trailers(headers);
+                }
+            }
+
+            if s.is_closed() {
+                remove_ids.push(*id);
+            }
+        }
+
+        Vec::from_iter(remove_ids.into_iter().map(|i| self.remove_stream(i).unwrap()));
     }
 }
 
@@ -204,7 +244,9 @@ impl<H : ResponseHandler> WriteLoop<H> {
 
             let stream = GrpcHttp2ClientStream2 {
                 state: StreamState::Open,
-                response_handler: response_handler,
+                response_handler: Some(response_handler),
+                last_chunk: LastChunk::Empty,
+                response_state: ResponseState::Init,
             };
             let stream_id = inner.session_state.insert_outgoing(stream);
 
@@ -322,9 +364,16 @@ impl<H : ResponseHandler> ReadLoop<H> {
             .boxed()
     }
 
-    fn process_raw_frame(self, raw_frame: RawFrame) -> HttpFuture<Self> {
-
+    fn process_streams_after_handle_next_frame(self) -> HttpFuture<Self> {
         self.inner.with(|inner: &mut Inner<H>| {
+            inner.session_state.process_streams_after_handle_next_frame();
+        });
+
+        futures::finished(self).boxed()
+    }
+
+    fn process_raw_frame(self, raw_frame: RawFrame) -> HttpFuture<Self> {
+        self.inner.with(move |inner: &mut Inner<H>| {
             let mut send = VecSendFrame(Vec::new());
             {
                 let mut session = ClientSession::new(&mut inner.session_state, &mut send);
@@ -332,15 +381,13 @@ impl<H : ResponseHandler> ReadLoop<H> {
                     .unwrap();
             }
 
-            inner.session_state.remove_closed_streams();
-
             if !send.0.is_empty() {
                 inner.call_tx.send(ToWriteMessage::FromRead(ReadToWriteMessage { buf: send.0 }))
                     .expect("read to write");
             }
         });
 
-        futures::finished(self).boxed()
+        self.process_streams_after_handle_next_frame()
     }
 
     fn read_process_frame(self) -> HttpFuture<Self> {
