@@ -138,19 +138,24 @@ struct StartRequestMessage<H : ResponseHandler> {
     response_handler: H,
 }
 
-struct ReadToWriteMessage {
-    buf: Vec<u8>,
-}
-
 struct BodyChunkMessage {
     stream_id: StreamId,
     chunk: Vec<u8>,
 }
 
+struct EndRequestMessage {
+    stream_id: StreamId,
+}
+
+struct ReadToWriteMessage {
+    buf: Vec<u8>,
+}
+
 enum ToWriteMessage<H : ResponseHandler> {
     Start(StartRequestMessage<H>),
-    FromRead(ReadToWriteMessage),
     BodyChunk(BodyChunkMessage),
+    End(EndRequestMessage),
+    FromRead(ReadToWriteMessage),
 }
 
 struct WriteLoop<H : ResponseHandler> {
@@ -183,15 +188,6 @@ impl<H : ResponseHandler> WriteLoop<H> {
             let stream_id = inner.insert_outgoing(stream);
 
             let send_buf = {
-
-                let headers = vec![
-                    // TODO
-                    Header::new(b":method", b"POST"),
-                    Header::new(b":path", b"/aaa"),
-                    Header::new(b":authority", b"localhost"),
-                    Header::new(b":scheme", inner.conn.scheme.as_bytes().to_vec()),
-                ];
-
                 let mut send_buf = VecSendFrame(Vec::new());
 
                 inner.conn.sender(&mut send_buf).send_headers(headers, stream_id, EndStream::No).unwrap();
@@ -213,6 +209,14 @@ impl<H : ResponseHandler> WriteLoop<H> {
                     });
                     futures::finished::<_, HttpError>(wl)
                 })
+            })
+            .and_then(move |wl: WriteLoop<H>| {
+                wl.inner.with(|inner: &mut Inner<H>| {
+                    inner.call_tx.send(ToWriteMessage::End(EndRequestMessage {
+                        stream_id: stream_id,
+                    }));
+                });
+                futures::finished::<_, HttpError>(wl)
             })
             .boxed()
     }
@@ -246,11 +250,29 @@ impl<H : ResponseHandler> WriteLoop<H> {
         self.write_all(buf)
     }
 
+    fn process_end(self, end: EndRequestMessage) -> HttpFuture<Self> {
+        let EndRequestMessage { stream_id } = end;
+
+        let buf = self.inner.with(move |inner: &mut Inner<H>| {
+            let mut send_buf = VecSendFrame(Vec::new());
+
+            let chunk = Vec::new();
+            let data_chunk = DataChunk::new_borrowed(&chunk[..], stream_id, EndStream::Yes);
+
+            inner.conn.sender(&mut send_buf).send_data(data_chunk).unwrap();
+
+            send_buf.0
+        });
+
+        futures::finished(self).boxed()
+    }
+
     fn process_message(self, message: ToWriteMessage<H>) -> HttpFuture<Self> {
         match message {
             ToWriteMessage::Start(start) => self.process_start(start),
-            ToWriteMessage::FromRead(from_read) => self.process_from_read(from_read),
             ToWriteMessage::BodyChunk(body_chunk) => self.process_body_chunk(body_chunk),
+            ToWriteMessage::End(end) => self.process_end(end),
+            ToWriteMessage::FromRead(from_read) => self.process_from_read(from_read),
         }
     }
 
