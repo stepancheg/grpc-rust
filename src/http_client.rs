@@ -1,6 +1,7 @@
 use std::marker;
 use std::cmp;
 use std::collections::HashMap;
+use std::iter::FromIterator;
 
 use solicit::http::client::RequestStream;
 use solicit::http::client::ClientSession;
@@ -75,15 +76,28 @@ impl<H : ResponseHandler> solicit_Stream for GrpcHttp2ClientStream2<H> {
     }
 }
 
-struct Inner<H : ResponseHandler> {
-    host: String,
-    conn: HttpConnection,
+struct MySessionState<H : ResponseHandler> {
     streams: HashMap<StreamId, GrpcHttp2ClientStream2<H>>,
     next_stream_id: StreamId,
-    call_tx: tokio_core::Sender<ToWriteMessage<H>>,
 }
 
-impl<H : ResponseHandler> SessionState for Inner<H> {
+impl<H : ResponseHandler> MySessionState<H> {
+    fn remove_closed_streams(&mut self) {
+        let ids: Vec<StreamId> = self.streams
+            .iter()
+            .filter_map(|(id, s)| {
+                if s.is_closed() {
+                    Some(*id)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        Vec::from_iter(ids.into_iter().map(|i| self.remove_stream(i).unwrap()));
+    }
+}
+
+impl<H : ResponseHandler> SessionState for MySessionState<H> {
     type Stream = GrpcHttp2ClientStream2<H>;
 
     fn insert_outgoing(&mut self, stream: Self::Stream) -> StreamId {
@@ -126,6 +140,13 @@ impl<H : ResponseHandler> SessionState for Inner<H> {
     fn len(&self) -> usize {
         self.streams.len()
     }
+}
+
+struct Inner<H : ResponseHandler> {
+    host: String,
+    conn: HttpConnection,
+    call_tx: tokio_core::Sender<ToWriteMessage<H>>,
+    session_state: MySessionState<H>,
 }
 
 struct HttpConnectionAsync<H : ResponseHandler> {
@@ -185,7 +206,7 @@ impl<H : ResponseHandler> WriteLoop<H> {
                 state: StreamState::Open,
                 response_handler: response_handler,
             };
-            let stream_id = inner.insert_outgoing(stream);
+            let stream_id = inner.session_state.insert_outgoing(stream);
 
             let send_buf = {
                 let mut send_buf = VecSendFrame(Vec::new());
@@ -226,7 +247,7 @@ impl<H : ResponseHandler> WriteLoop<H> {
 
         let buf = self.inner.with(move |inner: &mut Inner<H>| {
             {
-                let stream = inner.get_stream_mut(stream_id);
+                let stream = inner.session_state.get_stream_mut(stream_id);
                 // TODO: check stream state
             }
 
@@ -301,9 +322,30 @@ impl<H : ResponseHandler> ReadLoop<H> {
             .boxed()
     }
 
+    fn process_raw_frame(self, raw_frame: RawFrame) -> HttpFuture<Self> {
+
+        self.inner.with(|inner: &mut Inner<H>| {
+            let mut send = VecSendFrame(Vec::new());
+            {
+                let mut session = ClientSession::new(&mut inner.session_state, &mut send);
+                inner.conn.handle_next_frame(&mut OnceReceiveFrame::new(raw_frame), &mut session)
+                    .unwrap();
+            }
+
+            inner.session_state.remove_closed_streams();
+
+            if !send.0.is_empty() {
+                inner.call_tx.send(ToWriteMessage::FromRead(ReadToWriteMessage { buf: send.0 }))
+                    .expect("read to write");
+            }
+        });
+
+        futures::finished(self).boxed()
+    }
+
     fn read_process_frame(self) -> HttpFuture<Self> {
         self.recv_raw_frame()
-            .map(|(rl, frame)| rl)
+            .and_then(move |(rl, frame)| rl.process_raw_frame(frame))
             .boxed()
     }
 
@@ -329,9 +371,11 @@ impl<H : ResponseHandler> HttpConnectionAsync<H> {
             let inner = TaskRcMut::new(Inner {
                 host: "localhost".to_owned(), // TODO
                 conn: HttpConnection::new(HttpScheme::Http),
-                next_stream_id: 1,
-                streams: HashMap::new(),
                 call_tx: call_tx,
+                session_state: MySessionState {
+                    next_stream_id: 1,
+                    streams: HashMap::new(),
+                }
             });
 
             let write_inner = inner.clone();
