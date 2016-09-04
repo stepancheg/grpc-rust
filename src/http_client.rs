@@ -196,7 +196,6 @@ impl<H : HttpResponseHandler> SessionState for MySessionState<H> {
 }
 
 struct Inner<H : HttpResponseHandler> {
-    host: String,
     conn: HttpConnection,
     call_tx: tokio_core::Sender<ToWriteMessage<H>>,
     session_state: MySessionState<H>,
@@ -424,7 +423,7 @@ impl<H : HttpResponseHandler> ReadLoop<H> {
 }
 
 impl<H : HttpResponseHandler> HttpConnectionAsync<H> {
-    pub fn new(lh: LoopHandle, addr: &SocketAddr, host: String) -> (Self, HttpFuture<()>) {
+    pub fn new(lh: LoopHandle, addr: &SocketAddr) -> (Self, HttpFuture<()>) {
         let (call_tx, call_rx) = lh.clone().channel();
 
         let call_rx = future_flatten_to_stream(call_rx).map_err(HttpError::from).boxed();
@@ -438,7 +437,6 @@ impl<H : HttpResponseHandler> HttpConnectionAsync<H> {
             let (read, write) = TaskIo::new(conn).split();
 
             let inner = TaskRcMut::new(Inner {
-                host: host.to_owned(),
                 conn: HttpConnection::new(HttpScheme::Http),
                 call_tx: call_tx.clone(),
                 session_state: MySessionState {
