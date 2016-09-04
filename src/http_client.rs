@@ -408,7 +408,7 @@ impl<H : ResponseHandler> ReadLoop<H> {
 }
 
 impl<H : ResponseHandler> HttpConnectionAsync<H> {
-    fn new(lh: LoopHandle, conn: TcpStream) -> HttpFuture<(Self, HttpFuture<()>)> {
+    fn new(lh: LoopHandle, conn: TcpStream, host: String) -> HttpFuture<(Self, HttpFuture<()>)> {
         let (call_tx, call_rx) = lh.channel();
 
         let handshake = client_handshake(conn);
@@ -416,7 +416,7 @@ impl<H : ResponseHandler> HttpConnectionAsync<H> {
             let (read, write) = TaskIo::new(conn).split();
 
             let inner = TaskRcMut::new(Inner {
-                host: "localhost".to_owned(), // TODO
+                host: host.to_owned(),
                 conn: HttpConnection::new(HttpScheme::Http),
                 call_tx: call_tx,
                 session_state: MySessionState {
