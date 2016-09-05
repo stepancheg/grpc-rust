@@ -50,10 +50,14 @@ use solicit_misc::*;
 
 // TODO: make async
 pub trait HttpResponseHandler: Send + 'static {
-    fn headers(&mut self, headers: Vec<StaticHeader>) -> HttpResult<()>;
-    fn data_frame(&mut self, chunk: Vec<u8>) -> HttpResult<()>;
-    fn trailers(&mut self, headers: Vec<StaticHeader>) -> HttpResult<()>;
-    fn end(&mut self) -> HttpResult<()>;
+    // called once response headers received
+    fn headers(&mut self, headers: Vec<StaticHeader>) -> bool;
+    // called for each response data frame
+    fn data_frame(&mut self, chunk: Vec<u8>) -> bool;
+    // called for response trailers
+    fn trailers(&mut self, headers: Vec<StaticHeader>) -> bool;
+    // called at the end of reponse stream
+    fn end(&mut self);
 }
 
 enum ResponseState {
@@ -124,14 +128,17 @@ impl<H : HttpResponseHandler> MySessionState<H> {
                 ok = match last_chunk {
                     LastChunk::Empty => true,
                     LastChunk::Chunk(chunk) => {
-                        response_handler.data_frame(chunk).is_ok()
+                        response_handler.data_frame(chunk)
                     }
                     LastChunk::Headers(headers) => {
-                        response_handler.headers(headers).is_ok()
+                        response_handler.headers(headers)
                     }
                     LastChunk::Trailers(headers) => {
-                        response_handler.trailers(headers).is_ok()
-                            && response_handler.end().is_ok()
+                        let r = response_handler.trailers(headers);
+                        if r {
+                            response_handler.end();
+                        }
+                        r
                     }
                 };
 
