@@ -168,35 +168,27 @@ impl<H : HttpResponseHandler> SessionState for MySessionState<H> {
     }
 
     fn insert_incoming(&mut self, stream_id: StreamId, stream: Self::Stream) -> Result<(), ()> {
-        // TODO: assert parity
-        // TODO: Assert that the stream IDs are monotonically increasing!
-        self.streams.insert(stream_id, stream);
-        Ok(())
+        panic!("unused on the client");
     }
 
-    #[inline]
     fn get_stream_ref(&self, stream_id: StreamId) -> Option<&Self::Stream> {
         self.streams.get(&stream_id)
     }
 
-    #[inline]
     fn get_stream_mut(&mut self, stream_id: StreamId) -> Option<&mut Self::Stream> {
         self.streams.get_mut(&stream_id)
     }
 
-    #[inline]
     fn remove_stream(&mut self, stream_id: StreamId) -> Option<Self::Stream> {
         self.streams.remove(&stream_id)
     }
 
-    #[inline]
     fn iter(&mut self) -> StreamIter<GrpcHttp2ClientStream2<H>> {
         // https://github.com/mlalic/solicit/pull/34
         unimplemented!()
     }
 
     /// Number of currently active streams
-    #[inline]
     fn len(&self) -> usize {
         self.streams.len()
     }
