@@ -249,13 +249,7 @@ impl GrpcClient {
         (sender, receiver)
     }
 
-    pub fn call_unary<Req : Send + 'static, Resp : Send + 'static>(&self, req: Req, method: Arc<MethodDescriptor<Req, Resp>>)
-        -> GrpcFuture<Resp>
-    {
-        stream_single(self.call_server_streaming(req, method))
-    }
-
-    pub fn call_server_streaming<Req : Send + 'static, Resp : Send + 'static>(&self, req: Req, method: Arc<MethodDescriptor<Req, Resp>>)
+    pub fn call_impl<Req : Send + 'static, Resp : Send + 'static>(&self, req: GrpcStream<Req>, method: Arc<MethodDescriptor<Req, Resp>>)
         -> GrpcStream<Resp>
     {
         // A channel to send response back to caller
@@ -274,7 +268,7 @@ impl GrpcClient {
 
         let request_frames = {
             let method = method.clone();
-            stream_once::<_, GrpcError>(req)
+            req
                 .and_then(move |req| {
                     let grpc_frame = try!(method.req_marshaller.write(&req));
                     Ok(write_grpc_frame_to_vec(&grpc_frame))
@@ -297,16 +291,28 @@ impl GrpcClient {
         future_flatten_to_stream(start_request.and_then(|()| Ok(receiver))).boxed()
     }
 
+    pub fn call_unary<Req : Send + 'static, Resp : Send + 'static>(&self, req: Req, method: Arc<MethodDescriptor<Req, Resp>>)
+        -> GrpcFuture<Resp>
+    {
+        stream_single(self.call_impl(stream_once(req).boxed(), method))
+    }
+
+    pub fn call_server_streaming<Req : Send + 'static, Resp : Send + 'static>(&self, req: Req, method: Arc<MethodDescriptor<Req, Resp>>)
+        -> GrpcStream<Resp>
+    {
+        self.call_impl(stream_once(req).boxed(), method)
+    }
+
     pub fn call_client_streaming<Req : Send + 'static, Resp : Send + 'static>(&self, req: GrpcStream<Req>, method: Arc<MethodDescriptor<Req, Resp>>)
         -> GrpcFuture<Resp>
     {
-        unimplemented!();
+        stream_single(self.call_impl(req, method))
     }
 
     pub fn call_bidi<Req : Send + 'static, Resp : Send + 'static>(&self, req: GrpcStream<Req>, method: Arc<MethodDescriptor<Req, Resp>>)
         -> GrpcStream<Resp>
     {
-        unimplemented!();
+        self.call_impl(req, method)
     }
 }
 
