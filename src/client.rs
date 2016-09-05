@@ -169,44 +169,6 @@ pub struct GrpcClient {
     http_scheme: HttpScheme,
 }
 
-trait CallRequest : Send {
-    // serialize message contained in this request
-    fn write_req(&self) -> GrpcResult<Vec<u8>>;
-    // gRPC method name (path)
-    fn method_name(&self) -> &str;
-    // called when server receives response from server
-    // to send it back method called
-    fn process_response(&mut self, message: ResultOrEof<&[u8], GrpcError>);
-}
-
-struct CallRequestHolder {
-    request: Box<CallRequest>,
-}
-
-struct CallRequestTyped<Req, Resp> {
-    // this call method descriptor
-    method: Arc<MethodDescriptor<Req, Resp>>,
-    // the request
-    req: Req,
-    // channel to send response back to called
-    complete: tokio_core::Sender<ResultOrEof<Resp, GrpcError>>,
-}
-
-impl<Req : Send + 'static, Resp : Send + 'static> CallRequest for CallRequestTyped<Req, Resp> {
-    fn write_req(&self) -> GrpcResult<Vec<u8>> {
-        self.method.req_marshaller.write(&self.req)
-    }
-
-    fn method_name(&self) -> &str {
-        &self.method.name
-    }
-
-    fn process_response(&mut self, message: ResultOrEof<&[u8], GrpcError>) {
-        let resp = message.and_then(|message| self.method.resp_marshaller.read(&message));
-        self.complete.send(resp).ok();
-    }
-}
-
 impl GrpcClient {
     /// Create a client connected to specified host and port.
     pub fn new(host: &str, port: u16) -> GrpcResult<GrpcClient> {
