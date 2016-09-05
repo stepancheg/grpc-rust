@@ -49,7 +49,7 @@ use solicit_misc::*;
 
 
 // TODO: make async
-pub trait HttpResponseHandler: Send + 'static {
+pub trait HttpClientResponseHandler: Send + 'static {
     // called once response headers received
     fn headers(&mut self, headers: Vec<StaticHeader>) -> bool;
     // called for each response data frame
@@ -74,14 +74,14 @@ enum LastChunk {
     Trailers(Vec<StaticHeader>),
 }
 
-struct GrpcHttp2ClientStream2<H : HttpResponseHandler> {
+struct GrpcHttp2ClientStream2<H : HttpClientResponseHandler> {
     state: StreamState,
     response_state: ResponseState,
     last_chunk: LastChunk,
     response_handler: Option<H>,
 }
 
-impl<H : HttpResponseHandler> solicit_Stream for GrpcHttp2ClientStream2<H> {
+impl<H : HttpClientResponseHandler> solicit_Stream for GrpcHttp2ClientStream2<H> {
     fn set_headers<'n, 'v>(&mut self, headers: Vec<Header<'n, 'v>>) {
         let headers = headers.into_iter().map(|h| Header::new(h.name().to_owned(), h.value().to_owned())).collect();
         let (last_chunk, response_state) = match self.response_state {
@@ -112,12 +112,12 @@ impl<H : HttpResponseHandler> solicit_Stream for GrpcHttp2ClientStream2<H> {
     }
 }
 
-struct MySessionState<H : HttpResponseHandler> {
+struct MySessionState<H : HttpClientResponseHandler> {
     streams: HashMap<StreamId, GrpcHttp2ClientStream2<H>>,
     next_stream_id: StreamId,
 }
 
-impl<H : HttpResponseHandler> MySessionState<H> {
+impl<H : HttpClientResponseHandler> MySessionState<H> {
     fn process_streams_after_handle_next_frame(&mut self) {
         let mut remove_ids = Vec::new();
 
@@ -157,7 +157,7 @@ impl<H : HttpResponseHandler> MySessionState<H> {
     }
 }
 
-impl<H : HttpResponseHandler> SessionState for MySessionState<H> {
+impl<H : HttpClientResponseHandler> SessionState for MySessionState<H> {
     type Stream = GrpcHttp2ClientStream2<H>;
 
     fn insert_outgoing(&mut self, stream: Self::Stream) -> StreamId {
@@ -194,17 +194,17 @@ impl<H : HttpResponseHandler> SessionState for MySessionState<H> {
     }
 }
 
-struct Inner<H : HttpResponseHandler> {
+struct Inner<H : HttpClientResponseHandler> {
     conn: HttpConnection,
     call_tx: tokio_core::Sender<ToWriteMessage<H>>,
     session_state: MySessionState<H>,
 }
 
-pub struct HttpConnectionAsync<H : HttpResponseHandler> {
+pub struct HttpClientConnectionAsync<H : HttpClientResponseHandler> {
     call_tx: tokio_core::Sender<ToWriteMessage<H>>,
 }
 
-struct StartRequestMessage<H : HttpResponseHandler> {
+struct StartRequestMessage<H : HttpClientResponseHandler> {
     headers: Vec<StaticHeader>,
     body: HttpStream<Vec<u8>>,
     response_handler: H,
@@ -223,19 +223,19 @@ struct ReadToWriteMessage {
     buf: Vec<u8>,
 }
 
-enum ToWriteMessage<H : HttpResponseHandler> {
+enum ToWriteMessage<H : HttpClientResponseHandler> {
     Start(StartRequestMessage<H>),
     BodyChunk(BodyChunkMessage),
     End(EndRequestMessage),
     FromRead(ReadToWriteMessage),
 }
 
-struct WriteLoop<H : HttpResponseHandler> {
+struct WriteLoop<H : HttpClientResponseHandler> {
     write: TaskIoWrite<TcpStream>,
     inner: TaskRcMut<Inner<H>>,
 }
 
-impl<H : HttpResponseHandler> WriteLoop<H> {
+impl<H : HttpClientResponseHandler> WriteLoop<H> {
     fn write_all(self, buf: Vec<u8>) -> HttpFuture<Self> {
         let WriteLoop { write, inner } = self;
 
@@ -364,12 +364,12 @@ impl<H : HttpResponseHandler> WriteLoop<H> {
     }
 }
 
-struct ReadLoop<H : HttpResponseHandler> {
+struct ReadLoop<H : HttpClientResponseHandler> {
     read: TaskIoRead<TcpStream>,
     inner: TaskRcMut<Inner<H>>,
 }
 
-impl<H : HttpResponseHandler> ReadLoop<H> {
+impl<H : HttpClientResponseHandler> ReadLoop<H> {
     fn recv_raw_frame(self) -> HttpFuture<(Self, RawFrame<'static>)> {
         let ReadLoop { read, inner } = self;
         recv_raw_frame(read)
@@ -421,13 +421,13 @@ impl<H : HttpResponseHandler> ReadLoop<H> {
     }
 }
 
-impl<H : HttpResponseHandler> HttpConnectionAsync<H> {
+impl<H : HttpClientResponseHandler> HttpClientConnectionAsync<H> {
     pub fn new(lh: LoopHandle, addr: &SocketAddr) -> (Self, HttpFuture<()>) {
         let (call_tx, call_rx) = lh.clone().channel();
 
         let call_rx = future_flatten_to_stream(call_rx).map_err(HttpError::from).boxed();
 
-        let c = HttpConnectionAsync {
+        let c = HttpClientConnectionAsync {
             call_tx: call_tx.clone(),
         };
 

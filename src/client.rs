@@ -59,7 +59,7 @@ use http_client::*;
 
 
 
-trait GrpcResponseHandlerTrait : Send + 'static + HttpResponseHandler {
+trait GrpcResponseHandlerTrait : Send + 'static + HttpClientResponseHandler {
 }
 
 struct GrpcResponseHandlerTyped<Req : Send + 'static, Resp : Send + 'static> {
@@ -71,7 +71,7 @@ struct GrpcResponseHandlerTyped<Req : Send + 'static, Resp : Send + 'static> {
 impl<Req : Send + 'static, Resp : Send + 'static> GrpcResponseHandlerTrait for GrpcResponseHandlerTyped<Req, Resp> {
 }
 
-impl<Req : Send + 'static, Resp : Send + 'static> HttpResponseHandler for GrpcResponseHandlerTyped<Req, Resp> {
+impl<Req : Send + 'static, Resp : Send + 'static> HttpClientResponseHandler for GrpcResponseHandlerTyped<Req, Resp> {
     fn headers(&mut self, headers: Vec<StaticHeader>) -> bool {
         println!("client: received headers");
         if slice_get_header(&headers, ":status") != Some("200") {
@@ -130,7 +130,7 @@ struct GrpcResponseHandler {
     tr: Box<GrpcResponseHandlerTrait>,
 }
 
-impl HttpResponseHandler for GrpcResponseHandler {
+impl HttpClientResponseHandler for GrpcResponseHandler {
     fn headers(&mut self, headers: Vec<StaticHeader>) -> bool {
         self.tr.headers(headers)
     }
@@ -154,7 +154,7 @@ struct LoopToClient {
     // used only once to send shutdown signal
     shutdown_tx: tokio_core::Sender<()>,
     loop_handle: LoopHandle,
-    http_conn: HttpConnectionAsync<GrpcResponseHandler>,
+    http_conn: HttpClientConnectionAsync<GrpcResponseHandler>,
 }
 
 /// gRPC client implementation.
@@ -312,7 +312,7 @@ fn run_client_event_loop(
     // Create a channel to receive shutdown signal.
     let (shutdown_tx, shutdown_rx) = lp.handle().channel();
 
-    let (http_conn, http_conn_future) = HttpConnectionAsync::new(lp.handle(), &socket_addr);
+    let (http_conn, http_conn_future) = HttpClientConnectionAsync::new(lp.handle(), &socket_addr);
     let http_conn_future = http_conn_future.map_err(GrpcError::from);
 
     // Send channels back to GrpcClient
