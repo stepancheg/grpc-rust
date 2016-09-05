@@ -272,11 +272,19 @@ impl GrpcClient {
             header(":scheme", from_utf8(self.http_scheme.as_bytes()).unwrap()),
         ];
 
-        let send2 = self.loop_to_client.http_conn.start_request(
+        let request_frames = {
+            let method = method.clone();
+            stream_once::<_, GrpcError>(req)
+                .and_then(move |req| {
+                    let grpc_frame = try!(method.req_marshaller.write(&req));
+                    Ok(write_grpc_frame_to_vec(&grpc_frame))
+                })
+                .map_err(|e| HttpError::Other(Box::new(e)))
+        };
+
+        let start_request = self.loop_to_client.http_conn.start_request(
             headers,
-            // TODO: do not unwrap
-            // TODO: serialize in event loop
-            stream_once(write_grpc_frame_to_vec(&method.req_marshaller.write(&req).unwrap())),
+            request_frames.boxed(),
             GrpcResponseHandler {
                 tr: Box::new(GrpcResponseHandlerTyped {
                     method: method.clone(),
@@ -284,9 +292,9 @@ impl GrpcClient {
                     remaining_response: Vec::new(),
                 }),
             }
-        );
+        ).map_err(GrpcError::from);
 
-        receiver
+        future_flatten_to_stream(start_request.and_then(|()| Ok(receiver))).boxed()
     }
 
     pub fn call_client_streaming<Req : Send + 'static, Resp : Send + 'static>(&self, req: GrpcStream<Req>, method: Arc<MethodDescriptor<Req, Resp>>)

@@ -467,6 +467,8 @@ impl<H : HttpResponseHandler> HttpConnectionAsync<H> {
             body: body,
             response_handler: response_handler,
         }));
+
+        // should use bounded queue here, so future result
         futures::finished(()).boxed()
     }
 }
