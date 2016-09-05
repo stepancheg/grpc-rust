@@ -82,12 +82,54 @@ enum LastChunk {
 struct GrpcHttp2ClientStream2<H : HttpClientResponseHandler> {
     state: StreamState,
     response_state: ResponseState,
-    last_chunk: LastChunk,
     response_handler: Option<H>,
 }
 
-impl<H : HttpClientResponseHandler> solicit_Stream for GrpcHttp2ClientStream2<H> {
-    fn set_headers<'n, 'v>(&mut self, headers: Vec<Header<'n, 'v>>) {
+impl<H : HttpClientResponseHandler> GrpcHttp2ClientStream2<H> {
+
+    fn on_rst_stream(&mut self, _error_code: ErrorCode) {
+        self.close();
+    }
+
+    fn close(&mut self) {
+        self.set_state(StreamState::Closed);
+    }
+
+    fn close_local(&mut self) {
+        let next = match self.state() {
+            StreamState::HalfClosedRemote => StreamState::Closed,
+            _ => StreamState::HalfClosedLocal,
+        };
+        self.set_state(next);
+    }
+
+    fn close_remote(&mut self) {
+        let next = match self.state() {
+            StreamState::HalfClosedLocal => StreamState::Closed,
+            _ => StreamState::HalfClosedRemote,
+        };
+        self.set_state(next);
+    }
+
+    fn is_closed(&self) -> bool {
+        self.state() == StreamState::Closed
+    }
+
+    fn is_closed_local(&self) -> bool {
+        match self.state() {
+            StreamState::HalfClosedLocal | StreamState::Closed => true,
+            _ => false,
+        }
+    }
+
+    fn is_closed_remote(&self) -> bool {
+        match self.state() {
+            StreamState::HalfClosedRemote | StreamState::Closed => true,
+            _ => false,
+        }
+    }
+
+    fn set_headers<'n, 'v>(&mut self, headers: Vec<Header<'n, 'v>>) -> LastChunk {
         let headers = headers.into_iter().map(|h| Header::new(h.name().to_owned(), h.value().to_owned())).collect();
         let (last_chunk, response_state) = match self.response_state {
             ResponseState::Init => (LastChunk::Headers(headers), ResponseState::GotHeaders),
@@ -95,21 +137,17 @@ impl<H : HttpClientResponseHandler> solicit_Stream for GrpcHttp2ClientStream2<H>
             ResponseState::GotBodyChunk => (LastChunk::Trailers(headers), ResponseState::GotTrailers),
             ResponseState::GotTrailers => panic!(),
         };
-        self.last_chunk = last_chunk;
         self.response_state = response_state;
+        last_chunk
     }
 
-    fn new_data_chunk(&mut self, data: &[u8]) {
-        self.last_chunk = LastChunk::Chunk(data.to_owned());
+    fn new_data_chunk(&mut self, data: &[u8]) -> LastChunk {
         self.response_state = ResponseState::GotBodyChunk;
+        LastChunk::Chunk(data.to_owned())
     }
 
     fn set_state(&mut self, state: StreamState) {
         self.state = state;
-    }
-
-    fn get_data_chunk(&mut self, buf: &mut [u8]) -> Result<StreamDataChunk, StreamDataError> {
-        unimplemented!()
     }
 
     fn state(&self) -> StreamState {
@@ -123,12 +161,11 @@ struct MySessionState<H : HttpClientResponseHandler> {
 }
 
 impl<H : HttpClientResponseHandler> MySessionState<H> {
-    fn process_streams_after_handle_next_frame(&mut self, stream_id: StreamId) -> HttpFuture<()> {
+    fn process_streams_after_handle_next_frame(&mut self, stream_id: StreamId, last_chunk: LastChunk) -> HttpFuture<()> {
         let remove;
         if let Some(ref mut s) = self.streams.get_mut(&stream_id) {
             let mut ok = false;
             if let Some(ref mut response_handler) = s.response_handler {
-                let last_chunk = mem::replace(&mut s.last_chunk, LastChunk::Empty);
                 ok = match last_chunk {
                     LastChunk::Empty => true,
                     LastChunk::Chunk(chunk) => {
@@ -165,35 +202,29 @@ impl<H : HttpClientResponseHandler> MySessionState<H> {
     }
 }
 
-impl<H : HttpClientResponseHandler> SessionState for MySessionState<H> {
-    type Stream = GrpcHttp2ClientStream2<H>;
+impl<H : HttpClientResponseHandler> MySessionState<H> {
 
-    fn insert_outgoing(&mut self, stream: Self::Stream) -> StreamId {
+    fn insert_outgoing(&mut self, stream: GrpcHttp2ClientStream2<H>) -> StreamId {
         let id = self.next_stream_id;
         self.streams.insert(id, stream);
         self.next_stream_id += 2;
         id
     }
 
-    fn insert_incoming(&mut self, stream_id: StreamId, stream: Self::Stream) -> Result<(), ()> {
+    fn insert_incoming(&mut self, stream_id: StreamId, stream: GrpcHttp2ClientStream2<H>) -> Result<(), ()> {
         panic!("unused on the client");
     }
 
-    fn get_stream_ref(&self, stream_id: StreamId) -> Option<&Self::Stream> {
+    fn get_stream_ref(&self, stream_id: StreamId) -> Option<&GrpcHttp2ClientStream2<H>> {
         self.streams.get(&stream_id)
     }
 
-    fn get_stream_mut(&mut self, stream_id: StreamId) -> Option<&mut Self::Stream> {
+    fn get_stream_mut(&mut self, stream_id: StreamId) -> Option<&mut GrpcHttp2ClientStream2<H>> {
         self.streams.get_mut(&stream_id)
     }
 
-    fn remove_stream(&mut self, stream_id: StreamId) -> Option<Self::Stream> {
+    fn remove_stream(&mut self, stream_id: StreamId) -> Option<GrpcHttp2ClientStream2<H>> {
         self.streams.remove(&stream_id)
-    }
-
-    fn iter(&mut self) -> StreamIter<GrpcHttp2ClientStream2<H>> {
-        // https://github.com/mlalic/solicit/pull/34
-        unimplemented!()
     }
 
     /// Number of currently active streams
@@ -209,7 +240,7 @@ struct MyClientSession<'a, H, S>
 {
     state: &'a mut MySessionState<H>,
     sender: &'a mut S,
-    stream_id: Option<StreamId>,
+    last: Option<(StreamId, LastChunk)>,
 }
 
 impl<'a, H, S> MyClientSession<'a, H, S>
@@ -221,7 +252,7 @@ impl<'a, H, S> MyClientSession<'a, H, S>
         MyClientSession {
             state: state,
             sender: sender,
-            stream_id: None,
+            last: None,
         }
     }
 }
@@ -232,7 +263,7 @@ impl<'a, H, S> Session for MyClientSession<'a, H, S>
         S : SendFrame + 'a,
 {
     fn new_data_chunk(&mut self, stream_id: StreamId, data: &[u8], conn: &mut HttpConnection) -> HttpResult<()> {
-        let mut stream = match self.state.get_stream_mut(stream_id) {
+        let mut stream: &mut GrpcHttp2ClientStream2<H> = match self.state.get_stream_mut(stream_id) {
             None => {
                 // TODO(mlalic): This can currently indicate two things:
                 //                 1) the stream was idle => PROTOCOL_ERROR
@@ -242,13 +273,12 @@ impl<'a, H, S> Session for MyClientSession<'a, H, S>
             Some(stream) => stream,
         };
         // Now let the stream handle the data chunk
-        stream.new_data_chunk(data);
-        self.stream_id = Some(stream_id);
+        self.last = Some((stream_id, stream.new_data_chunk(data)));
         Ok(())
     }
 
     fn new_headers<'n, 'v>(&mut self, stream_id: StreamId, headers: Vec<Header<'n, 'v>>, conn: &mut HttpConnection) -> HttpResult<()> {
-        let mut stream = match self.state.get_stream_mut(stream_id) {
+        let mut stream: &mut GrpcHttp2ClientStream2<H> = match self.state.get_stream_mut(stream_id) {
             None => {
                 // TODO(mlalic): This means that the server's header is not associated to any
                 //               request made by the client nor any server-initiated stream (pushed)
@@ -257,8 +287,7 @@ impl<'a, H, S> Session for MyClientSession<'a, H, S>
             Some(stream) => stream,
         };
         // Now let the stream handle the headers
-        stream.set_headers(headers);
-        self.stream_id = Some(stream_id);
+        self.last = Some((stream_id, stream.set_headers(headers)));
         Ok(())
     }
 
@@ -273,13 +302,15 @@ impl<'a, H, S> Session for MyClientSession<'a, H, S>
         // close the local end of the stream, as well as the remote one; there's no need to keep
         // sending out the request body if the server's decided that it doesn't want to see it.
         stream.close();
-        self.stream_id = Some(stream_id);
+        if let None = self.last {
+            self.last = Some((stream_id, LastChunk::Empty));
+        }
         Ok(())
     }
 
     fn rst_stream(&mut self, stream_id: StreamId, error_code: ErrorCode, conn: &mut HttpConnection) -> HttpResult<()> {
         self.state.get_stream_mut(stream_id).map(|stream| stream.on_rst_stream(error_code));
-        self.stream_id = Some(stream_id);
+        self.last = Some((stream_id, LastChunk::Empty));
         Ok(())
     }
 
@@ -358,7 +389,6 @@ impl<H : HttpClientResponseHandler> WriteLoop<H> {
             let stream = GrpcHttp2ClientStream2 {
                 state: StreamState::Open,
                 response_handler: Some(response_handler),
-                last_chunk: LastChunk::Empty,
                 response_state: ResponseState::Init,
             };
             let stream_id = inner.session_state.insert_outgoing(stream);
@@ -480,22 +510,22 @@ impl<H : HttpClientResponseHandler> ReadLoop<H> {
             .boxed()
     }
 
-    fn process_streams_after_handle_next_frame(self, stream_id: StreamId) -> HttpFuture<Self> {
+    fn process_streams_after_handle_next_frame(self, stream_id: StreamId, last_chunk: LastChunk) -> HttpFuture<Self> {
         let future = self.inner.with(|inner: &mut Inner<H>| {
-            inner.session_state.process_streams_after_handle_next_frame(stream_id)
+            inner.session_state.process_streams_after_handle_next_frame(stream_id, last_chunk)
         });
 
         future.map(|_| self).boxed()
     }
 
     fn process_raw_frame(self, raw_frame: RawFrame) -> HttpFuture<Self> {
-        let stream_id = self.inner.with(move |inner: &mut Inner<H>| {
+        let last = self.inner.with(move |inner: &mut Inner<H>| {
             let mut send = VecSendFrame(Vec::new());
-            let stream_id = {
+            let last = {
                 let mut session = MyClientSession::new(&mut inner.session_state, &mut send);
                 inner.conn.handle_next_frame(&mut OnceReceiveFrame::new(raw_frame), &mut session)
                     .unwrap();
-                session.stream_id.take()
+                session.last.take()
             };
 
             if !send.0.is_empty() {
@@ -503,11 +533,11 @@ impl<H : HttpClientResponseHandler> ReadLoop<H> {
                     .expect("read to write");
             }
 
-            stream_id
+            last
         });
 
-        if let Some(stream_id) = stream_id {
-            self.process_streams_after_handle_next_frame(stream_id)
+        if let Some((stream_id, last_chunk)) = last {
+            self.process_streams_after_handle_next_frame(stream_id, last_chunk)
         } else {
             futures::finished(self).boxed()
         }
