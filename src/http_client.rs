@@ -54,7 +54,7 @@ use solicit_misc::*;
 
 
 // TODO: make async
-pub trait HttpClientResponseHandler: Send + 'static {
+pub trait HttpClientResponseHandler : Send + 'static {
     // called once response headers received
     fn headers(&mut self, headers: Vec<StaticHeader>) -> bool;
     // called for each response data frame
@@ -123,7 +123,7 @@ struct MySessionState<H : HttpClientResponseHandler> {
 }
 
 impl<H : HttpClientResponseHandler> MySessionState<H> {
-    fn process_streams_after_handle_next_frame(&mut self, stream_id: StreamId) {
+    fn process_streams_after_handle_next_frame(&mut self, stream_id: StreamId) -> HttpFuture<()> {
         let remove;
         if let Some(ref mut s) = self.streams.get_mut(&stream_id) {
             let mut ok = false;
@@ -154,12 +154,14 @@ impl<H : HttpClientResponseHandler> MySessionState<H> {
 
             remove = s.is_closed();
         } else {
-            return;
+            return futures::finished(()).boxed();
         }
 
         if remove {
             self.streams.remove(&stream_id);
         }
+
+        futures::finished(()).boxed()
     }
 }
 
@@ -479,11 +481,11 @@ impl<H : HttpClientResponseHandler> ReadLoop<H> {
     }
 
     fn process_streams_after_handle_next_frame(self, stream_id: StreamId) -> HttpFuture<Self> {
-        self.inner.with(|inner: &mut Inner<H>| {
-            inner.session_state.process_streams_after_handle_next_frame(stream_id);
+        let future = self.inner.with(|inner: &mut Inner<H>| {
+            inner.session_state.process_streams_after_handle_next_frame(stream_id)
         });
 
-        futures::finished(self).boxed()
+        future.map(|_| self).boxed()
     }
 
     fn process_raw_frame(self, raw_frame: RawFrame) -> HttpFuture<Self> {
