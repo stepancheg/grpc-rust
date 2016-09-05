@@ -16,15 +16,20 @@ use solicit::http::session::StreamDataError;
 use solicit::http::session::StreamDataChunk;
 use solicit::http::session::Stream as solicit_Stream;
 use solicit::http::session::StreamIter;
+use solicit::http::session::Session;
 use solicit::http::connection::HttpConnection;
 use solicit::http::connection::SendStatus;
 use solicit::http::connection::EndStream;
 use solicit::http::connection::DataChunk;
+use solicit::http::connection::SendFrame;
 use solicit::http::priority::SimplePrioritizer;
 use solicit::http::frame::RawFrame;
+use solicit::http::frame::HttpSetting;
+use solicit::http::frame::PingFrame;
 use solicit::http::StreamId;
 use solicit::http::HttpScheme;
 use solicit::http::HttpError;
+use solicit::http::ErrorCode;
 use solicit::http::HttpResult;
 use solicit::http::Header;
 use solicit::http::StaticHeader;
@@ -118,10 +123,9 @@ struct MySessionState<H : HttpClientResponseHandler> {
 }
 
 impl<H : HttpClientResponseHandler> MySessionState<H> {
-    fn process_streams_after_handle_next_frame(&mut self) {
-        let mut remove_ids = Vec::new();
-
-        for (id, s) in &mut self.streams {
+    fn process_streams_after_handle_next_frame(&mut self, stream_id: StreamId) {
+        let remove;
+        if let Some(ref mut s) = self.streams.get_mut(&stream_id) {
             let mut ok = false;
             if let Some(ref mut response_handler) = s.response_handler {
                 let last_chunk = mem::replace(&mut s.last_chunk, LastChunk::Empty);
@@ -148,12 +152,14 @@ impl<H : HttpClientResponseHandler> MySessionState<H> {
                 s.response_handler.take();
             }
 
-            if s.is_closed() {
-                remove_ids.push(*id);
-            }
+            remove = s.is_closed();
+        } else {
+            return;
         }
 
-        Vec::from_iter(remove_ids.into_iter().map(|i| self.remove_stream(i).unwrap()));
+        if remove {
+            self.streams.remove(&stream_id);
+        }
     }
 }
 
@@ -191,6 +197,100 @@ impl<H : HttpClientResponseHandler> SessionState for MySessionState<H> {
     /// Number of currently active streams
     fn len(&self) -> usize {
         self.streams.len()
+    }
+}
+
+struct MyClientSession<'a, H, S>
+    where
+        H : HttpClientResponseHandler,
+        S : SendFrame + 'a,
+{
+    state: &'a mut MySessionState<H>,
+    sender: &'a mut S,
+    stream_id: Option<StreamId>,
+}
+
+impl<'a, H, S> MyClientSession<'a, H, S>
+    where
+        H : HttpClientResponseHandler,
+        S : SendFrame + 'a,
+{
+    fn new(state: &'a mut MySessionState<H>, sender: &'a mut S) -> MyClientSession<'a, H, S> {
+        MyClientSession {
+            state: state,
+            sender: sender,
+            stream_id: None,
+        }
+    }
+}
+
+impl<'a, H, S> Session for MyClientSession<'a, H, S>
+    where
+        H : HttpClientResponseHandler,
+        S : SendFrame + 'a,
+{
+    fn new_data_chunk(&mut self, stream_id: StreamId, data: &[u8], conn: &mut HttpConnection) -> HttpResult<()> {
+        let mut stream = match self.state.get_stream_mut(stream_id) {
+            None => {
+                // TODO(mlalic): This can currently indicate two things:
+                //                 1) the stream was idle => PROTOCOL_ERROR
+                //                 2) the stream was closed => STREAM_CLOSED (stream error)
+                return Ok(());
+            }
+            Some(stream) => stream,
+        };
+        // Now let the stream handle the data chunk
+        stream.new_data_chunk(data);
+        self.stream_id = Some(stream_id);
+        Ok(())
+    }
+
+    fn new_headers<'n, 'v>(&mut self, stream_id: StreamId, headers: Vec<Header<'n, 'v>>, conn: &mut HttpConnection) -> HttpResult<()> {
+        let mut stream = match self.state.get_stream_mut(stream_id) {
+            None => {
+                // TODO(mlalic): This means that the server's header is not associated to any
+                //               request made by the client nor any server-initiated stream (pushed)
+                return Ok(());
+            }
+            Some(stream) => stream,
+        };
+        // Now let the stream handle the headers
+        stream.set_headers(headers);
+        self.stream_id = Some(stream_id);
+        Ok(())
+    }
+
+    fn end_of_stream(&mut self, stream_id: StreamId, conn: &mut HttpConnection) -> HttpResult<()> {
+        let mut stream = match self.state.get_stream_mut(stream_id) {
+            None => {
+                return Ok(());
+            }
+            Some(stream) => stream,
+        };
+        // Since this implies that the server has closed the stream (i.e. provided a response), we
+        // close the local end of the stream, as well as the remote one; there's no need to keep
+        // sending out the request body if the server's decided that it doesn't want to see it.
+        stream.close();
+        self.stream_id = Some(stream_id);
+        Ok(())
+    }
+
+    fn rst_stream(&mut self, stream_id: StreamId, error_code: ErrorCode, conn: &mut HttpConnection) -> HttpResult<()> {
+        self.state.get_stream_mut(stream_id).map(|stream| stream.on_rst_stream(error_code));
+        self.stream_id = Some(stream_id);
+        Ok(())
+    }
+
+    fn new_settings(&mut self, settings: Vec<HttpSetting>, conn: &mut HttpConnection) -> HttpResult<()> {
+        conn.sender(self.sender).send_settings_ack()
+    }
+
+    fn on_ping(&mut self, ping: &PingFrame, conn: &mut HttpConnection) -> HttpResult<()> {
+        conn.sender(self.sender).send_ping_ack(ping.opaque_data())
+    }
+
+    fn on_pong(&mut self, ping: &PingFrame, conn: &mut HttpConnection) -> HttpResult<()> {
+        Ok(())
     }
 }
 
@@ -378,30 +478,37 @@ impl<H : HttpClientResponseHandler> ReadLoop<H> {
             .boxed()
     }
 
-    fn process_streams_after_handle_next_frame(self) -> HttpFuture<Self> {
+    fn process_streams_after_handle_next_frame(self, stream_id: StreamId) -> HttpFuture<Self> {
         self.inner.with(|inner: &mut Inner<H>| {
-            inner.session_state.process_streams_after_handle_next_frame();
+            inner.session_state.process_streams_after_handle_next_frame(stream_id);
         });
 
         futures::finished(self).boxed()
     }
 
     fn process_raw_frame(self, raw_frame: RawFrame) -> HttpFuture<Self> {
-        self.inner.with(move |inner: &mut Inner<H>| {
+        let stream_id = self.inner.with(move |inner: &mut Inner<H>| {
             let mut send = VecSendFrame(Vec::new());
-            {
-                let mut session = ClientSession::new(&mut inner.session_state, &mut send);
+            let stream_id = {
+                let mut session = MyClientSession::new(&mut inner.session_state, &mut send);
                 inner.conn.handle_next_frame(&mut OnceReceiveFrame::new(raw_frame), &mut session)
                     .unwrap();
-            }
+                session.stream_id.take()
+            };
 
             if !send.0.is_empty() {
                 inner.call_tx.send(ToWriteMessage::FromRead(ReadToWriteMessage { buf: send.0 }))
                     .expect("read to write");
             }
+
+            stream_id
         });
 
-        self.process_streams_after_handle_next_frame()
+        if let Some(stream_id) = stream_id {
+            self.process_streams_after_handle_next_frame(stream_id)
+        } else {
+            futures::finished(self).boxed()
+        }
     }
 
     fn read_process_frame(self) -> HttpFuture<Self> {

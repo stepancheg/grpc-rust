@@ -25,6 +25,7 @@ impl<'a> fmt::Debug for HeaderDebug<'a> {
 
 
 
+/// work around https://github.com/mlalic/solicit/pull/33
 pub struct OnceReceiveFrame<'a> {
     raw_frame: RawFrame<'a>,
     used: bool,

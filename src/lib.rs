@@ -17,9 +17,10 @@ pub mod error;
 pub mod iter;
 pub mod rt;
 
-mod solicit_async;
 mod http_client;
+mod http_server;
 pub mod futures_misc;
 mod misc;
+mod solicit_async;
 mod solicit_misc;
 mod tokio_oneshot;
