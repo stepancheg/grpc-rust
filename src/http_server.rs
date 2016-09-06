@@ -82,9 +82,87 @@ struct GrpcHttpServerStream<F : HttpServerHandlerFactory> {
     request_handler: Option<F::RequestHandler>,
 }
 
+impl<F : HttpServerHandlerFactory> GrpcHttpServerStream<F> {
+    fn on_rst_stream(&mut self, _error_code: ErrorCode) {
+        self.close();
+    }
+
+    fn close(&mut self) {
+        self.set_state(StreamState::Closed);
+    }
+
+    fn close_local(&mut self) {
+        let next = match self.state() {
+            StreamState::HalfClosedRemote => StreamState::Closed,
+            _ => StreamState::HalfClosedLocal,
+        };
+        self.set_state(next);
+    }
+
+    fn close_remote(&mut self) {
+        let next = match self.state() {
+            StreamState::HalfClosedLocal => StreamState::Closed,
+            _ => StreamState::HalfClosedRemote,
+        };
+        self.set_state(next);
+    }
+
+    fn is_closed(&self) -> bool {
+        self.state() == StreamState::Closed
+    }
+
+    fn is_closed_local(&self) -> bool {
+        match self.state() {
+            StreamState::HalfClosedLocal | StreamState::Closed => true,
+            _ => false,
+        }
+    }
+
+    fn is_closed_remote(&self) -> bool {
+        match self.state() {
+            StreamState::HalfClosedRemote | StreamState::Closed => true,
+            _ => false,
+        }
+    }
+
+    fn new_data_chunk(&mut self, data: &[u8]) {
+    }
+
+    fn set_headers<'n, 'v>(&mut self, headers: Vec<Header<'n, 'v>>) {
+    }
+
+    fn set_state(&mut self, state: StreamState) {
+        self.state = state;
+    }
+
+    fn state(&self) -> StreamState {
+        self.state
+    }
+
+}
+
 struct GrpcHttpServerSessionState<F : HttpServerHandlerFactory> {
     streams: HashMap<StreamId, GrpcHttpServerStream<F>>,
-    next_stream_id: StreamId,
+}
+
+impl<F : HttpServerHandlerFactory> GrpcHttpServerSessionState<F> {
+    fn insert_stream(&mut self, stream_id: StreamId, stream: GrpcHttpServerStream<F>) -> &mut GrpcHttpServerStream<F> {
+        self.streams.insert(stream_id, stream);
+        self.streams.get_mut(&stream_id).unwrap()
+    }
+
+    fn get_stream_ref(&self, stream_id: StreamId) -> Option<&GrpcHttpServerStream<F>> {
+        self.streams.get(&stream_id)
+    }
+
+    fn get_stream_mut(&mut self, stream_id: StreamId) -> Option<&mut GrpcHttpServerStream<F>> {
+        self.streams.get_mut(&stream_id)
+    }
+
+    fn remove_stream(&mut self, stream_id: StreamId) -> Option<GrpcHttpServerStream<F>> {
+        self.streams.remove(&stream_id)
+    }
+
 }
 
 
@@ -124,32 +202,75 @@ impl<'a, F, S> Session for MyServerSession<'a, F, S>
         F : HttpServerHandlerFactory,
         S : SendFrame + 'a,
 {
-    fn new_data_chunk(&mut self, stream_id: StreamId, data: &[u8], conn: &mut HttpConnection) -> HttpResult<()> {
-        unimplemented!()
+    fn new_data_chunk(&mut self,
+                      stream_id: StreamId,
+                      data: &[u8],
+                      _: &mut HttpConnection)
+                      -> HttpResult<()> {
+        let mut stream = match self.state.get_stream_mut(stream_id) {
+            None => {
+                return Ok(());
+            }
+            Some(stream) => stream,
+        };
+        // Now let the stream handle the data chunk
+        stream.new_data_chunk(data);
+        Ok(())
     }
 
-    fn new_headers<'n, 'v>(&mut self, stream_id: StreamId, headers: Vec<Header<'n, 'v>>, conn: &mut HttpConnection) -> HttpResult<()> {
-        unimplemented!()
+    fn new_headers<'n, 'v>(&mut self,
+                           stream_id: StreamId,
+                           headers: Vec<Header<'n, 'v>>,
+                           _conn: &mut HttpConnection)
+                           -> HttpResult<()> {
+        if let Some(stream) = self.state.get_stream_mut(stream_id) {
+            // This'd correspond to having received trailers...
+            stream.set_headers(headers);
+            return Ok(());
+        };
+        // New stream initiated by the client
+        let mut stream = GrpcHttpServerStream {
+            state: StreamState::Open,
+            request_handler: unimplemented!(),
+        };
+        let stream = self.state.insert_stream(stream_id, stream);
+        stream.set_headers(headers);
+        Ok(())
     }
 
-    fn end_of_stream(&mut self, stream_id: StreamId, conn: &mut HttpConnection) -> HttpResult<()> {
-        unimplemented!()
+    fn end_of_stream(&mut self, stream_id: StreamId, _: &mut HttpConnection) -> HttpResult<()> {
+        let mut stream = match self.state.get_stream_mut(stream_id) {
+            None => {
+                return Ok(());
+            }
+            Some(stream) => stream,
+        };
+        stream.close_remote();
+        Ok(())
     }
 
-    fn rst_stream(&mut self, stream_id: StreamId, error_code: ErrorCode, conn: &mut HttpConnection) -> HttpResult<()> {
-        unimplemented!()
+    fn rst_stream(&mut self,
+                  stream_id: StreamId,
+                  error_code: ErrorCode,
+                  _: &mut HttpConnection)
+                  -> HttpResult<()> {
+        self.state.get_stream_mut(stream_id).map(|stream| stream.on_rst_stream(error_code));
+        Ok(())
     }
 
-    fn new_settings(&mut self, settings: Vec<HttpSetting>, conn: &mut HttpConnection) -> HttpResult<()> {
-        unimplemented!()
+    fn new_settings(&mut self,
+                    _settings: Vec<HttpSetting>,
+                    conn: &mut HttpConnection)
+                    -> HttpResult<()> {
+        conn.sender(self.sender).send_settings_ack()
     }
 
     fn on_ping(&mut self, ping: &PingFrame, conn: &mut HttpConnection) -> HttpResult<()> {
-        unimplemented!()
+        conn.sender(self.sender).send_ping_ack(ping.opaque_data())
     }
 
-    fn on_pong(&mut self, ping: &PingFrame, conn: &mut HttpConnection) -> HttpResult<()> {
-        unimplemented!()
+    fn on_pong(&mut self, _ping: &PingFrame, _conn: &mut HttpConnection) -> HttpResult<()> {
+        Ok(())
     }
 }
 
@@ -269,7 +390,6 @@ impl<F : HttpServerHandlerFactory> HttpServerConnectionAsync<F> {
                 conn: HttpConnection::new(HttpScheme::Http),
                 to_write_tx: to_write_tx.clone(),
                 session_state: GrpcHttpServerSessionState {
-                    next_stream_id: 2,
                     streams: HashMap::new(),
                 },
             });
