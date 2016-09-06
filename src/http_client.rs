@@ -79,13 +79,13 @@ enum LastChunk {
     Trailers(Vec<StaticHeader>),
 }
 
-struct GrpcHttp2ClientStream2<H : HttpClientResponseHandler> {
+struct GrpcHttpClientStream<H : HttpClientResponseHandler> {
     state: StreamState,
     response_state: ResponseState,
     response_handler: Option<H>,
 }
 
-impl<H : HttpClientResponseHandler> GrpcHttp2ClientStream2<H> {
+impl<H : HttpClientResponseHandler> GrpcHttpClientStream<H> {
 
     fn on_rst_stream(&mut self, _error_code: ErrorCode) {
         self.close();
@@ -155,12 +155,12 @@ impl<H : HttpClientResponseHandler> GrpcHttp2ClientStream2<H> {
     }
 }
 
-struct MySessionState<H : HttpClientResponseHandler> {
-    streams: HashMap<StreamId, GrpcHttp2ClientStream2<H>>,
+struct GrpcHttpClientSessionState<H : HttpClientResponseHandler> {
+    streams: HashMap<StreamId, GrpcHttpClientStream<H>>,
     next_stream_id: StreamId,
 }
 
-impl<H : HttpClientResponseHandler> MySessionState<H> {
+impl<H : HttpClientResponseHandler> GrpcHttpClientSessionState<H> {
     fn process_streams_after_handle_next_frame(&mut self, stream_id: StreamId, last_chunk: LastChunk) -> HttpFuture<()> {
         let remove;
         if let Some(ref mut s) = self.streams.get_mut(&stream_id) {
@@ -202,34 +202,25 @@ impl<H : HttpClientResponseHandler> MySessionState<H> {
     }
 }
 
-impl<H : HttpClientResponseHandler> MySessionState<H> {
+impl<H : HttpClientResponseHandler> GrpcHttpClientSessionState<H> {
 
-    fn insert_outgoing(&mut self, stream: GrpcHttp2ClientStream2<H>) -> StreamId {
+    fn insert_stream(&mut self, stream: GrpcHttpClientStream<H>) -> StreamId {
         let id = self.next_stream_id;
         self.streams.insert(id, stream);
         self.next_stream_id += 2;
         id
     }
 
-    fn insert_incoming(&mut self, stream_id: StreamId, stream: GrpcHttp2ClientStream2<H>) -> Result<(), ()> {
-        panic!("unused on the client");
-    }
-
-    fn get_stream_ref(&self, stream_id: StreamId) -> Option<&GrpcHttp2ClientStream2<H>> {
+    fn get_stream_ref(&self, stream_id: StreamId) -> Option<&GrpcHttpClientStream<H>> {
         self.streams.get(&stream_id)
     }
 
-    fn get_stream_mut(&mut self, stream_id: StreamId) -> Option<&mut GrpcHttp2ClientStream2<H>> {
+    fn get_stream_mut(&mut self, stream_id: StreamId) -> Option<&mut GrpcHttpClientStream<H>> {
         self.streams.get_mut(&stream_id)
     }
 
-    fn remove_stream(&mut self, stream_id: StreamId) -> Option<GrpcHttp2ClientStream2<H>> {
+    fn remove_stream(&mut self, stream_id: StreamId) -> Option<GrpcHttpClientStream<H>> {
         self.streams.remove(&stream_id)
-    }
-
-    /// Number of currently active streams
-    fn len(&self) -> usize {
-        self.streams.len()
     }
 }
 
@@ -238,7 +229,7 @@ struct MyClientSession<'a, H, S>
         H : HttpClientResponseHandler,
         S : SendFrame + 'a,
 {
-    state: &'a mut MySessionState<H>,
+    state: &'a mut GrpcHttpClientSessionState<H>,
     sender: &'a mut S,
     last: Option<(StreamId, LastChunk)>,
 }
@@ -248,7 +239,7 @@ impl<'a, H, S> MyClientSession<'a, H, S>
         H : HttpClientResponseHandler,
         S : SendFrame + 'a,
 {
-    fn new(state: &'a mut MySessionState<H>, sender: &'a mut S) -> MyClientSession<'a, H, S> {
+    fn new(state: &'a mut GrpcHttpClientSessionState<H>, sender: &'a mut S) -> MyClientSession<'a, H, S> {
         MyClientSession {
             state: state,
             sender: sender,
@@ -263,7 +254,7 @@ impl<'a, H, S> Session for MyClientSession<'a, H, S>
         S : SendFrame + 'a,
 {
     fn new_data_chunk(&mut self, stream_id: StreamId, data: &[u8], conn: &mut HttpConnection) -> HttpResult<()> {
-        let mut stream: &mut GrpcHttp2ClientStream2<H> = match self.state.get_stream_mut(stream_id) {
+        let mut stream: &mut GrpcHttpClientStream<H> = match self.state.get_stream_mut(stream_id) {
             None => {
                 // TODO(mlalic): This can currently indicate two things:
                 //                 1) the stream was idle => PROTOCOL_ERROR
@@ -278,7 +269,7 @@ impl<'a, H, S> Session for MyClientSession<'a, H, S>
     }
 
     fn new_headers<'n, 'v>(&mut self, stream_id: StreamId, headers: Vec<Header<'n, 'v>>, conn: &mut HttpConnection) -> HttpResult<()> {
-        let mut stream: &mut GrpcHttp2ClientStream2<H> = match self.state.get_stream_mut(stream_id) {
+        let mut stream: &mut GrpcHttpClientStream<H> = match self.state.get_stream_mut(stream_id) {
             None => {
                 // TODO(mlalic): This means that the server's header is not associated to any
                 //               request made by the client nor any server-initiated stream (pushed)
@@ -327,14 +318,14 @@ impl<'a, H, S> Session for MyClientSession<'a, H, S>
     }
 }
 
-struct Inner<H : HttpClientResponseHandler> {
+struct ClientInner<H : HttpClientResponseHandler> {
     conn: HttpConnection,
-    call_tx: tokio_core::Sender<ToWriteMessage<H>>,
-    session_state: MySessionState<H>,
+    to_write_tx: tokio_core::Sender<ClientToWriteMessage<H>>,
+    session_state: GrpcHttpClientSessionState<H>,
 }
 
 pub struct HttpClientConnectionAsync<H : HttpClientResponseHandler> {
-    call_tx: tokio_core::Sender<ToWriteMessage<H>>,
+    call_tx: tokio_core::Sender<ClientToWriteMessage<H>>,
 }
 
 struct StartRequestMessage<H : HttpClientResponseHandler> {
@@ -352,46 +343,46 @@ struct EndRequestMessage {
     stream_id: StreamId,
 }
 
-struct ReadToWriteMessage {
+struct ClientReadToWriteMessage {
     buf: Vec<u8>,
 }
 
-enum ToWriteMessage<H : HttpClientResponseHandler> {
+enum ClientToWriteMessage<H : HttpClientResponseHandler> {
     Start(StartRequestMessage<H>),
     BodyChunk(BodyChunkMessage),
     End(EndRequestMessage),
-    FromRead(ReadToWriteMessage),
+    FromRead(ClientReadToWriteMessage),
 }
 
-struct WriteLoop<H : HttpClientResponseHandler> {
+struct ClientWriteLoop<H : HttpClientResponseHandler> {
     write: TaskIoWrite<TcpStream>,
-    inner: TaskRcMut<Inner<H>>,
+    inner: TaskRcMut<ClientInner<H>>,
 }
 
-impl<H : HttpClientResponseHandler> WriteLoop<H> {
+impl<H : HttpClientResponseHandler> ClientWriteLoop<H> {
     fn write_all(self, buf: Vec<u8>) -> HttpFuture<Self> {
-        let WriteLoop { write, inner } = self;
+        let ClientWriteLoop { write, inner } = self;
 
         tokio_io::write_all(write, buf)
-            .map(move |(write, _)| WriteLoop { write: write, inner: inner })
+            .map(move |(write, _)| ClientWriteLoop { write: write, inner: inner })
             .map_err(HttpError::from)
             .boxed()
     }
 
-    fn process_from_read(self, message: ReadToWriteMessage) -> HttpFuture<Self> {
+    fn process_from_read(self, message: ClientReadToWriteMessage) -> HttpFuture<Self> {
         self.write_all(message.buf)
     }
 
     fn process_start(self, start: StartRequestMessage<H>) -> HttpFuture<Self> {
         let StartRequestMessage { headers, body, response_handler } = start;
-        let (buf, stream_id) = self.inner.with(move |inner: &mut Inner<H>| {
+        let (buf, stream_id) = self.inner.with(move |inner: &mut ClientInner<H>| {
 
-            let stream = GrpcHttp2ClientStream2 {
+            let stream = GrpcHttpClientStream {
                 state: StreamState::Open,
                 response_handler: Some(response_handler),
                 response_state: ResponseState::Init,
             };
-            let stream_id = inner.session_state.insert_outgoing(stream);
+            let stream_id = inner.session_state.insert_stream(stream);
 
             let send_buf = {
                 let mut send_buf = VecSendFrame(Vec::new());
@@ -405,10 +396,10 @@ impl<H : HttpClientResponseHandler> WriteLoop<H> {
         });
 
         self.write_all(buf)
-            .and_then(move |wl: WriteLoop<H>| {
-                body.fold(wl, move |wl: WriteLoop<H>, chunk| {
-                    wl.inner.with(|inner: &mut Inner<H>| {
-                        inner.call_tx.send(ToWriteMessage::BodyChunk(BodyChunkMessage {
+            .and_then(move |wl: ClientWriteLoop<H>| {
+                body.fold(wl, move |wl: ClientWriteLoop<H>, chunk| {
+                    wl.inner.with(|inner: &mut ClientInner<H>| {
+                        inner.to_write_tx.send(ClientToWriteMessage::BodyChunk(BodyChunkMessage {
                             stream_id: stream_id,
                             chunk: chunk,
                         }))
@@ -416,9 +407,9 @@ impl<H : HttpClientResponseHandler> WriteLoop<H> {
                     futures::finished::<_, HttpError>(wl)
                 })
             })
-            .and_then(move |wl: WriteLoop<H>| {
-                wl.inner.with(|inner: &mut Inner<H>| {
-                    inner.call_tx.send(ToWriteMessage::End(EndRequestMessage {
+            .and_then(move |wl: ClientWriteLoop<H>| {
+                wl.inner.with(|inner: &mut ClientInner<H>| {
+                    inner.to_write_tx.send(ClientToWriteMessage::End(EndRequestMessage {
                         stream_id: stream_id,
                     }));
                 });
@@ -432,7 +423,7 @@ impl<H : HttpClientResponseHandler> WriteLoop<H> {
 
         let BodyChunkMessage { stream_id, chunk } = body_chunk;
 
-        let buf = self.inner.with(move |inner: &mut Inner<H>| {
+        let buf = self.inner.with(move |inner: &mut ClientInner<H>| {
             {
                 let stream = inner.session_state.get_stream_mut(stream_id);
                 // TODO: check stream state
@@ -462,7 +453,7 @@ impl<H : HttpClientResponseHandler> WriteLoop<H> {
         println!("client: process request end");
         let EndRequestMessage { stream_id } = end;
 
-        let buf = self.inner.with(move |inner: &mut Inner<H>| {
+        let buf = self.inner.with(move |inner: &mut ClientInner<H>| {
             let mut send_buf = VecSendFrame(Vec::new());
 
             let chunk = Vec::new();
@@ -476,19 +467,19 @@ impl<H : HttpClientResponseHandler> WriteLoop<H> {
         self.write_all(buf)
     }
 
-    fn process_message(self, message: ToWriteMessage<H>) -> HttpFuture<Self> {
+    fn process_message(self, message: ClientToWriteMessage<H>) -> HttpFuture<Self> {
         match message {
-            ToWriteMessage::Start(start) => self.process_start(start),
-            ToWriteMessage::BodyChunk(body_chunk) => self.process_body_chunk(body_chunk),
-            ToWriteMessage::End(end) => self.process_end(end),
-            ToWriteMessage::FromRead(from_read) => self.process_from_read(from_read),
+            ClientToWriteMessage::Start(start) => self.process_start(start),
+            ClientToWriteMessage::BodyChunk(body_chunk) => self.process_body_chunk(body_chunk),
+            ClientToWriteMessage::End(end) => self.process_end(end),
+            ClientToWriteMessage::FromRead(from_read) => self.process_from_read(from_read),
         }
     }
 
-    fn run(self, requests: HttpStream<ToWriteMessage<H>>) -> HttpFuture<()> {
+    fn run(self, requests: HttpStream<ClientToWriteMessage<H>>) -> HttpFuture<()> {
         let requests = requests.map_err(HttpError::from);
         requests
-            .fold(self, move |wl, message: ToWriteMessage<H>| {
+            .fold(self, move |wl, message: ClientToWriteMessage<H>| {
                 wl.process_message(message)
             })
             .map(|_| ())
@@ -496,22 +487,22 @@ impl<H : HttpClientResponseHandler> WriteLoop<H> {
     }
 }
 
-struct ReadLoop<H : HttpClientResponseHandler> {
+struct ClientReadLoop<H : HttpClientResponseHandler> {
     read: TaskIoRead<TcpStream>,
-    inner: TaskRcMut<Inner<H>>,
+    inner: TaskRcMut<ClientInner<H>>,
 }
 
-impl<H : HttpClientResponseHandler> ReadLoop<H> {
+impl<H : HttpClientResponseHandler> ClientReadLoop<H> {
     fn recv_raw_frame(self) -> HttpFuture<(Self, RawFrame<'static>)> {
-        let ReadLoop { read, inner } = self;
+        let ClientReadLoop { read, inner } = self;
         recv_raw_frame(read)
-            .map(|(read, frame)| (ReadLoop { read: read, inner: inner}, frame))
+            .map(|(read, frame)| (ClientReadLoop { read: read, inner: inner}, frame))
             .map_err(HttpError::from)
             .boxed()
     }
 
     fn process_streams_after_handle_next_frame(self, stream_id: StreamId, last_chunk: LastChunk) -> HttpFuture<Self> {
-        let future = self.inner.with(|inner: &mut Inner<H>| {
+        let future = self.inner.with(|inner: &mut ClientInner<H>| {
             inner.session_state.process_streams_after_handle_next_frame(stream_id, last_chunk)
         });
 
@@ -519,7 +510,7 @@ impl<H : HttpClientResponseHandler> ReadLoop<H> {
     }
 
     fn process_raw_frame(self, raw_frame: RawFrame) -> HttpFuture<Self> {
-        let last = self.inner.with(move |inner: &mut Inner<H>| {
+        let last = self.inner.with(move |inner: &mut ClientInner<H>| {
             let mut send = VecSendFrame(Vec::new());
             let last = {
                 let mut session = MyClientSession::new(&mut inner.session_state, &mut send);
@@ -529,7 +520,7 @@ impl<H : HttpClientResponseHandler> ReadLoop<H> {
             };
 
             if !send.0.is_empty() {
-                inner.call_tx.send(ToWriteMessage::FromRead(ReadToWriteMessage { buf: send.0 }))
+                inner.to_write_tx.send(ClientToWriteMessage::FromRead(ClientReadToWriteMessage { buf: send.0 }))
                     .expect("read to write");
             }
 
@@ -562,30 +553,30 @@ impl<H : HttpClientResponseHandler> ReadLoop<H> {
 
 impl<H : HttpClientResponseHandler> HttpClientConnectionAsync<H> {
     pub fn new(lh: LoopHandle, addr: &SocketAddr) -> (Self, HttpFuture<()>) {
-        let (call_tx, call_rx) = lh.clone().channel();
+        let (to_write_tx, to_write_rx) = lh.clone().channel();
 
-        let call_rx = future_flatten_to_stream(call_rx).map_err(HttpError::from).boxed();
+        let to_write_rx = future_flatten_to_stream(to_write_rx).map_err(HttpError::from).boxed();
 
         let c = HttpClientConnectionAsync {
-            call_tx: call_tx.clone(),
+            call_tx: to_write_tx.clone(),
         };
 
         let handshake = connect_and_handshake(lh, addr);
         let future = handshake.and_then(move |conn| {
             let (read, write) = TaskIo::new(conn).split();
 
-            let inner = TaskRcMut::new(Inner {
+            let inner = TaskRcMut::new(ClientInner {
                 conn: HttpConnection::new(HttpScheme::Http),
-                call_tx: call_tx.clone(),
-                session_state: MySessionState {
+                to_write_tx: to_write_tx.clone(),
+                session_state: GrpcHttpClientSessionState {
                     next_stream_id: 1,
                     streams: HashMap::new(),
                 }
             });
 
             let write_inner = inner.clone();
-            let run_write = WriteLoop { write: write, inner: write_inner }.run(call_rx);
-            let run_read = ReadLoop { read: read, inner: inner.clone() }.run();
+            let run_write = ClientWriteLoop { write: write, inner: write_inner }.run(to_write_rx);
+            let run_read = ClientReadLoop { read: read, inner: inner.clone() }.run();
 
             run_write.join(run_read).map(|_| ())
         }).boxed();
@@ -600,7 +591,7 @@ impl<H : HttpClientResponseHandler> HttpClientConnectionAsync<H> {
         response_handler: H)
             -> HttpFuture<()>
     {
-        self.call_tx.send(ToWriteMessage::Start(StartRequestMessage {
+        self.call_tx.send(ClientToWriteMessage::Start(StartRequestMessage {
             headers: headers,
             body: body,
             response_handler: response_handler,
