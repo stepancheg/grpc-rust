@@ -53,25 +53,26 @@ use solicit_async::*;
 use solicit_misc::*;
 
 
-enum AfterHeaders {
+pub enum AfterHeaders {
     DataChunk(Vec<u8>, HttpFuture<AfterHeaders>),
     Trailers(Vec<StaticHeader>),
 }
 
-struct ResponseHeaders {
-    headers: Vec<StaticHeader>,
-    after: HttpFuture<AfterHeaders>,
+pub struct ResponseHeaders {
+    pub headers: Vec<StaticHeader>,
+    pub after: HttpFuture<AfterHeaders>,
 }
 
 
-trait HttpServerHandler: Send + 'static {
-    fn headers(&mut self) -> HttpFuture<()>;
-    fn data_chunk(&mut self) -> HttpFuture<()>;
-    fn trailers(&mut self) -> HttpFuture<()>;
-    fn end(&mut self) -> HttpFuture<()>;
+// TODO: async
+pub trait HttpServerHandler: Send + 'static {
+    fn headers(&mut self, headers: Vec<StaticHeader>) -> HttpResult<()>;
+    fn data_frame(&mut self, data: &[u8]) -> HttpResult<()>;
+    fn trailers(&mut self) -> HttpResult<()>;
+    fn end(&mut self) -> HttpResult<()>;
 }
 
-trait HttpServerHandlerFactory: Send + 'static {
+pub trait HttpServerHandlerFactory: Send + 'static {
     type RequestHandler : HttpServerHandler;
 
     fn new_request(&mut self) -> (Self::RequestHandler, HttpFuture<ResponseHeaders>);
@@ -126,9 +127,12 @@ impl<F : HttpServerHandlerFactory> GrpcHttpServerStream<F> {
     }
 
     fn new_data_chunk(&mut self, data: &[u8]) {
+        self.request_handler.as_mut().unwrap().data_frame(data).expect("xxx");
     }
 
     fn set_headers<'n, 'v>(&mut self, headers: Vec<Header<'n, 'v>>) {
+        let headers = headers.into_iter().map(|h| Header::new(h.name().to_owned(), h.value().to_owned())).collect();
+        self.request_handler.as_mut().unwrap().headers(headers).expect("xxx");
     }
 
     fn set_state(&mut self, state: StreamState) {
@@ -142,6 +146,7 @@ impl<F : HttpServerHandlerFactory> GrpcHttpServerStream<F> {
 }
 
 struct GrpcHttpServerSessionState<F : HttpServerHandlerFactory> {
+    factory: F,
     streams: HashMap<StreamId, GrpcHttpServerStream<F>>,
 }
 
@@ -228,10 +233,14 @@ impl<'a, F, S> Session for MyServerSession<'a, F, S>
             stream.set_headers(headers);
             return Ok(());
         };
+
+        let (handler, response) = self.state.factory.new_request();
+        // TODO: send response to writer
+
         // New stream initiated by the client
         let mut stream = GrpcHttpServerStream {
             state: StreamState::Open,
-            request_handler: unimplemented!(),
+            request_handler: Some(handler),
         };
         let stream = self.state.insert_stream(stream_id, stream);
         stream.set_headers(headers);
@@ -278,7 +287,6 @@ impl<'a, F, S> Session for MyServerSession<'a, F, S>
 
 
 struct ServerInner<F : HttpServerHandlerFactory> {
-    factory: F,
     conn: HttpConnection,
     session_state: GrpcHttpServerSessionState<F>,
     to_write_tx: tokio_core::Sender<ServerToWriteMessage<F>>,
@@ -370,12 +378,12 @@ impl<F : HttpServerHandlerFactory> ServerWriteLoop<F> {
 
 
 
-struct HttpServerConnectionAsync<F : HttpServerHandlerFactory> {
+pub struct HttpServerConnectionAsync<F : HttpServerHandlerFactory> {
     factory: F,
 }
 
 impl<F : HttpServerHandlerFactory> HttpServerConnectionAsync<F> {
-    fn new(lh: LoopHandle, socket: TcpStream, factory : F) -> HttpFuture<()> {
+    pub fn new(lh: LoopHandle, socket: TcpStream, factory : F) -> HttpFuture<()> {
         let (to_write_tx, to_write_rx) = lh.clone().channel();
 
         let to_write_rx = future_flatten_to_stream(to_write_rx).map_err(HttpError::from).boxed();
@@ -386,11 +394,11 @@ impl<F : HttpServerHandlerFactory> HttpServerConnectionAsync<F> {
             let (read, write) = TaskIo::new(socket).split();
 
             let inner = TaskRcMut::new(ServerInner {
-                factory: factory,
                 conn: HttpConnection::new(HttpScheme::Http),
                 to_write_tx: to_write_tx.clone(),
                 session_state: GrpcHttpServerSessionState {
                     streams: HashMap::new(),
+                    factory: factory,
                 },
             });
 

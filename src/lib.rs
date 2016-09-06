@@ -25,3 +25,10 @@ mod misc;
 mod solicit_async;
 mod solicit_misc;
 mod tokio_oneshot;
+
+pub mod for_test {
+    pub use http_server::*;
+    pub use http_client::*;
+    pub use solicit_async::*;
+    pub use futures_misc::*;
+}
