@@ -254,6 +254,7 @@ impl<'a, H, S> Session for MyClientSession<'a, H, S>
         S : SendFrame + 'a,
 {
     fn new_data_chunk(&mut self, stream_id: StreamId, data: &[u8], conn: &mut HttpConnection) -> HttpResult<()> {
+        println!("client: new_data_chunk: {}", data.len());
         let mut stream: &mut GrpcHttpClientStream<H> = match self.state.get_stream_mut(stream_id) {
             None => {
                 // TODO(mlalic): This can currently indicate two things:
@@ -269,6 +270,7 @@ impl<'a, H, S> Session for MyClientSession<'a, H, S>
     }
 
     fn new_headers<'n, 'v>(&mut self, stream_id: StreamId, headers: Vec<Header<'n, 'v>>, conn: &mut HttpConnection) -> HttpResult<()> {
+        println!("client: new_headers: {}", headers.len());
         let mut stream: &mut GrpcHttpClientStream<H> = match self.state.get_stream_mut(stream_id) {
             None => {
                 // TODO(mlalic): This means that the server's header is not associated to any
@@ -384,15 +386,9 @@ impl<H : HttpClientResponseHandler> ClientWriteLoop<H> {
             };
             let stream_id = inner.session_state.insert_stream(stream);
 
-            let send_buf = {
-                let mut send_buf = VecSendFrame(Vec::new());
+            let send_buf = inner.conn.send_headers_to_vec(stream_id, headers, EndStream::No).unwrap();
 
-                inner.conn.sender(&mut send_buf).send_headers(headers, stream_id, EndStream::No).unwrap();
-
-                (send_buf.0, stream_id)
-            };
-
-            send_buf
+            (send_buf, stream_id)
         });
 
         self.write_all(buf)
@@ -429,21 +425,7 @@ impl<H : HttpClientResponseHandler> ClientWriteLoop<H> {
                 // TODO: check stream state
             }
 
-            let mut send_buf = VecSendFrame(Vec::new());
-
-            let mut pos = 0;
-            const MAX_CHUNK_SIZE: usize = 8 * 1024;
-            while pos < chunk.len() {
-                let end = cmp::min(chunk.len(), pos + MAX_CHUNK_SIZE);
-
-                let data_chunk = DataChunk::new_borrowed(&chunk[pos..end], stream_id, EndStream::No);
-
-                inner.conn.sender(&mut send_buf).send_data(data_chunk).unwrap();
-
-                pos = end;
-            }
-
-            send_buf.0
+            inner.conn.send_data_frames_to_vec(stream_id, &chunk, EndStream::No).unwrap()
         });
 
         self.write_all(buf)
@@ -454,14 +436,7 @@ impl<H : HttpClientResponseHandler> ClientWriteLoop<H> {
         let EndRequestMessage { stream_id } = end;
 
         let buf = self.inner.with(move |inner: &mut ClientInner<H>| {
-            let mut send_buf = VecSendFrame(Vec::new());
-
-            let chunk = Vec::new();
-            let data_chunk = DataChunk::new_borrowed(&chunk[..], stream_id, EndStream::Yes);
-
-            inner.conn.sender(&mut send_buf).send_data(data_chunk).unwrap();
-
-            send_buf.0
+            inner.conn.send_end_of_stream_to_vec(stream_id).unwrap()
         });
 
         self.write_all(buf)
@@ -510,6 +485,7 @@ impl<H : HttpClientResponseHandler> ClientReadLoop<H> {
     }
 
     fn process_raw_frame(self, raw_frame: RawFrame) -> HttpFuture<Self> {
+        println!("client: process_raw_frame");
         let last = self.inner.with(move |inner: &mut ClientInner<H>| {
             let mut send = VecSendFrame(Vec::new());
             let last = {
@@ -563,6 +539,7 @@ impl<H : HttpClientResponseHandler> HttpClientConnectionAsync<H> {
 
         let handshake = connect_and_handshake(lh, addr);
         let future = handshake.and_then(move |conn| {
+            println!("client: handshake done");
             let (read, write) = TaskIo::new(conn).split();
 
             let inner = TaskRcMut::new(ClientInner {

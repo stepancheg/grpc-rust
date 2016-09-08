@@ -51,6 +51,7 @@ use futures_misc::*;
 
 use solicit_async::*;
 use solicit_misc::*;
+use misc::*;
 
 
 pub enum AfterHeaders {
@@ -148,6 +149,8 @@ impl<F : HttpServerHandlerFactory> GrpcHttpServerStream<F> {
 struct GrpcHttpServerSessionState<F : HttpServerHandlerFactory> {
     factory: F,
     streams: HashMap<StreamId, GrpcHttpServerStream<F>>,
+    to_write_tx: tokio_core::Sender<ServerToWriteMessage<F>>,
+    loop_handle: LoopHandle,
 }
 
 impl<F : HttpServerHandlerFactory> GrpcHttpServerSessionState<F> {
@@ -235,7 +238,12 @@ impl<'a, F, S> Session for MyServerSession<'a, F, S>
         };
 
         let (handler, response) = self.state.factory.new_request();
-        // TODO: send response to writer
+
+        let to_write_tx = self.state.to_write_tx.clone();
+        self.state.loop_handle.spawn(move |_pin| response.and_then(move |response| {
+            to_write_tx.send(ServerToWriteMessage::WriteHeaders(stream_id, response)).unwrap();
+            Ok(())
+        }).map_err(|_| ()));
 
         // New stream initiated by the client
         let mut stream = GrpcHttpServerStream {
@@ -289,7 +297,6 @@ impl<'a, F, S> Session for MyServerSession<'a, F, S>
 struct ServerInner<F : HttpServerHandlerFactory> {
     conn: HttpConnection,
     session_state: GrpcHttpServerSessionState<F>,
-    to_write_tx: tokio_core::Sender<ServerToWriteMessage<F>>,
 }
 
 struct ServerReadLoop<F>
@@ -307,6 +314,8 @@ struct ServerReadToWriteMessage {
 enum ServerToWriteMessage<F : HttpServerHandlerFactory> {
     _Dummy(F),
     FromRead(ServerReadToWriteMessage),
+    WriteHeaders(StreamId, ResponseHeaders),
+    WriteDataFrame(StreamId, AfterHeaders),
 }
 
 
@@ -336,7 +345,7 @@ impl<F : HttpServerHandlerFactory> ServerReadLoop<F> {
             };
 
             if !send.0.is_empty() {
-                inner.to_write_tx.send(ServerToWriteMessage::FromRead(ServerReadToWriteMessage { buf: send.0 }))
+                inner.session_state.to_write_tx.send(ServerToWriteMessage::FromRead(ServerReadToWriteMessage { buf: send.0 }))
                     .expect("read to write");
             }
 
@@ -370,8 +379,96 @@ struct ServerWriteLoop<F>
 }
 
 impl<F : HttpServerHandlerFactory> ServerWriteLoop<F> {
+    fn loop_handle(&self) -> LoopHandle {
+        self.inner.with(move |inner: &mut ServerInner<F>| inner.session_state.loop_handle.clone())
+    }
+
+    fn to_write_tx(&self) -> tokio_core::Sender<ServerToWriteMessage<F>> {
+        self.inner.with(move |inner: &mut ServerInner<F>| inner.session_state.to_write_tx.clone())
+    }
+
+    fn write_all(self, buf: Vec<u8>) -> HttpFuture<Self> {
+        let ServerWriteLoop { write, inner } = self;
+
+        println!("server: write_all: {:?}", BsDebug(&buf));
+        tokio_io::write_all(write, buf)
+            .map(move |(write, _)| ServerWriteLoop { write: write, inner: inner })
+            .map_err(HttpError::from)
+            .boxed()
+    }
+
+    fn process_from_read(self, message: ServerReadToWriteMessage) -> HttpFuture<Self> {
+        self.write_all(message.buf)
+    }
+
+    fn process_write_headers(self, stream_id: StreamId, response_headers: ResponseHeaders) -> HttpFuture<Self> {
+        println!("server: write headers");
+
+        let ResponseHeaders { headers, after } = response_headers;
+
+        let send_buf = self.inner.with(move |inner: &mut ServerInner<F>| {
+            let mut send_buf = VecSendFrame(Vec::new());
+
+            inner.conn.send_headers_to_vec(stream_id, headers, EndStream::No).unwrap()
+        });
+
+        self.write_all(send_buf)
+            .and_then(move |wl: Self| {
+                let to_write_tx = wl.to_write_tx();
+                after.and_then(move |after_headers| {
+                    to_write_tx.send(ServerToWriteMessage::WriteDataFrame(stream_id, after_headers)).unwrap();
+                    Ok(())
+                });
+                Ok(wl)
+            })
+            .boxed()
+    }
+
+    fn process_data_chunk(self, stream_id: StreamId, frame: Vec<u8>, future: HttpFuture<AfterHeaders>) -> HttpFuture<Self> {
+
+        /*
+        let send_buf = self.inner.with(move |inner: &mut ServerInner<F>| {
+            let mut send_buf = VecSendFrame(Vec::new());
+
+            inner.conn.sender(&mut send_buf).send_data(headers, stream_id, EndStream::No).unwrap();
+
+            send_buf.0
+        });
+        */
+
+        // TODO
+        futures::finished(self).boxed()
+    }
+
+    fn process_trailers(self, stream_id: StreamId, trailers: Vec<StaticHeader>) -> HttpFuture<Self> {
+        // TODO
+        futures::finished(self).boxed()
+    }
+
+    fn process_after_headers(self, stream_id: StreamId, after_headers: AfterHeaders) -> HttpFuture<Self> {
+        match after_headers {
+            AfterHeaders::DataChunk(buf, future_after_headers) => self.process_data_chunk(stream_id, buf, future_after_headers),
+            AfterHeaders::Trailers(trailers) => self.process_trailers(stream_id, trailers),
+        }
+    }
+
+    fn process_message(self, message: ServerToWriteMessage<F>) -> HttpFuture<Self> {
+        match message {
+            ServerToWriteMessage::FromRead(from_read) => self.process_from_read(from_read),
+            ServerToWriteMessage::WriteHeaders(stream_id, headers) => self.process_write_headers(stream_id, headers),
+            ServerToWriteMessage::WriteDataFrame(stream_id, after_headers) => self.process_after_headers(stream_id, after_headers),
+            ServerToWriteMessage::_Dummy(..) => panic!(),
+        }
+    }
+
     fn run(self, requests: HttpStream<ServerToWriteMessage<F>>) -> HttpFuture<()> {
-        futures::finished(()).boxed()
+        let requests = requests.map_err(HttpError::from);
+        requests
+            .fold(self, move |wl, message: ServerToWriteMessage<F>| {
+                wl.process_message(message)
+            })
+            .map(|_| ())
+            .boxed()
     }
 }
 
@@ -395,10 +492,11 @@ impl<F : HttpServerHandlerFactory> HttpServerConnectionAsync<F> {
 
             let inner = TaskRcMut::new(ServerInner {
                 conn: HttpConnection::new(HttpScheme::Http),
-                to_write_tx: to_write_tx.clone(),
                 session_state: GrpcHttpServerSessionState {
                     streams: HashMap::new(),
                     factory: factory,
+                    to_write_tx: to_write_tx.clone(),
+                    loop_handle: lh,
                 },
             });
 
@@ -408,6 +506,6 @@ impl<F : HttpServerHandlerFactory> HttpServerConnectionAsync<F> {
             run_write.join(run_read).map(|_| ())
         });
 
-        run.boxed()
+        run.then(|x| { println!("server: end"); x }).boxed()
     }
 }

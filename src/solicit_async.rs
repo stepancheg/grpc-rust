@@ -53,9 +53,11 @@ pub fn recv_raw_frame<R : Read + Send + 'static>(read: R) -> HttpFuture<(R, RawF
         full_frame.vec.resize(total_len, 0);
         full_frame.pos = 9;
 
+        println!("about to read_exact {}", full_frame.as_mut().len());
         read_exact(read, full_frame)
     });
     let frame = frame_buf.map(|(read, frame_buf)| {
+        println!("after read_exact");
         (read, RawFrame::from(frame_buf.vec))
     });
     frame

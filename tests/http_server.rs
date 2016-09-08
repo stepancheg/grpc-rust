@@ -42,22 +42,22 @@ fn test() {
 
         impl HttpServerHandler for H {
             fn headers(&mut self, headers: Vec<StaticHeader>) -> HttpResult<()> {
-                println!("headers");
+                println!("test: server got: headers: {}", headers.len());
                 Ok(())
             }
 
             fn data_frame(&mut self, data: &[u8]) -> HttpResult<()> {
-                println!("data frame: {}", data.len());
+                println!("test: server got: data frame: {}", data.len());
                 Ok(())
             }
 
             fn trailers(&mut self) -> HttpResult<()> {
-                println!("trailers");
+                println!("test: server got: trailers");
                 Ok(())
             }
 
             fn end(&mut self) -> HttpResult<()> {
-                println!("end");
+                println!("test: server got: end");
                 Ok(())
             }
         }
@@ -93,7 +93,8 @@ fn test() {
 
     impl HttpClientResponseHandler for R {
         fn headers(&mut self, headers: Vec<StaticHeader>) -> bool {
-            unimplemented!()
+            println!("test: client: response headers");
+            true
         }
 
         fn data_frame(&mut self, chunk: Vec<u8>) -> bool {
@@ -111,7 +112,9 @@ fn test() {
 
     let resp = client.start_request(Vec::new(), stream_once((&b"abcd"[..]).to_owned()), R {});
 
-    //client_lp.run(future).expect("client run");
-
-    //resp.wait().unwrap();
+//    client_lp.run(future).expect("client run");
+//
+//    println!("test: client loop complete");
+//
+//    resp.wait().unwrap();
 }
