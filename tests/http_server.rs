@@ -98,23 +98,25 @@ fn test() {
         }
 
         fn data_frame(&mut self, chunk: Vec<u8>) -> bool {
-            unimplemented!()
+            println!("test: client: response data frame: {}", chunk.len());
+            true
         }
 
         fn trailers(&mut self, headers: Vec<StaticHeader>) -> bool {
-            unimplemented!()
+            println!("test: client: response trailers: {}", headers.len());
+            true
         }
 
         fn end(&mut self) {
-            unimplemented!()
+            println!("test: client: end");
         }
     }
 
     let resp = client.start_request(Vec::new(), stream_once((&b"abcd"[..]).to_owned()), R {});
 
-//    client_lp.run(future).expect("client run");
-//
-//    println!("test: client loop complete");
-//
-//    resp.wait().unwrap();
+    client_lp.run(future).expect("client run");
+
+    println!("test: client loop complete");
+
+    resp.wait().unwrap();
 }
