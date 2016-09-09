@@ -25,6 +25,7 @@ mod misc;
 mod solicit_async;
 mod solicit_misc;
 mod tokio_oneshot;
+mod assert_types;
 
 pub mod for_test {
     pub use http_server::*;

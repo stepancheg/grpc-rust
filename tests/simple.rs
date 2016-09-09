@@ -131,7 +131,7 @@ impl TesterServerStreaming {
 
 #[test]
 fn unary() {
-    let tester = TesterUnary::new(|s| Ok(s).into_future().boxed());
+    let tester = TesterUnary::new(|s| Box::new(Ok(s).into_future()));
 
     assert_eq!("aa", tester.call("aa").wait().unwrap());
 }
@@ -149,7 +149,7 @@ fn server_is_not_running() {
 
 #[test]
 fn error_in_handler() {
-    let tester = TesterUnary::new(|_| Err(GrpcError::Other("my error")).into_future().boxed());
+    let tester = TesterUnary::new(|_| Box::new(Err(GrpcError::Other("my error")).into_future()));
 
     tester.call_expect_grpc_error_contain("aa", "my error");
 }

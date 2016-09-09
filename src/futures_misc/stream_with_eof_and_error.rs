@@ -46,7 +46,7 @@ pub struct StreamWithEofAndError<S> {
 }
 
 impl<T, E, S> Stream for StreamWithEofAndError<S>
-    where S : Stream<Item=ResultOrEof<T, E>, Error=E>
+    where S : Stream<Item=ResultOrEof<T, E>, Error=E> + Send
 {
     type Item = T;
     type Error = E;

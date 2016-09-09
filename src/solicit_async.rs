@@ -5,14 +5,12 @@ use std::net::SocketAddr;
 
 use futures::done;
 use futures::Future;
-use futures::BoxFuture;
-
-use futures::stream::BoxStream;
+use futures::stream::Stream;
 
 use tokio_core::io::read_exact;
 use tokio_core::io::write_all;
-use tokio_core::TcpStream;
-use tokio_core::LoopHandle;
+use tokio_core::net::TcpStream;
+use tokio_core::reactor;
 
 use solicit::http::HttpError;
 use solicit::http::frame::RawFrame;
@@ -23,8 +21,11 @@ use solicit::http::frame::settings::HttpSetting;
 use solicit::http::connection::HttpFrame;
 
 
-pub type HttpFuture<T> = BoxFuture<T, HttpError>;
-pub type HttpStream<T> = BoxStream<T, HttpError>;
+pub type HttpFuture<T> = Box<Future<Item=T, Error=HttpError>>;
+pub type HttpStream<T> = Box<Stream<Item=T, Error=HttpError>>;
+
+pub type HttpFutureSend<T> = Box<Future<Item=T, Error=HttpError> + Send>;
+pub type HttpStreamSend<T> = Box<Stream<Item=T, Error=HttpError> + Send>;
 
 
 struct VecWithPos<T> {
@@ -60,9 +61,8 @@ pub fn recv_raw_frame<R : Read + Send + 'static>(read: R) -> HttpFuture<(R, RawF
         println!("after read_exact");
         (read, RawFrame::from(frame_buf.vec))
     });
-    frame
-        .map_err(|e| e.into())
-        .boxed()
+    Box::new(frame
+        .map_err(|e| e.into()))
 }
 
 #[allow(dead_code)]
@@ -72,7 +72,7 @@ pub fn recv_raw_frame_stream<R : Read + Send + 'static>(_read: R) -> HttpStream<
 }
 
 pub fn recv_settings_frame<R : Read + Send + 'static>(read: R) -> HttpFuture<(R, SettingsFrame)> {
-    recv_raw_frame(read)
+    Box::new(recv_raw_frame(read)
         .then(|result| {
             result.and_then(|(read, raw_frame)| {
                 match HttpFrame::from_raw(&raw_frame) {
@@ -81,26 +81,23 @@ pub fn recv_settings_frame<R : Read + Send + 'static>(read: R) -> HttpFuture<(R,
                     Err(e) => Err(e),
                 }
             })
-        })
-        .boxed()
+        }))
 }
 
 #[allow(dead_code)]
 pub fn send_raw_frame<W : Write + Send + 'static>(write: W, frame: RawFrame<'static>) -> HttpFuture<W> {
     let bytes = frame.serialize();
-    write_all(write, bytes)
+    Box::new(write_all(write, bytes)
         .map(|(w, _)| w)
-        .map_err(|e| e.into())
-        .boxed()
+        .map_err(|e| e.into()))
 }
 
 pub fn send_frame<W : Write + Send + 'static, F : FrameIR>(write: W, frame: F) -> HttpFuture<W> {
     let mut buf = io::Cursor::new(Vec::with_capacity(16));
     frame.serialize_into(&mut buf).unwrap();
-    write_all(write, buf.into_inner())
+    Box::new(write_all(write, buf.into_inner())
         .map(|(w, _)| w)
-        .map_err(|e| e.into())
-        .boxed()
+        .map_err(|e| e.into()))
 }
 
 static PREFACE: &'static [u8] = b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
@@ -125,7 +122,7 @@ pub fn client_handshake(conn: TcpStream) -> HttpFuture<TcpStream> {
 
     let done = recv_settings;
 
-    done.boxed()
+    Box::new(done)
 }
 
 pub fn server_handshake(conn: TcpStream) -> HttpFuture<TcpStream> {
@@ -149,14 +146,14 @@ pub fn server_handshake(conn: TcpStream) -> HttpFuture<TcpStream> {
         send_frame(conn, SettingsFrame::new_ack())
     });
 
-    send_settings.boxed()
+    Box::new(send_settings)
 }
 
-pub fn connect_and_handshake(lh: LoopHandle, addr: &SocketAddr) -> HttpFuture<TcpStream> {
-    let connect = lh.tcp_connect(&addr)
+pub fn connect_and_handshake(lh: &reactor::Handle, addr: &SocketAddr) -> HttpFuture<TcpStream> {
+    let connect = TcpStream::connect(&addr, lh)
         .map_err(|e| e.into());
 
     let handshake = connect.and_then(client_handshake);
 
-    handshake.boxed()
+    Box::new(handshake)
 }

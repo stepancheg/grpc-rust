@@ -1,14 +1,13 @@
 use std::thread;
 
 use futures::stream::Stream;
-use futures::stream::BoxStream;
 
 use grpc::futures_misc::channel_sync_sender;
 
 /// Spawn a thread with a function which returns an iterator.
 /// Resulting iterator elements will be emitted as Stream.
 pub fn stream_thread_spawn_iter<I, F, E>(f: F)
-    -> BoxStream<I::Item, E>
+    -> Box<Stream<Item=I::Item, Error=E>>
         where
             I : Iterator,
             F : FnOnce() -> I,
@@ -23,5 +22,5 @@ pub fn stream_thread_spawn_iter<I, F, E>(f: F)
         }
     });
 
-    receiver.boxed()
+    Box::new(receiver)
 }

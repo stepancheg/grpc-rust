@@ -39,12 +39,12 @@ use futures::Future;
 use futures::stream::Stream;
 
 use tokio_core;
-use tokio_core::TcpStream;
+use tokio_core::net::TcpStream;
 use tokio_core::io as tokio_io;
-use tokio_core::io::TaskIo;
-use tokio_core::io::TaskIoRead;
-use tokio_core::io::TaskIoWrite;
-use tokio_core::LoopHandle;
+use tokio_core::io::Io;
+use tokio_core::io::ReadHalf;
+use tokio_core::io::WriteHalf;
+use tokio_core::reactor;
 
 use error::*;
 use futures_misc::*;
@@ -191,14 +191,14 @@ impl<H : HttpClientResponseHandler> GrpcHttpClientSessionState<H> {
 
             remove = s.is_closed();
         } else {
-            return futures::finished(()).boxed();
+            return Box::new(futures::finished(()));
         }
 
         if remove {
             self.streams.remove(&stream_id);
         }
 
-        futures::finished(()).boxed()
+        Box::new(futures::finished(()))
     }
 }
 
@@ -322,17 +322,19 @@ impl<'a, H, S> Session for MyClientSession<'a, H, S>
 
 struct ClientInner<H : HttpClientResponseHandler> {
     conn: HttpConnection,
-    to_write_tx: tokio_core::Sender<ClientToWriteMessage<H>>,
+    to_write_tx: tokio_core::channel::Sender<ClientToWriteMessage<H>>,
     session_state: GrpcHttpClientSessionState<H>,
 }
 
 pub struct HttpClientConnectionAsync<H : HttpClientResponseHandler> {
-    call_tx: tokio_core::Sender<ClientToWriteMessage<H>>,
+    call_tx: tokio_core::channel::Sender<ClientToWriteMessage<H>>,
 }
+
+unsafe impl <H : HttpClientResponseHandler> Sync for HttpClientConnectionAsync<H> {}
 
 struct StartRequestMessage<H : HttpClientResponseHandler> {
     headers: Vec<StaticHeader>,
-    body: HttpStream<Vec<u8>>,
+    body: HttpStreamSend<Vec<u8>>,
     response_handler: H,
 }
 
@@ -357,7 +359,7 @@ enum ClientToWriteMessage<H : HttpClientResponseHandler> {
 }
 
 struct ClientWriteLoop<H : HttpClientResponseHandler> {
-    write: TaskIoWrite<TcpStream>,
+    write: WriteHalf<TcpStream>,
     inner: TaskRcMut<ClientInner<H>>,
 }
 
@@ -365,10 +367,9 @@ impl<H : HttpClientResponseHandler> ClientWriteLoop<H> {
     fn write_all(self, buf: Vec<u8>) -> HttpFuture<Self> {
         let ClientWriteLoop { write, inner } = self;
 
-        tokio_io::write_all(write, buf)
+        Box::new(tokio_io::write_all(write, buf)
             .map(move |(write, _)| ClientWriteLoop { write: write, inner: inner })
-            .map_err(HttpError::from)
-            .boxed()
+            .map_err(HttpError::from))
     }
 
     fn process_from_read(self, message: ClientReadToWriteMessage) -> HttpFuture<Self> {
@@ -391,7 +392,7 @@ impl<H : HttpClientResponseHandler> ClientWriteLoop<H> {
             (send_buf, stream_id)
         });
 
-        self.write_all(buf)
+        Box::new(self.write_all(buf)
             .and_then(move |wl: ClientWriteLoop<H>| {
                 body.fold(wl, move |wl: ClientWriteLoop<H>, chunk| {
                     wl.inner.with(|inner: &mut ClientInner<H>| {
@@ -410,8 +411,7 @@ impl<H : HttpClientResponseHandler> ClientWriteLoop<H> {
                     }));
                 });
                 futures::finished::<_, HttpError>(wl)
-            })
-            .boxed()
+            }))
     }
 
     fn process_body_chunk(self, body_chunk: BodyChunkMessage) -> HttpFuture<Self> {
@@ -451,29 +451,27 @@ impl<H : HttpClientResponseHandler> ClientWriteLoop<H> {
         }
     }
 
-    fn run(self, requests: HttpStream<ClientToWriteMessage<H>>) -> HttpFuture<()> {
+    fn run(self, requests: HttpStreamSend<ClientToWriteMessage<H>>) -> HttpFuture<()> {
         let requests = requests.map_err(HttpError::from);
-        requests
+        Box::new(requests
             .fold(self, move |wl, message: ClientToWriteMessage<H>| {
                 wl.process_message(message)
             })
-            .map(|_| ())
-            .boxed()
+            .map(|_| ()))
     }
 }
 
 struct ClientReadLoop<H : HttpClientResponseHandler> {
-    read: TaskIoRead<TcpStream>,
+    read: ReadHalf<TcpStream>,
     inner: TaskRcMut<ClientInner<H>>,
 }
 
 impl<H : HttpClientResponseHandler> ClientReadLoop<H> {
     fn recv_raw_frame(self) -> HttpFuture<(Self, RawFrame<'static>)> {
         let ClientReadLoop { read, inner } = self;
-        recv_raw_frame(read)
+        Box::new(recv_raw_frame(read)
             .map(|(read, frame)| (ClientReadLoop { read: read, inner: inner}, frame))
-            .map_err(HttpError::from)
-            .boxed()
+            .map_err(HttpError::from))
     }
 
     fn process_streams_after_handle_next_frame(self, stream_id: StreamId, last_chunk: LastChunk) -> HttpFuture<Self> {
@@ -481,7 +479,7 @@ impl<H : HttpClientResponseHandler> ClientReadLoop<H> {
             inner.session_state.process_streams_after_handle_next_frame(stream_id, last_chunk)
         });
 
-        future.map(|_| self).boxed()
+        Box::new(future.map(|_| self))
     }
 
     fn process_raw_frame(self, raw_frame: RawFrame) -> HttpFuture<Self> {
@@ -506,14 +504,13 @@ impl<H : HttpClientResponseHandler> ClientReadLoop<H> {
         if let Some((stream_id, last_chunk)) = last {
             self.process_streams_after_handle_next_frame(stream_id, last_chunk)
         } else {
-            futures::finished(self).boxed()
+            Box::new(futures::finished(self))
         }
     }
 
     fn read_process_frame(self) -> HttpFuture<Self> {
-        self.recv_raw_frame()
-            .and_then(move |(rl, frame)| rl.process_raw_frame(frame))
-            .boxed()
+        Box::new(self.recv_raw_frame()
+            .and_then(move |(rl, frame)| rl.process_raw_frame(frame)))
     }
 
     fn run(self) -> HttpFuture<()> {
@@ -523,24 +520,24 @@ impl<H : HttpClientResponseHandler> ClientReadLoop<H> {
             rl.read_process_frame()
         });
 
-        future.map(|_| ()).boxed()
+        Box::new(future.map(|_| ()))
     }
 }
 
 impl<H : HttpClientResponseHandler> HttpClientConnectionAsync<H> {
-    pub fn new(lh: LoopHandle, addr: &SocketAddr) -> (Self, HttpFuture<()>) {
-        let (to_write_tx, to_write_rx) = lh.clone().channel();
+    pub fn new(lh: reactor::Handle, addr: &SocketAddr) -> (Self, HttpFuture<()>) {
+        let (to_write_tx, to_write_rx) = tokio_core::channel::channel(&lh).unwrap();
 
-        let to_write_rx = future_flatten_to_stream(to_write_rx).map_err(HttpError::from).boxed();
+        let to_write_rx = Box::new(to_write_rx.map_err(HttpError::from));
 
         let c = HttpClientConnectionAsync {
             call_tx: to_write_tx.clone(),
         };
 
-        let handshake = connect_and_handshake(lh, addr);
+        let handshake = connect_and_handshake(&lh, addr);
         let future = handshake.and_then(move |conn| {
             println!("client: handshake done");
-            let (read, write) = TaskIo::new(conn).split();
+            let (read, write) = conn.split();
 
             let inner = TaskRcMut::new(ClientInner {
                 conn: HttpConnection::new(HttpScheme::Http),
@@ -556,17 +553,17 @@ impl<H : HttpClientResponseHandler> HttpClientConnectionAsync<H> {
             let run_read = ClientReadLoop { read: read, inner: inner.clone() }.run();
 
             run_write.join(run_read).map(|_| ())
-        }).boxed();
+        });
 
-        (c, future)
+        (c, Box::new(future))
     }
 
     pub fn start_request(
         &self,
         headers: Vec<StaticHeader>,
-        body: HttpStream<Vec<u8>>,
+        body: HttpStreamSend<Vec<u8>>,
         response_handler: H)
-            -> HttpFuture<()>
+            -> HttpFutureSend<()>
     {
         self.call_tx.send(ClientToWriteMessage::Start(StartRequestMessage {
             headers: headers,
@@ -575,6 +572,6 @@ impl<H : HttpClientResponseHandler> HttpClientConnectionAsync<H> {
         }));
 
         // should use bounded queue here, so future result
-        futures::finished(()).boxed()
+        Box::new(futures::finished(()))
     }
 }

@@ -32,14 +32,14 @@ impl<'a> MethodGen<'a> {
     fn input_async(&self) -> String {
         match self.proto.get_client_streaming() {
             false => self.input(),
-            true  => format!("::grpc::futures_grpc::GrpcStream<{}>", self.input()),
+            true  => format!("::grpc::futures_grpc::GrpcStreamSend<{}>", self.input()),
         }
     }
 
     fn output_async(&self) -> String {
         match self.proto.get_server_streaming() {
-            false => format!("::grpc::futures_grpc::GrpcFuture<{}>", self.output()),
-            true  => format!("::grpc::futures_grpc::GrpcStream<{}>", self.output()),
+            false => format!("::grpc::futures_grpc::GrpcFutureSend<{}>", self.output()),
+            true  => format!("::grpc::futures_grpc::GrpcStreamSend<{}>", self.output()),
         }
     }
 

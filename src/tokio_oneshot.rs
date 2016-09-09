@@ -6,28 +6,25 @@ use futures::Async;
 use futures::stream::Stream;
 
 use tokio_core;
-use tokio_core::LoopHandle;
+use tokio_core::reactor;
 
 use tokio_core::io::*;
 
 
 #[allow(dead_code)]
-pub fn oneshot<T : Send + 'static>(lh: LoopHandle) -> (Sender<T>, IoFuture<Receiver<T>>) {
-    let (sender, receiver) = lh.channel();
-    (
-        Sender { sender: sender },
-        receiver.map(|receiver| Receiver { receiver: Some(receiver) }).boxed()
-    )
+pub fn oneshot<T : Send + 'static>(handle: &reactor::Handle) -> (Sender<T>, Receiver<T>) {
+    let (sender, receiver) = tokio_core::channel::channel(handle).unwrap();
+    (Sender { sender: sender }, Receiver { receiver: Some(receiver) })
 }
 
 #[allow(dead_code)]
 pub struct Sender<T> {
-    sender: tokio_core::Sender<T>,
+    sender: tokio_core::channel::Sender<T>,
 }
 
 #[allow(dead_code)]
 pub struct Receiver<T> {
-    receiver: Option<tokio_core::Receiver<T>>,
+    receiver: Option<tokio_core::channel::Receiver<T>>,
 }
 
 #[allow(dead_code)]

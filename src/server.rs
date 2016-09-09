@@ -32,15 +32,15 @@ use futures::stream;
 use futures::stream::Stream;
 use tokio_core::io as tokio_io;
 use tokio_core::io::IoFuture;
-use tokio_core::io::TaskIo;
-use tokio_core::io::TaskIoRead;
-use tokio_core::io::TaskIoWrite;
+use tokio_core::io::ReadHalf;
+use tokio_core::io::WriteHalf;
 use tokio_core;
-use tokio_core::Loop;
-use tokio_core::LoopHandle;
-use tokio_core::TcpStream;
-use tokio_core::Sender;
-use tokio_core::Receiver;
+use tokio_core::reactor;
+use tokio_core::io::Io;
+use tokio_core::net::TcpStream;
+use tokio_core::net::TcpListener;
+use tokio_core::channel::Sender;
+use tokio_core::channel::Receiver;
 
 use method::*;
 use error::*;
@@ -49,10 +49,11 @@ use futures_misc::*;
 use solicit_async::*;
 use solicit_misc::*;
 use grpc::*;
+use assert_types::*;
 
 
 pub trait MethodHandler<Req, Resp> {
-    fn handle(&self, req: Req) -> GrpcStream<Resp>;
+    fn handle(&self, req: Req) -> GrpcStreamSend<Resp>;
 }
 
 pub struct MethodHandlerUnary<F> {
@@ -73,7 +74,7 @@ pub struct MethodHandlerBidi<F> {
 
 impl<F> MethodHandlerUnary<F> {
     pub fn new<Req, Resp>(f: F) -> Self
-        where F : Fn(Req) -> GrpcFuture<Resp>
+        where F : Fn(Req) -> GrpcFutureSend<Resp>
     {
         MethodHandlerUnary {
             f: f,
@@ -83,7 +84,7 @@ impl<F> MethodHandlerUnary<F> {
 
 impl<F> MethodHandlerClientStreaming<F> {
     pub fn new<Req, Resp>(f: F) -> Self
-        where F : Fn(GrpcStream<Req>) -> GrpcFuture<Resp>
+        where F : Fn(GrpcStreamSend<Req>) -> GrpcFutureSend<Resp>
     {
         MethodHandlerClientStreaming {
             f: f,
@@ -93,7 +94,7 @@ impl<F> MethodHandlerClientStreaming<F> {
 
 impl<F> MethodHandlerServerStreaming<F> {
     pub fn new<Req, Resp>(f: F) -> Self
-        where F : Fn(Req) -> GrpcStream<Resp>
+        where F : Fn(Req) -> GrpcStreamSend<Resp>
     {
         MethodHandlerServerStreaming {
             f: f,
@@ -103,7 +104,7 @@ impl<F> MethodHandlerServerStreaming<F> {
 
 impl<F> MethodHandlerBidi<F> {
     pub fn new<Req, Resp>(f: F) -> Self
-        where F : Fn(GrpcStream<Req>) -> GrpcStream<Resp>
+        where F : Fn(GrpcStreamSend<Req>) -> GrpcStreamSend<Resp>
     {
         MethodHandlerBidi {
             f: f,
@@ -114,20 +115,19 @@ impl<F> MethodHandlerBidi<F> {
 impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerUnary<F>
     where
         Resp : Send + 'static,
-        F : Fn(Req) -> GrpcFuture<Resp>,
+        F : Fn(Req) -> GrpcFutureSend<Resp>,
 {
-    fn handle(&self, req: Req) -> GrpcStream<Resp> {
-        future_to_stream_once((self.f)(req))
-            .boxed()
+    fn handle(&self, req: Req) -> GrpcStreamSend<Resp> {
+        Box::new(future_to_stream_once((self.f)(req)))
     }
 }
 
 impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerClientStreaming<F>
     where
         Resp : Send + 'static,
-        F : Fn(GrpcStream<Req>) -> GrpcFuture<Resp>,
+        F : Fn(GrpcStreamSend<Req>) -> GrpcFutureSend<Resp>,
 {
-    fn handle(&self, req: Req) -> GrpcStream<Resp> {
+    fn handle(&self, req: Req) -> GrpcStreamSend<Resp> {
         unimplemented!()
     }
 }
@@ -135,26 +135,25 @@ impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerClientStreaming<F>
 impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerServerStreaming<F>
     where
         Resp : Send + 'static,
-        F : Fn(Req) -> GrpcStream<Resp>,
+        F : Fn(Req) -> GrpcStreamSend<Resp>,
 {
-    fn handle(&self, req: Req) -> GrpcStream<Resp> {
-        (self.f)(req)
-            .boxed()
+    fn handle(&self, req: Req) -> GrpcStreamSend<Resp> {
+        Box::new((self.f)(req))
     }
 }
 
 impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerBidi<F>
     where
         Resp : Send + 'static,
-        F : Fn(GrpcStream<Req>) -> GrpcStream<Resp>,
+        F : Fn(GrpcStreamSend<Req>) -> GrpcStreamSend<Resp>,
 {
-    fn handle(&self, req: Req) -> GrpcStream<Resp> {
+    fn handle(&self, req: Req) -> GrpcStreamSend<Resp> {
         unimplemented!()
     }
 }
 
 trait MethodHandlerDispatch {
-    fn on_message(&self, message: &[u8]) -> GrpcStream<Vec<u8>>;
+    fn on_message(&self, message: &[u8]) -> GrpcStreamSend<Vec<u8>>;
 }
 
 struct MethodHandlerDispatchAsyncImpl<Req, Resp> {
@@ -177,24 +176,22 @@ impl<Req, Resp> MethodHandlerDispatch for MethodHandlerDispatchAsyncImpl<Req, Re
         Req : Send + 'static,
         Resp : Send + 'static,
 {
-    fn on_message(&self, message: &[u8]) -> GrpcStream<Vec<u8>> {
+    fn on_message(&self, message: &[u8]) -> GrpcStreamSend<Vec<u8>> {
         let req = match self.desc.req_marshaller.read(message) {
             Ok(req) => req,
-            Err(e) => return future_to_stream_once(futures::done(Err(e))).boxed(),
+            Err(e) => return Box::new(future_to_stream_once(futures::done(Err(e)))),
         };
         let resp =
             catch_unwind(AssertUnwindSafe(|| self.method_handler.handle(req)));
         match resp {
             Ok(resp) => {
                 let desc_copy = self.desc.clone();
-                resp
-                    .and_then(move |resp| desc_copy.resp_marshaller.write(&resp))
-                    .boxed()
+                Box::new(resp
+                    .and_then(move |resp| desc_copy.resp_marshaller.write(&resp)))
             }
             Err(e) => {
                 let message = any_to_string(e);
-                future_to_stream_once(futures::failed(GrpcError::Panic(message)))
-                    .boxed()
+                Box::new(future_to_stream_once(futures::failed(GrpcError::Panic(message))))
             }
         }
     }
@@ -248,9 +245,14 @@ impl ServerServiceDefinition {
 
 struct LoopToServer {
     // used only once to send shutdown signal
-    shutdown_tx: tokio_core::Sender<()>,
+    shutdown_tx: tokio_core::channel::Sender<()>,
     local_addr: SocketAddr,
 }
+
+fn _assert_loop_to_server() {
+    assert_send::<LoopToServer>();
+}
+
 
 pub struct GrpcServer {
     loop_to_server: LoopToServer,
@@ -296,7 +298,7 @@ struct GrpcHttp2ServerStream {
     service_definition: Arc<ServerServiceDefinition>,
     path: String,
     sender: Sender<ReadToWriteMessage>,
-    loop_handle: LoopHandle,
+    loop_handle: reactor::Handle,
 }
 
 impl solicit_Stream for GrpcHttp2ServerStream {
@@ -324,8 +326,8 @@ impl solicit_Stream for GrpcHttp2ServerStream {
             let stream = self.service_definition.handle_method(&self.path, message);
 
             let sender = self.sender.clone();
-            self.loop_handle.spawn(move |pin| {
-                Ok(pin.spawn(stream
+            self.loop_handle.spawn(
+                stream
                     .fold((sender.clone(), 0), move |(sender, i), resp| {
                         sender.send(ReadToWriteMessage {
                             stream_id: stream_id,
@@ -345,8 +347,7 @@ impl solicit_Stream for GrpcHttp2ServerStream {
                         futures::done::<_, GrpcError>(Ok(()))
                     })
                     .then(|_| Ok(())) // TODO: should not probably ignore errors
-                ))
-            });
+                );
         }
         self.stream.set_state(state)
     }
@@ -363,7 +364,7 @@ impl solicit_Stream for GrpcHttp2ServerStream {
 struct GrpcStreamFactory {
     service_definition: Arc<ServerServiceDefinition>,
     sender: Sender<ReadToWriteMessage>,
-    loop_handle: LoopHandle,
+    loop_handle: reactor::Handle,
 }
 
 impl StreamFactory for GrpcStreamFactory {
@@ -399,13 +400,13 @@ struct ReadToWriteMessage {
 }
 
 fn run_read(
-    read: TaskIoRead<TcpStream>,
+    read: ReadHalf<TcpStream>,
     shared: TaskRcMutex<ServerSharedState>)
         -> GrpcFuture<()>
 {
     let stream = stream::iter(iter::repeat(()).map(|x| Ok(x)));
 
-    let future = stream.fold((read, shared), |(read, shared), _| {
+    let future = stream.fold((read, shared), move |(read, shared), _| {
         recv_raw_frame(read)
             .map(|(read, raw_frame)| {
                 println!("server: received frame");
@@ -425,13 +426,12 @@ fn run_read(
             })
     });
 
-    future
-        .map(|_| ())
-        .boxed()
+    Box::new(future
+        .map(|_| ()))
 }
 
 fn run_write(
-    write: TaskIoWrite<TcpStream>,
+    write: WriteHalf<TcpStream>,
     shared: TaskRcMutex<ServerSharedState>,
     receiver: Receiver<ReadToWriteMessage>)
     -> GrpcFuture<()>
@@ -491,10 +491,9 @@ fn run_write(
             .map(|(write, _)| (write, shared))
     });
 
-    future
+    Box::new(future
         .map(|_| ())
-        .map_err(GrpcError::from)
-        .boxed()
+        .map_err(GrpcError::from))
 }
 
 
@@ -502,24 +501,20 @@ fn run_connection(
     socket: TcpStream,
     peer_addr: SocketAddr,
     service_defintion: Arc<ServerServiceDefinition>,
-    loop_handle: LoopHandle)
-    -> IoFuture<()>
+    loop_handle: reactor::Handle)
+    -> Box<Future<Item=(), Error=io::Error>>
 {
     println!("accepted connection from {}", peer_addr);
     let handshake = server_handshake(socket).map_err(GrpcError::from);
 
     let loop_handle_for_channel = loop_handle.clone();
-    let three = handshake.and_then(|conn| {
-        let (sender, receiver_future) = loop_handle_for_channel.channel();
-        receiver_future
-            .map(|receiver| {
-                (conn, sender, receiver)
-            })
-            .map_err(GrpcError::from)
+    let three = handshake.and_then(move |conn| {
+        let (sender, receiver) = tokio_core::channel::channel(&loop_handle_for_channel).unwrap();
+        Ok((conn, sender, receiver))
     });
 
     let run = three.and_then(|(conn, sender, receiver_stream)| {
-        let (read, write) = TaskIo::new(conn).split();
+        let (read, write) = conn.split();
 
         let shared_for_read = TaskRcMutex::new(ServerSharedState {
             conn: HttpConnection::new(HttpScheme::Http),
@@ -542,10 +537,9 @@ fn run_connection(
             x
         });
 
-    bye
-        .map(|_| ())
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
-        .boxed()
+    Box::new(bye
+        .map(move |_| ())
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e)))
 }
 
 fn run_server_event_loop(
@@ -553,40 +547,31 @@ fn run_server_event_loop(
     service_definition: ServerServiceDefinition,
     send_to_back: mpsc::Sender<LoopToServer>)
 {
-    let mut lp = Loop::new().expect("loop new");
+    let mut lp = reactor::Core::new().expect("loop new");
 
-    let (shutdown_tx, shutdown_rx) = lp.handle().channel();
+    let (shutdown_tx, shutdown_rx) = tokio_core::channel::channel(&lp.handle()).unwrap();
 
     let shutdown_rx = shutdown_rx.map_err(GrpcError::from);
 
-    let listen = lp.handle().tcp_listen(&listen_addr);
+    let listen = TcpListener::bind(&listen_addr, &lp.handle()).unwrap();
 
     let stuff = stream_repeat((Arc::new(service_definition), lp.handle()));
 
-    let loop_run = listen.and_then(|socket| {
-        let local_addr = socket.local_addr().unwrap();
-        send_to_back
-            .send(LoopToServer { shutdown_tx: shutdown_tx, local_addr: local_addr })
-            .expect("send back");
+    let local_addr = listen.local_addr().unwrap();
+    send_to_back
+        .send(LoopToServer { shutdown_tx: shutdown_tx, local_addr: local_addr })
+        .expect("send back");
 
-        socket.incoming().zip(stuff).for_each(|((socket, peer_addr), (service_definition, loop_handle))| {
-            let loop_handle_for_conn = loop_handle.clone();
-            loop_handle.spawn(move |pin| {
-                Ok(pin.spawn(run_connection(socket, peer_addr, service_definition, loop_handle_for_conn).map_err(|_| ())))
-            });
-            Ok(())
-        })
-    }).map_err(GrpcError::from);
+    let loop_run = listen.incoming().map_err(GrpcError::from).zip(stuff).for_each(|((socket, peer_addr), (service_definition, loop_handle))| {
+        let loop_handle_for_conn = loop_handle.clone();
+        loop_handle.spawn(run_connection(socket, peer_addr, service_definition, loop_handle_for_conn).map_err(|_| ()));
+        Ok(())
+    });
 
-    let shutdown = shutdown_rx.and_then(|shutdown_rx| {
-        shutdown_rx.into_future()
-            .map_err(|_| GrpcError::Other("error in shutdown channel"))
-            .and_then(|_| {
-                // Must complete with error,
-                // so `join` with this future cancels another future.
-                let result: Result<(), _> = Err(GrpcError::Other("shutdown"));
-                result
-            })
+    let shutdown = shutdown_rx.into_future().map_err(|(e, _)| GrpcError::from(e)).and_then(|_| {
+        // Must complete with error,
+        // so `join` with this future cancels another future.
+        futures::failed::<(), _>(GrpcError::Other("shutdown"))
     });
 
     // Wait for either completion of connection (i. e. error)

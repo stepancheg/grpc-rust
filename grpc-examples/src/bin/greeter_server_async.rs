@@ -20,7 +20,7 @@ impl GreeterAsync for GreeterImpl {
         let name = if req.get_name().is_empty() { "world" } else { req.get_name() };
         println!("greeting request from {}", name);
         r.set_message(format!("Hello {}", name));
-        futures::finished(r).boxed()
+        Box::new(futures::finished(r))
     }
 }
 

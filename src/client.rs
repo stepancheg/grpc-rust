@@ -8,17 +8,16 @@ use std::mem;
 
 use futures;
 use futures::Future;
+use futures::AndThen;
 use futures::stream::Stream;
 
 use tokio_core::io as tokio_io;
-use tokio_core::io::TaskIo;
-use tokio_core::io::TaskIoRead;
-use tokio_core::io::TaskIoWrite;
+use tokio_core::io::ReadHalf;
+use tokio_core::io::WriteHalf;
 
 use tokio_core;
-use tokio_core::Loop;
-use tokio_core::LoopHandle;
-use tokio_core::TcpStream;
+use tokio_core::reactor;
+use tokio_core::net::TcpStream;
 
 use solicit::http::client::RequestStream;
 use solicit::http::client::ClientSession;
@@ -57,6 +56,8 @@ use solicit_misc::*;
 
 use http_client::*;
 
+use assert_types::*;
+
 
 
 trait GrpcResponseHandlerTrait : Send + 'static + HttpClientResponseHandler {
@@ -64,7 +65,7 @@ trait GrpcResponseHandlerTrait : Send + 'static + HttpClientResponseHandler {
 
 struct GrpcResponseHandlerTyped<Req : Send + 'static, Resp : Send + 'static> {
     method: Arc<MethodDescriptor<Req, Resp>>,
-    complete: tokio_core::Sender<ResultOrEof<Resp, GrpcError>>,
+    complete: tokio_core::channel::Sender<ResultOrEof<Resp, GrpcError>>,
     remaining_response: Vec<u8>,
 }
 
@@ -152,9 +153,19 @@ impl HttpClientResponseHandler for GrpcResponseHandler {
 // Data sent from event loop to GrpcClient
 struct LoopToClient {
     // used only once to send shutdown signal
-    shutdown_tx: tokio_core::Sender<()>,
-    loop_handle: LoopHandle,
-    http_conn: HttpClientConnectionAsync<GrpcResponseHandler>,
+    shutdown_tx: tokio_core::channel::Sender<()>,
+    loop_handle: reactor::Remote,
+    http_conn: Arc<HttpClientConnectionAsync<GrpcResponseHandler>>,
+}
+
+fn _assert_loop_to_client() {
+    assert_send::<reactor::Remote>();
+    assert_send::<HttpClientConnectionAsync<GrpcResponseHandler>>();
+    assert_send::<HttpClientConnectionAsync<GrpcResponseHandler>>();
+    assert_sync::<HttpClientConnectionAsync<GrpcResponseHandler>>();
+    assert_send::<Arc<HttpClientConnectionAsync<GrpcResponseHandler>>>();
+    assert_send::<tokio_core::channel::Sender<()>>();
+    assert_send::<LoopToClient>();
 }
 
 /// gRPC client implementation.
@@ -196,80 +207,96 @@ impl GrpcClient {
     }
 
     pub fn new_resp_channel<Resp : Send + 'static>(&self)
-        -> (tokio_core::Sender<ResultOrEof<Resp, GrpcError>>, GrpcStream<Resp>)
+        -> futures::Oneshot<(tokio_core::channel::Sender<ResultOrEof<Resp, GrpcError>>, GrpcStreamSend<Resp>)>
     {
-        let (sender, receiver) = self.loop_to_client.loop_handle.clone().channel::<ResultOrEof<Resp, GrpcError>>();
-        let receiver: GrpcStream<ResultOrEof<Resp, GrpcError>> = future_flatten_to_stream(receiver)
-            .map_err(GrpcError::from)
-            .boxed();
+        let (one_sender, one_receiver) = futures::oneshot();
 
-        let receiver: GrpcStream<Resp> = stream_with_eof_and_error(receiver).boxed();
+        self.loop_to_client.loop_handle.spawn(move |handle| {
+            let (sender, receiver) = tokio_core::channel::channel(&handle).unwrap();
+            let receiver: GrpcStreamSend<ResultOrEof<Resp, GrpcError>> = Box::new(receiver.map_err(GrpcError::from));
 
-        (sender, receiver)
+            let receiver: GrpcStreamSend<Resp> = Box::new(stream_with_eof_and_error(receiver));
+
+            one_sender.complete((sender, receiver));
+
+            futures::finished(())
+        });
+
+        one_receiver
     }
 
-    pub fn call_impl<Req : Send + 'static, Resp : Send + 'static>(&self, req: GrpcStream<Req>, method: Arc<MethodDescriptor<Req, Resp>>)
-        -> GrpcStream<Resp>
+    pub fn call_impl<Req : Send + 'static, Resp : Send + 'static>(&self, req: GrpcStreamSend<Req>, method: Arc<MethodDescriptor<Req, Resp>>)
+        -> GrpcStreamSend<Resp>
     {
+        let host = self.host.clone();
+        let http_scheme = self.http_scheme.clone();
+        let http_conn = self.loop_to_client.http_conn.clone();
+
         // A channel to send response back to caller
-        let (complete, receiver) = self.new_resp_channel();
+        let future = self.new_resp_channel().map_err(GrpcError::from).and_then(move |(complete, receiver)| {
 
-        fn header(name: &str, value: &str) -> StaticHeader {
-            Header::new(name.as_bytes().to_owned(), value.as_bytes().to_owned())
-        }
-
-        let headers = vec![
-            header(":method", "POST"),
-            header(":path", &method.name),
-            header(":authority", &self.host),
-            header(":scheme", from_utf8(self.http_scheme.as_bytes()).unwrap()),
-        ];
-
-        let request_frames = {
-            let method = method.clone();
-            req
-                .and_then(move |req| {
-                    let grpc_frame = try!(method.req_marshaller.write(&req));
-                    Ok(write_grpc_frame_to_vec(&grpc_frame))
-                })
-                .map_err(|e| HttpError::Other(Box::new(e)))
-        };
-
-        let start_request = self.loop_to_client.http_conn.start_request(
-            headers,
-            request_frames.boxed(),
-            GrpcResponseHandler {
-                tr: Box::new(GrpcResponseHandlerTyped {
-                    method: method.clone(),
-                    complete: complete,
-                    remaining_response: Vec::new(),
-                }),
+            fn header(name: &str, value: &str) -> StaticHeader {
+                Header::new(name.as_bytes().to_owned(), value.as_bytes().to_owned())
             }
-        ).map_err(GrpcError::from);
 
-        future_flatten_to_stream(start_request.and_then(|()| Ok(receiver))).boxed()
+            let headers = vec![
+                header(":method", "POST"),
+                header(":path", &method.name),
+                header(":authority", &host),
+                header(":scheme", from_utf8(http_scheme.as_bytes()).unwrap()),
+            ];
+
+            let request_frames = {
+                let method = method.clone();
+                req
+                    .and_then(move |req| {
+                        let grpc_frame = try!(method.req_marshaller.write(&req));
+                        Ok(write_grpc_frame_to_vec(&grpc_frame))
+                    })
+                    .map_err(|e| HttpError::Other(Box::new(e)))
+            };
+
+            let start_request = http_conn.start_request(
+                headers,
+                Box::new(request_frames),
+                GrpcResponseHandler {
+                    tr: Box::new(GrpcResponseHandlerTyped {
+                        method: method.clone(),
+                        complete: complete,
+                        remaining_response: Vec::new(),
+                    }),
+                }
+            ).map_err(GrpcError::from);
+
+            let receiver: GrpcStreamSend<Resp> = receiver;
+
+            start_request.map(move |()| receiver)
+        });
+
+        let s: GrpcStreamSend<Resp> = future_flatten_to_stream(future);
+        s
     }
 
     pub fn call_unary<Req : Send + 'static, Resp : Send + 'static>(&self, req: Req, method: Arc<MethodDescriptor<Req, Resp>>)
-        -> GrpcFuture<Resp>
+        -> GrpcFutureSend<Resp>
     {
-        stream_single(self.call_impl(stream_once(req).boxed(), method))
+        stream_single_send(self.call_impl(Box::new(stream_once_send(req)), method))
     }
 
     pub fn call_server_streaming<Req : Send + 'static, Resp : Send + 'static>(&self, req: Req, method: Arc<MethodDescriptor<Req, Resp>>)
-        -> GrpcStream<Resp>
+        -> GrpcStreamSend<Resp>
     {
-        self.call_impl(stream_once(req).boxed(), method)
+        self.call_impl(stream_once_send(req).boxed(), method)
     }
 
-    pub fn call_client_streaming<Req : Send + 'static, Resp : Send + 'static>(&self, req: GrpcStream<Req>, method: Arc<MethodDescriptor<Req, Resp>>)
-        -> GrpcFuture<Resp>
+    pub fn call_client_streaming<Req : Send + 'static, Resp : Send + 'static>(&self, req: GrpcStreamSend<Req>, method: Arc<MethodDescriptor<Req, Resp>>)
+        -> GrpcFutureSend<Resp>
     {
-        stream_single(self.call_impl(req, method))
+        stream_single_send(self.call_impl(req, method))
     }
 
-    pub fn call_bidi<Req : Send + 'static, Resp : Send + 'static>(&self, req: GrpcStream<Req>, method: Arc<MethodDescriptor<Req, Resp>>)
-        -> GrpcStream<Resp>
+    pub fn call_bidi<Req : Send + 'static, Resp : Send + 'static>(&self, req: GrpcStreamSend<Req>, method: Arc<MethodDescriptor<Req, Resp>>)
+        -> GrpcStreamSend<Resp>
     {
         self.call_impl(req, method)
     }
@@ -307,34 +334,27 @@ fn run_client_event_loop(
     send_to_back: mpsc::Sender<LoopToClient>)
 {
     // Create an event loop.
-    let mut lp = Loop::new().unwrap();
+    let mut lp = reactor::Core::new().unwrap();
 
     // Create a channel to receive shutdown signal.
-    let (shutdown_tx, shutdown_rx) = lp.handle().channel();
+    let (shutdown_tx, shutdown_rx) = tokio_core::channel::channel(&lp.handle()).unwrap();
 
     let (http_conn, http_conn_future) = HttpClientConnectionAsync::new(lp.handle(), &socket_addr);
-    let http_conn_future = http_conn_future.map_err(GrpcError::from);
+    let http_conn_future: GrpcFuture<_> = Box::new(http_conn_future.map_err(GrpcError::from));
 
     // Send channels back to GrpcClient
     send_to_back
         .send(LoopToClient {
             shutdown_tx: shutdown_tx,
-            loop_handle: lp.handle(),
-            http_conn: http_conn,
+            loop_handle: lp.remote(),
+            http_conn: Arc::new(http_conn),
         })
         .expect("send back");
 
-    let shutdown_rx = shutdown_rx.map_err(GrpcError::from);
-
-    let shutdown = shutdown_rx.and_then(|shutdown_rx| {
-        shutdown_rx.into_future()
-            .map_err(|_| GrpcError::Other("error in shutdown channel"))
-            .and_then(|_| {
-                // Must complete with error,
-                // so `join` with this future cancels another future.
-                let result: Result<(), _> = Err(GrpcError::Other("shutdown"));
-                result
-            })
+    let shutdown = shutdown_rx.into_future().map_err(|(e, _)| GrpcError::from(e)).and_then(move |_| {
+        // Must complete with error,
+        // so `join` with this future cancels another future.
+        futures::failed::<(), _>(GrpcError::Other("shutdown"))
     });
 
     // Wait for either completion of connection (i. e. error)

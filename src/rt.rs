@@ -15,41 +15,39 @@ use result::*;
 use iter::*;
 
 
-pub fn stream_to_iter<T : 'static>(s: GrpcStream<T>) -> GrpcIterator<T> {
+pub fn stream_to_iter<T : 'static>(s: GrpcStreamSend<T>) -> GrpcIterator<T> {
     Box::new(s.wait())
 }
 
-pub fn iter_to_stream<T : Send + 'static>(i: GrpcIterator<T>) -> GrpcStream<T> {
-    stream::iter(i).boxed()
+pub fn iter_to_stream<T : Send + 'static>(i: GrpcIterator<T>) -> GrpcStreamSend<T> {
+    Box::new(stream::iter(i))
 }
 
-pub fn sync_to_async_unary<Req, Resp, H>(cpupool: &CpuPool, req: Req, sync_handler: H) -> GrpcFuture<Resp>
+pub fn sync_to_async_unary<Req, Resp, H>(cpupool: &CpuPool, req: Req, sync_handler: H) -> GrpcFutureSend<Resp>
     where
         Req : Send + 'static,
         Resp : Send + 'static,
         H : FnOnce(Req) -> GrpcResult<Resp> + Send + 'static,
 {
-    cpupool
+    Box::new(cpupool
         .spawn(futures::lazy(move || {
             sync_handler(req)
-        }))
-        .boxed()
+        })))
 }
 
-pub fn sync_to_async_client_streaming<Req, Resp, H>(cpupool: &CpuPool, req: GrpcStream<Req>, sync_handler: H) -> GrpcFuture<Resp>
+pub fn sync_to_async_client_streaming<Req, Resp, H>(cpupool: &CpuPool, req: GrpcStreamSend<Req>, sync_handler: H) -> GrpcFutureSend<Resp>
     where
         Req : Send + 'static,
         Resp : Send + 'static,
         H : FnOnce(GrpcIterator<Req>) -> GrpcResult<Resp> + Send + 'static,
 {
-    cpupool
+    Box::new(cpupool
         .spawn(futures::lazy(move || {
             sync_handler(Box::new(req.wait()))
-        }))
-        .boxed()
+        })))
 }
 
-pub fn sync_to_async_server_streaming<Req, Resp, H>(cpupool: &CpuPool, req: Req, sync_handler: H) -> GrpcStream<Resp>
+pub fn sync_to_async_server_streaming<Req, Resp, H>(cpupool: &CpuPool, req: Req, sync_handler: H) -> GrpcStreamSend<Resp>
     where
         Req : Send + 'static,
         Resp : Send + 'static,
@@ -66,10 +64,10 @@ pub fn sync_to_async_server_streaming<Req, Resp, H>(cpupool: &CpuPool, req: Req,
             futures::finished::<_, GrpcError>(())
         }));
         // TODO: handle cpupool error
-    receiver.boxed()
+    Box::new(receiver)
 }
 
-pub fn sync_to_async_bidi<Req, Resp, H>(cpupool: &CpuPool, req: GrpcStream<Req>, sync_handler: H) -> GrpcStream<Resp>
+pub fn sync_to_async_bidi<Req, Resp, H>(cpupool: &CpuPool, req: GrpcStreamSend<Req>, sync_handler: H) -> GrpcStreamSend<Resp>
     where
         Req : Send + 'static,
         Resp : Send + 'static,
@@ -86,5 +84,5 @@ pub fn sync_to_async_bidi<Req, Resp, H>(cpupool: &CpuPool, req: GrpcStream<Req>,
             futures::finished::<_, GrpcError>(())
         }));
         // TODO: handle cpupool error
-    receiver.boxed()
+    Box::new(receiver)
 }

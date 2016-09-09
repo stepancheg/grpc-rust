@@ -1,17 +1,16 @@
-use futures::stream::BoxStream;
 use futures::stream::Stream;
 use futures::Future;
 use futures::Poll;
 
 
-pub fn future_flatten_to_stream<F, T : Send + 'static, E : Send + 'static, S>(f: F) -> BoxStream<T, E>
+pub fn future_flatten_to_stream<F, T : Send + 'static, E : Send + 'static, S>(f: F) -> Box<Stream<Item=T, Error=E> + Send>
     where
         S : Stream<Item=T, Error=E> + Send + 'static,
         F : Future<Item=S, Error=E> + Send + 'static,
 {
-    FutureFlattenToStream {
+    Box::new(FutureFlattenToStream {
         inner: FutureFlattenToStreamInner::Future(f)
-    }.boxed()
+    })
 }
 
 enum FutureFlattenToStreamInner<F, S> {
