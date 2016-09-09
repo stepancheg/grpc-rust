@@ -43,14 +43,14 @@ fn new_server<H>(name: &str, streaming: GrpcStreaming, handler: H) -> GrpcServer
 
 /// Single unary method server
 fn new_server_unary<H>(name: &str, handler: H) -> GrpcServer
-    where H : Fn(String) -> GrpcFuture<String> + Sync + Send + 'static
+    where H : Fn(String) -> GrpcFutureSend<String> + Sync + Send + 'static
 {
     new_server(name, GrpcStreaming::Unary, MethodHandlerUnary::new(handler))
 }
 
 /// Single server streaming method server
 fn new_server_server_streaming<H>(name: &str, handler: H) -> GrpcServer
-    where H : Fn(String) -> GrpcStream<String> + Sync + Send + 'static
+    where H : Fn(String) -> GrpcStreamSend<String> + Sync + Send + 'static
 {
     new_server(name, GrpcStreaming::ServerStreaming, MethodHandlerServerStreaming::new(handler))
 }
@@ -65,7 +65,7 @@ struct TesterUnary {
 
 impl TesterUnary {
     fn new<H>(handler: H) -> TesterUnary
-        where H : Fn(String) -> GrpcFuture<String> + Sync + Send + 'static
+        where H : Fn(String) -> GrpcFutureSend<String> + Sync + Send + 'static
     {
         let name = "/text/Unary";
         let server = new_server_unary(name, handler);
@@ -77,7 +77,7 @@ impl TesterUnary {
         }
     }
 
-    fn call(&self, param: &str) -> GrpcFuture<String> {
+    fn call(&self, param: &str) -> GrpcFutureSend<String> {
         self.client.call_unary(param.to_owned(), string_string_method(&self.name, GrpcStreaming::Unary))
     }
 
@@ -112,7 +112,7 @@ struct TesterServerStreaming {
 
 impl TesterServerStreaming {
     fn new<H>(handler: H) -> TesterServerStreaming
-        where H : Fn(String) -> GrpcStream<String> + Sync + Send + 'static
+        where H : Fn(String) -> GrpcStreamSend<String> + Sync + Send + 'static
     {
         let name = "/test/ServerStreaming";
         let server = new_server_server_streaming(name, handler);

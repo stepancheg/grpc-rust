@@ -7,7 +7,7 @@ use grpc::futures_misc::channel_sync_sender;
 /// Spawn a thread with a function which returns an iterator.
 /// Resulting iterator elements will be emitted as Stream.
 pub fn stream_thread_spawn_iter<I, F, E>(f: F)
-    -> Box<Stream<Item=I::Item, Error=E>>
+    -> Box<Stream<Item=I::Item, Error=E> + Send>
         where
             I : Iterator,
             F : FnOnce() -> I,
