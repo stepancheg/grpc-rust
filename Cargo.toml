@@ -14,8 +14,10 @@ solicit         = { git = "http://github.com/mlalic/solicit.git" }
 #solicit-fork   = { git = "http://github.com/stepancheg/solicit.git" }
 #protobuf       = { path = "../rust-protobuf" }
 protobuf        = { git = "http://github.com/stepancheg/rust-protobuf" }
-futures         = { git = "https://github.com/alexcrichton/futures-rs" }
-futures-cpupool = { git = "https://github.com/alexcrichton/futures-rs" }
+#futures         = { git = "https://github.com/alexcrichton/futures-rs" }
+futures         = "0.1"
+#futures-cpupool = { git = "https://github.com/alexcrichton/futures-rs" }
+futures-cpupool = "0.1"
 tokio-core      = { git = "https://github.com/tokio-rs/tokio-core" }
 
 [lib]
