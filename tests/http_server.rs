@@ -71,7 +71,7 @@ fn test() {
             fn new_request(&mut self) -> (Self::RequestHandler, HttpFuture<ResponseHeaders>) {
                 (H {}, Box::new(futures::finished(ResponseHeaders {
                     headers: Vec::new(),
-                    after: Box::new(futures::failed(HttpError::IoError(io::Error::new(io::ErrorKind::Other, "aa")))),
+                    after: Box::new(futures::finished(AfterHeaders::DataChunk(vec![1], Box::new(futures::finished(AfterHeaders::Trailers(Vec::new())))))),
                 })))
             }
         }
@@ -83,39 +83,43 @@ fn test() {
 
     let port = port_rx.recv().expect("recv port");
 
-    let mut client_lp = reactor::Core::new().unwrap();
+    let (client_complete_tx, client_complete_rx) = mpsc::channel();
 
-    let (client, future) = HttpClientConnectionAsync::new(client_lp.handle(), &("::1", port).to_socket_addrs().unwrap().next().unwrap());
+    thread::spawn(move || {
+        let mut client_lp = reactor::Core::new().unwrap();
 
-    struct R {
-    }
+        let (client, future) = HttpClientConnectionAsync::new(client_lp.handle(), &("::1", port).to_socket_addrs().unwrap().next().unwrap());
 
-    impl HttpClientResponseHandler for R {
-        fn headers(&mut self, headers: Vec<StaticHeader>) -> bool {
-            println!("test: client: response headers");
-            true
+        struct R {
+            client_complete_tx: mpsc::Sender<()>,
         }
 
-        fn data_frame(&mut self, chunk: Vec<u8>) -> bool {
-            println!("test: client: response data frame: {}", chunk.len());
-            true
+        impl HttpClientResponseHandler for R {
+            fn headers(&mut self, headers: Vec<StaticHeader>) -> bool {
+                println!("test: client: response headers: {}", headers.len());
+                true
+            }
+
+            fn data_frame(&mut self, chunk: Vec<u8>) -> bool {
+                println!("test: client: response data frame: {}", chunk.len());
+                true
+            }
+
+            fn trailers(&mut self, headers: Vec<StaticHeader>) -> bool {
+                println!("test: client: response trailers: {}", headers.len());
+                true
+            }
+
+            fn end(&mut self) {
+                println!("test: client: end");
+                self.client_complete_tx.send(());
+            }
         }
 
-        fn trailers(&mut self, headers: Vec<StaticHeader>) -> bool {
-            println!("test: client: response trailers: {}", headers.len());
-            true
-        }
+        let resp = client.start_request(Vec::new(), stream_once_send((&b"abcd"[..]).to_owned()), R { client_complete_tx: client_complete_tx });
 
-        fn end(&mut self) {
-            println!("test: client: end");
-        }
-    }
+        client_lp.run(future).expect("client run");
+    });
 
-    let resp = client.start_request(Vec::new(), stream_once_send((&b"abcd"[..]).to_owned()), R {});
-
-//    client_lp.run(future).expect("client run");
-//
-//    println!("test: client loop complete");
-//
-//    resp.wait().unwrap();
+    client_complete_rx.recv().unwrap();
 }

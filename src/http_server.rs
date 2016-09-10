@@ -418,33 +418,40 @@ impl<F : HttpServerHandlerFactory> ServerWriteLoop<F> {
         Box::new(self.write_all(send_buf)
             .and_then(move |wl: Self| {
                 let to_write_tx = wl.to_write_tx();
-                after.and_then(move |after_headers| {
+                wl.loop_handle().spawn(after.and_then(move |after_headers| {
                     to_write_tx.send(ServerToWriteMessage::WriteDataFrame(stream_id, after_headers)).unwrap();
                     Ok(())
-                });
+                }).map_err(|e| panic!("{:?}", e))); // TODO: do not panic
                 Ok(wl)
             }))
     }
 
     fn process_data_chunk(self, stream_id: StreamId, frame: Vec<u8>, future: HttpFuture<AfterHeaders>) -> HttpFuture<Self> {
 
-        /*
         let send_buf = self.inner.with(move |inner: &mut ServerInner<F>| {
-            let mut send_buf = VecSendFrame(Vec::new());
-
-            inner.conn.sender(&mut send_buf).send_data(headers, stream_id, EndStream::No).unwrap();
-
-            send_buf.0
+            inner.conn.send_data_frames_to_vec(stream_id, &frame, EndStream::No).unwrap()
         });
-        */
 
-        // TODO
-        Box::new(futures::finished(self))
+        Box::new(self.write_all(send_buf)
+            .and_then(move |wl| {
+                let to_write_tx = wl.to_write_tx();
+                wl.loop_handle().spawn(future.and_then(move |after_headers| {
+                    to_write_tx.send(ServerToWriteMessage::WriteDataFrame(stream_id, after_headers)).unwrap();
+                    Ok(())
+                }).map_err(|e| panic!("{:?}", e))); // TODO: do not panic
+                Ok(wl)
+            }))
+
+        // TODO: after
     }
 
     fn process_trailers(self, stream_id: StreamId, trailers: Vec<StaticHeader>) -> HttpFuture<Self> {
-        // TODO
-        Box::new(futures::finished(self))
+        let send_buf = self.inner.with(move |inner: &mut ServerInner<F>| {
+            inner.conn.send_headers_to_vec(stream_id, trailers, EndStream::Yes).unwrap()
+        });
+
+        self.write_all(send_buf)
+        // TODO: GC stream
     }
 
     fn process_after_headers(self, stream_id: StreamId, after_headers: AfterHeaders) -> HttpFuture<Self> {
