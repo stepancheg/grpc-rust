@@ -20,6 +20,7 @@ pub mod rt;
 
 mod http_client;
 mod http_server;
+mod http_common;
 pub mod futures_misc;
 mod misc;
 mod solicit_async;
@@ -30,6 +31,7 @@ mod assert_types;
 pub mod for_test {
     pub use http_server::*;
     pub use http_client::*;
+    pub use http_common::*;
     pub use solicit_async::*;
     pub use futures_misc::*;
 }

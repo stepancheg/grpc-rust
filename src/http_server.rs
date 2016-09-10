@@ -53,6 +53,7 @@ use solicit_async::*;
 use solicit_misc::*;
 use misc::*;
 use assert_types::*;
+use http_common::*;
 
 
 pub enum AfterHeaders {
@@ -68,9 +69,7 @@ pub struct ResponseHeaders {
 
 // TODO: async
 pub trait HttpServerHandler: Send + 'static {
-    fn headers(&mut self, headers: Vec<StaticHeader>) -> HttpResult<()>;
-    fn data_frame(&mut self, data: &[u8]) -> HttpResult<()>;
-    fn trailers(&mut self) -> HttpResult<()>;
+    fn part(&mut self, part: HttpStreamPart) -> HttpResult<()>;
     fn end(&mut self) -> HttpResult<()>;
 }
 
@@ -129,12 +128,12 @@ impl<F : HttpServerHandlerFactory> GrpcHttpServerStream<F> {
     }
 
     fn new_data_chunk(&mut self, data: &[u8]) {
-        self.request_handler.as_mut().unwrap().data_frame(data).expect("xxx");
+        self.request_handler.as_mut().unwrap().part(HttpStreamPart::Data(data.to_owned())).expect("xxx");
     }
 
     fn set_headers<'n, 'v>(&mut self, headers: Vec<Header<'n, 'v>>) {
         let headers = headers.into_iter().map(|h| Header::new(h.name().to_owned(), h.value().to_owned())).collect();
-        self.request_handler.as_mut().unwrap().headers(headers).expect("xxx");
+        self.request_handler.as_mut().unwrap().part(HttpStreamPart::Headers(headers)).expect("xxx");
     }
 
     fn set_state(&mut self, state: StreamState) {

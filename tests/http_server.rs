@@ -40,18 +40,8 @@ fn test() {
         }
 
         impl HttpServerHandler for H {
-            fn headers(&mut self, headers: Vec<StaticHeader>) -> HttpResult<()> {
-                println!("test: server got: headers: {}", headers.len());
-                Ok(())
-            }
-
-            fn data_frame(&mut self, data: &[u8]) -> HttpResult<()> {
-                println!("test: server got: data frame: {}", data.len());
-                Ok(())
-            }
-
-            fn trailers(&mut self) -> HttpResult<()> {
-                println!("test: server got: trailers");
+            fn part(&mut self, part: HttpStreamPart) -> HttpResult<()> {
+                println!("test: part: {:?}", part);
                 Ok(())
             }
 
