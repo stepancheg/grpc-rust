@@ -175,14 +175,16 @@ impl<H : HttpClientResponseHandler> GrpcHttpClientSessionState<H> {
                         response_handler.headers(headers)
                     }
                     LastChunk::Trailers(headers) => {
-                        let r = response_handler.trailers(headers);
-                        if r {
-                            response_handler.end();
-                        }
-                        r
+                        response_handler.trailers(headers)
                     }
                 };
 
+            }
+
+            if ok && s.is_closed_remote() {
+                if let Some(ref mut response_handler) = s.response_handler {
+                    response_handler.end();
+                }
             }
 
             if !ok {

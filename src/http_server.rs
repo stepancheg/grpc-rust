@@ -76,7 +76,7 @@ pub trait HttpServerHandler: Send + 'static {
 pub trait HttpServerHandlerFactory: Send + 'static {
     type RequestHandler : HttpServerHandler;
 
-    fn new_request(&mut self) -> (Self::RequestHandler, HttpFuture<ResponseHeaders>);
+    fn new_request(&mut self) -> (Self::RequestHandler, HttpStreamStreamSend);
 }
 
 struct GrpcHttpServerStream<F : HttpServerHandlerFactory> {
@@ -239,11 +239,20 @@ impl<'a, F, S> Session for MyServerSession<'a, F, S>
 
         let (handler, response) = self.state.factory.new_request();
 
-        let to_write_tx = self.state.to_write_tx.clone();
-        self.state.loop_handle.spawn(response.and_then(move |response| {
-            to_write_tx.send(ServerToWriteMessage::WriteHeaders(stream_id, response)).unwrap();
-            Ok(())
-        }).map_err(|_| ()));
+        {
+            let to_write_tx = self.state.to_write_tx.clone();
+            let to_write_tx2 = to_write_tx.clone();
+
+            let process_response = response.for_each(move |part: HttpStreamPart| {
+                to_write_tx.send(ServerToWriteMessage::ResponsePart(stream_id, part));
+                Ok(())
+            }).and_then(move |()| {
+                to_write_tx2.send(ServerToWriteMessage::ResponseStreamEnd(stream_id));
+                Ok(())
+            }).map_err(|e| panic!("{:?}", e)); // TODO: handle
+
+            self.state.loop_handle.spawn(process_response);
+        }
 
         // New stream initiated by the client
         let mut stream = GrpcHttpServerStream {
@@ -314,8 +323,8 @@ struct ServerReadToWriteMessage {
 enum ServerToWriteMessage<F : HttpServerHandlerFactory> {
     _Dummy(F),
     FromRead(ServerReadToWriteMessage),
-    WriteHeaders(StreamId, ResponseHeaders),
-    WriteDataFrame(StreamId, AfterHeaders),
+    ResponsePart(StreamId, HttpStreamPart),
+    ResponseStreamEnd(StreamId),
 }
 
 fn assert_server_to_write_message_send<F : HttpServerHandlerFactory>() {
@@ -393,7 +402,6 @@ impl<F : HttpServerHandlerFactory> ServerWriteLoop<F> {
     fn write_all(self, buf: Vec<u8>) -> HttpFuture<Self> {
         let ServerWriteLoop { write, inner } = self;
 
-        println!("server: write_all: {:?}", BsDebug(&buf));
         Box::new(tokio_io::write_all(write, buf)
             .map(move |(write, _)| ServerWriteLoop { write: write, inner: inner })
             .map_err(HttpError::from))
@@ -403,68 +411,26 @@ impl<F : HttpServerHandlerFactory> ServerWriteLoop<F> {
         self.write_all(message.buf)
     }
 
-    fn process_write_headers(self, stream_id: StreamId, response_headers: ResponseHeaders) -> HttpFuture<Self> {
-        println!("server: write headers");
-
-        let ResponseHeaders { headers, after } = response_headers;
-
+    fn process_response_part(self, stream_id: StreamId, part: HttpStreamPart) -> HttpFuture<Self> {
         let send_buf = self.inner.with(move |inner: &mut ServerInner<F>| {
-            let mut send_buf = VecSendFrame(Vec::new());
-
-            inner.conn.send_headers_to_vec(stream_id, headers, EndStream::No).unwrap()
+            inner.conn.send_part_to_vec(stream_id, part, EndStream::No).unwrap()
         });
-
-        Box::new(self.write_all(send_buf)
-            .and_then(move |wl: Self| {
-                let to_write_tx = wl.to_write_tx();
-                wl.loop_handle().spawn(after.and_then(move |after_headers| {
-                    to_write_tx.send(ServerToWriteMessage::WriteDataFrame(stream_id, after_headers)).unwrap();
-                    Ok(())
-                }).map_err(|e| panic!("{:?}", e))); // TODO: do not panic
-                Ok(wl)
-            }))
-    }
-
-    fn process_data_chunk(self, stream_id: StreamId, frame: Vec<u8>, future: HttpFuture<AfterHeaders>) -> HttpFuture<Self> {
-
-        let send_buf = self.inner.with(move |inner: &mut ServerInner<F>| {
-            inner.conn.send_data_frames_to_vec(stream_id, &frame, EndStream::No).unwrap()
-        });
-
-        Box::new(self.write_all(send_buf)
-            .and_then(move |wl| {
-                let to_write_tx = wl.to_write_tx();
-                wl.loop_handle().spawn(future.and_then(move |after_headers| {
-                    to_write_tx.send(ServerToWriteMessage::WriteDataFrame(stream_id, after_headers)).unwrap();
-                    Ok(())
-                }).map_err(|e| panic!("{:?}", e))); // TODO: do not panic
-                Ok(wl)
-            }))
-
-        // TODO: after
-    }
-
-    fn process_trailers(self, stream_id: StreamId, trailers: Vec<StaticHeader>) -> HttpFuture<Self> {
-        let send_buf = self.inner.with(move |inner: &mut ServerInner<F>| {
-            inner.conn.send_headers_to_vec(stream_id, trailers, EndStream::Yes).unwrap()
-        });
-
         self.write_all(send_buf)
-        // TODO: GC stream
     }
 
-    fn process_after_headers(self, stream_id: StreamId, after_headers: AfterHeaders) -> HttpFuture<Self> {
-        match after_headers {
-            AfterHeaders::DataChunk(buf, future_after_headers) => self.process_data_chunk(stream_id, buf, future_after_headers),
-            AfterHeaders::Trailers(trailers) => self.process_trailers(stream_id, trailers),
-        }
+    fn process_response_end(self, stream_id: StreamId) -> HttpFuture<Self> {
+        println!("http server: process_response_end");
+        let send_buf = self.inner.with(move |inner: &mut ServerInner<F>| {
+            inner.conn.send_end_of_stream_to_vec(stream_id).unwrap()
+        });
+        self.write_all(send_buf)
     }
 
     fn process_message(self, message: ServerToWriteMessage<F>) -> HttpFuture<Self> {
         match message {
             ServerToWriteMessage::FromRead(from_read) => self.process_from_read(from_read),
-            ServerToWriteMessage::WriteHeaders(stream_id, headers) => self.process_write_headers(stream_id, headers),
-            ServerToWriteMessage::WriteDataFrame(stream_id, after_headers) => self.process_after_headers(stream_id, after_headers),
+            ServerToWriteMessage::ResponsePart(stream_id, response) => self.process_response_part(stream_id, response),
+            ServerToWriteMessage::ResponseStreamEnd(stream_id) => self.process_response_end(stream_id),
             ServerToWriteMessage::_Dummy(..) => panic!(),
         }
     }

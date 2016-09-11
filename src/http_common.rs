@@ -9,5 +9,5 @@ pub enum HttpStreamPart {
     Data(Vec<u8>),
 }
 
-type HttpStreamStream = Box<Stream<Item=HttpStreamPart, Error=HttpError>>;
-type HttpStreamStreamSend = Box<Stream<Item=HttpStreamPart, Error=HttpError> + Send>;
+pub type HttpStreamStream = Box<Stream<Item=HttpStreamPart, Error=HttpError>>;
+pub type HttpStreamStreamSend = Box<Stream<Item=HttpStreamPart, Error=HttpError> + Send>;

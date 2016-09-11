@@ -17,6 +17,7 @@ use solicit::http::connection::EndStream;
 use solicit::http::connection::DataChunk;
 
 use misc::*;
+use http_common::*;
 
 
 #[allow(dead_code)]
@@ -79,7 +80,7 @@ pub trait HttpConnectionEx {
         end_stream: EndStream)
             -> HttpResult<()>
     {
-        self.conn().sender(send).send_headers(headers, stream_id, EndStream::No)
+        self.conn().sender(send).send_headers(headers, stream_id, end_stream)
     }
 
     fn send_headers_to_vec(
@@ -164,6 +165,32 @@ pub trait HttpConnectionEx {
     fn send_end_of_stream_to_vec(&mut self, stream_id: StreamId) -> HttpResult<Vec<u8>> {
         let mut send = VecSendFrame(Vec::new());
         try!(self.send_end_of_stream(&mut send, stream_id));
+        Ok(send.0)
+    }
+
+    fn send_part<S : SendFrame>(
+        &mut self,
+        send: &mut S,
+        stream_id: StreamId,
+        part: HttpStreamPart,
+        end_stream: EndStream)
+            -> HttpResult<()>
+    {
+        match part {
+            HttpStreamPart::Data(data) => self.send_data_frames(send, stream_id, &data, end_stream),
+            HttpStreamPart::Headers(headers) => self.send_headers(send, stream_id, headers, end_stream),
+        }
+    }
+
+    fn send_part_to_vec(
+        &mut self,
+        stream_id: StreamId,
+        part: HttpStreamPart,
+        end_stream: EndStream)
+            -> HttpResult<Vec<u8>>
+    {
+        let mut send = VecSendFrame(Vec::new());
+        try!(self.send_part(&mut send, stream_id, part, end_stream));
         Ok(send.0)
     }
 }

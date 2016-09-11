@@ -58,11 +58,8 @@ fn test() {
         impl HttpServerHandlerFactory for F {
             type RequestHandler = H;
 
-            fn new_request(&mut self) -> (Self::RequestHandler, HttpFuture<ResponseHeaders>) {
-                (H {}, Box::new(futures::finished(ResponseHeaders {
-                    headers: Vec::new(),
-                    after: Box::new(futures::finished(AfterHeaders::DataChunk(vec![1], Box::new(futures::finished(AfterHeaders::Trailers(Vec::new())))))),
-                })))
+            fn new_request(&mut self) -> (Self::RequestHandler, HttpStreamStreamSend) {
+                (H {}, Box::new(stream::iter(vec![].into_iter())))
             }
         }
 
@@ -76,7 +73,7 @@ fn test() {
     let (client_complete_tx, client_complete_rx) = mpsc::channel();
 
     thread::spawn(move || {
-        let mut client_lp = reactor::Core::new().unwrap();
+        let mut client_lp = reactor::Core::new().expect("core");
 
         let (client, future) = HttpClientConnectionAsync::new(client_lp.handle(), &("::1", port).to_socket_addrs().unwrap().next().unwrap());
 
@@ -111,5 +108,5 @@ fn test() {
         client_lp.run(future).expect("client run");
     });
 
-    client_complete_rx.recv().unwrap();
+    client_complete_rx.recv().expect("client complete recv");
 }
