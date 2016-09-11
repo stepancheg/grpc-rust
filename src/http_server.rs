@@ -1,5 +1,6 @@
 use std::marker;
 use std::collections::HashMap;
+use std::collections::hash_map;
 
 use solicit::http::session::StreamState;
 use solicit::http::session::Session;
@@ -367,8 +368,31 @@ impl<F : HttpServerHandlerFactory> ServerReadLoop<F> {
         }
     }
 
+    fn process_stream_frame_new(self, frame: HttpFrameStream) -> HttpFuture<Self> {
+        self.inner.with(move |inner: &mut ServerInner<F>| {
+            let stream = inner.session_state.streams.entry(frame.get_stream_id())
+                .or_insert_with(|| {
+                    GrpcHttpServerStream {
+                        request_handler: None, // TODO
+                        state: StreamState::Open,
+                        _marker: marker::PhantomData,
+                    }
+                });
+
+            match frame {
+                HttpFrameStream::Data(data) => (),
+                HttpFrameStream::Headers(headers) => (),
+                HttpFrameStream::RstStream(rst) => (),
+                HttpFrameStream::WindowUpdate(settings) => (),
+            }
+        });
+
+        Box::new(futures::finished(self))
+    }
+
     fn process_stream_frame(self, frame: HttpFrameStream) -> HttpFuture<Self> {
         let last = self.inner.with(|inner: &mut ServerInner<F>| {
+
             let mut send = VecSendFrame(Vec::new());
             let last = {
                 let mut session = MyServerSession::new(&mut inner.session_state, &mut send);

@@ -207,7 +207,6 @@ pub enum HttpFrameStream<'a> {
     Data(DataFrame<'a>),
     Headers(HeadersFrame<'a>),
     RstStream(RstStreamFrame),
-    Settings(SettingsFrame),
     WindowUpdate(WindowUpdateFrame),
 }
 
@@ -219,7 +218,15 @@ impl<'a> HttpFrameStream<'a> {
             HttpFrameStream::Data(f) => HttpFrame::DataFrame(f),
             HttpFrameStream::Headers(f) => HttpFrame::HeadersFrame(f),
             HttpFrameStream::RstStream(f) => HttpFrame::RstStreamFrame(f),
-            HttpFrameStream::Settings(f) => HttpFrame::SettingsFrame(f),
+        }
+    }
+
+    pub fn get_stream_id(&self) -> StreamId {
+        match self {
+            &HttpFrameStream::WindowUpdate(ref f) => f.get_stream_id(),
+            &HttpFrameStream::Data(ref f) => f.get_stream_id(),
+            &HttpFrameStream::Headers(ref f) => f.get_stream_id(),
+            &HttpFrameStream::RstStream(ref f) => f.get_stream_id(),
         }
     }
 }
@@ -256,13 +263,7 @@ impl<'a> HttpFrameClassified<'a> {
             HttpFrame::DataFrame(f) => HttpFrameClassified::Stream(HttpFrameStream::Data(f)),
             HttpFrame::HeadersFrame(f) => HttpFrameClassified::Stream(HttpFrameStream::Headers(f)),
             HttpFrame::RstStreamFrame(f) => HttpFrameClassified::Stream(HttpFrameStream::RstStream(f)),
-            HttpFrame::SettingsFrame(f) => {
-                if f.get_stream_id() != 0 {
-                    HttpFrameClassified::Stream(HttpFrameStream::Settings(f))
-                } else {
-                    HttpFrameClassified::Conn(HttpFrameConn::Settings(f))
-                }
-            }
+            HttpFrame::SettingsFrame(f) => HttpFrameClassified::Conn(HttpFrameConn::Settings(f)),
             HttpFrame::PingFrame(f) => HttpFrameClassified::Conn(HttpFrameConn::Ping(f)),
             HttpFrame::GoawayFrame(f) => HttpFrameClassified::Conn(HttpFrameConn::Goaway(f)),
             HttpFrame::WindowUpdateFrame(f) => {
