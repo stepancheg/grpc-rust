@@ -12,7 +12,6 @@ use futures::stream::Stream;
 use tokio_core::reactor;
 use tokio_core::net::*;
 
-use solicit::http::HttpResult;
 use solicit::http::StaticHeader;
 
 use grpc::for_test::*;
@@ -31,31 +30,12 @@ fn test() {
 
         let server_conn = lp.run(listener.incoming().into_future()).ok().expect("accept").0.unwrap().0;
 
-        struct H {
-
-        }
-
-        impl HttpServerHandler for H {
-            fn part(&mut self, part: HttpStreamPart) -> HttpResult<()> {
-                println!("test: part: {:?}", part);
-                Ok(())
-            }
-
-            fn end(&mut self) -> HttpResult<()> {
-                println!("test: server got: end");
-                Ok(())
-            }
-        }
-
         struct F {
-
         }
 
         impl HttpServerHandlerFactory for F {
-            type RequestHandler = H;
-
-            fn new_request(&mut self) -> (Self::RequestHandler, HttpStreamStreamSend) {
-                (H {}, Box::new(stream::iter(vec![].into_iter())))
+            fn new_request(&mut self, _req: HttpStreamStreamSend) -> HttpStreamStreamSend {
+                Box::new(stream::iter(vec![].into_iter()))
             }
         }
 

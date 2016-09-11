@@ -47,21 +47,14 @@ pub struct ResponseHeaders {
 }
 
 
-// TODO: async
-pub trait HttpServerHandler: Send + 'static {
-    fn part(&mut self, part: HttpStreamPart) -> HttpResult<()>;
-    fn end(&mut self) -> HttpResult<()>;
-}
-
 pub trait HttpServerHandlerFactory: Send + 'static {
-    type RequestHandler : HttpServerHandler;
-
-    fn new_request(&mut self) -> (Self::RequestHandler, HttpStreamStreamSend);
+    fn new_request(&mut self, req: HttpStreamStreamSend) -> HttpStreamStreamSend;
 }
 
 struct GrpcHttpServerStream<F : HttpServerHandlerFactory> {
     state: StreamState,
-    request_handler: Option<F::RequestHandler>,
+    request_handler: Option<tokio_core::channel::Sender<ResultOrEof<HttpStreamPart, HttpError>>>,
+    _marker: marker::PhantomData<F>,
 }
 
 impl<F : HttpServerHandlerFactory> GrpcHttpServerStream<F> {
@@ -100,7 +93,7 @@ impl<F : HttpServerHandlerFactory> GrpcHttpServerStream<F> {
         }
     }
 
-    fn _is_closed_remote(&self) -> bool {
+    fn is_closed_remote(&self) -> bool {
         match self.state() {
             StreamState::HalfClosedRemote | StreamState::Closed => true,
             _ => false,
@@ -108,16 +101,28 @@ impl<F : HttpServerHandlerFactory> GrpcHttpServerStream<F> {
     }
 
     fn new_data_chunk(&mut self, data: &[u8]) {
-        self.request_handler.as_mut().unwrap().part(HttpStreamPart::Data(data.to_owned())).expect("xxx");
+        if let Some(ref mut sender) = self.request_handler {
+            // ignore error
+            sender.send(ResultOrEof::Item(HttpStreamPart::Data(data.to_owned()))).ok();
+        }
     }
 
     fn set_headers<'n, 'v>(&mut self, headers: Vec<Header<'n, 'v>>) {
         let headers = headers.into_iter().map(|h| Header::new(h.name().to_owned(), h.value().to_owned())).collect();
-        self.request_handler.as_mut().unwrap().part(HttpStreamPart::Headers(headers)).expect("xxx");
+        if let Some(ref mut sender) = self.request_handler {
+            // ignore error
+            sender.send(ResultOrEof::Item(HttpStreamPart::Headers(headers))).ok();
+        }
     }
 
     fn set_state(&mut self, state: StreamState) {
         self.state = state;
+        if self.is_closed_remote() {
+            if let Some(sender) = self.request_handler.take() {
+                // ignore error
+                sender.send(ResultOrEof::Eof).ok();
+            }
+        }
     }
 
     fn state(&self) -> StreamState {
@@ -217,7 +222,12 @@ impl<'a, F, S> Session for MyServerSession<'a, F, S>
             return Ok(());
         };
 
-        let (handler, response) = self.state.factory.new_request();
+        let (req_tx, req_rx) = tokio_core::channel::channel(&self.state.loop_handle).unwrap();
+
+        let req_rx = req_rx.map_err(HttpError::from);
+        let req_rx = stream_with_eof_and_error(req_rx);
+
+        let response = self.state.factory.new_request(Box::new(req_rx));
 
         {
             let to_write_tx = self.state.to_write_tx.clone();
@@ -237,7 +247,8 @@ impl<'a, F, S> Session for MyServerSession<'a, F, S>
         // New stream initiated by the client
         let stream = GrpcHttpServerStream {
             state: StreamState::Open,
-            request_handler: Some(handler),
+            request_handler: Some(req_tx),
+            _marker: marker::PhantomData,
         };
         let stream = self.state.insert_stream(stream_id, stream);
         stream.set_headers(headers);
