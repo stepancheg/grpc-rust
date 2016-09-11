@@ -21,6 +21,7 @@ use solicit::http::session::Stream as solicit_Stream;
 use solicit::http::connection::HttpConnection;
 use solicit::http::connection::EndStream;
 use solicit::http::connection::DataChunk;
+use solicit::http::connection::HttpFrame;
 use solicit::http::HttpScheme;
 use solicit::http::StreamId;
 use solicit::http::Header;
@@ -415,9 +416,7 @@ fn run_read(
                     let mut send_buf = VecSendFrame(Vec::new());
 
                     let mut session = ServerSession::new(&mut shared.state, &mut shared.factory, &mut send_buf);
-                    shared.conn.handle_next_frame(
-                        &mut OnceReceiveFrame::new(raw_frame),
-                        &mut session).unwrap();
+                    shared.conn.handle_frame(HttpFrame::from_raw(&raw_frame).unwrap(), &mut session).unwrap();
 
                     // TODO: process send
                 });

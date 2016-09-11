@@ -6,6 +6,7 @@ use solicit::http::session::Session;
 use solicit::http::connection::HttpConnection;
 use solicit::http::connection::EndStream;
 use solicit::http::connection::SendFrame;
+use solicit::http::connection::HttpFrame;
 use solicit::http::frame::RawFrame;
 use solicit::http::frame::HttpSetting;
 use solicit::http::frame::PingFrame;
@@ -472,7 +473,7 @@ impl<H : HttpClientResponseHandler> ClientReadLoop<H> {
             let mut send = VecSendFrame(Vec::new());
             let last = {
                 let mut session = MyClientSession::new(&mut inner.session_state, &mut send);
-                inner.conn.handle_next_frame(&mut OnceReceiveFrame::new(raw_frame), &mut session)
+                inner.conn.handle_frame(HttpFrame::from_raw(&raw_frame).unwrap(), &mut session)
                     .unwrap();
                 session.last.take()
             };

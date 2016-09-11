@@ -208,15 +208,11 @@ impl GrpcClient {
         // A channel to send response back to caller
         let future = self.new_resp_channel().map_err(GrpcError::from).and_then(move |(complete, receiver)| {
 
-            fn header(name: &str, value: &str) -> StaticHeader {
-                Header::new(name.as_bytes().to_owned(), value.as_bytes().to_owned())
-            }
-
             let headers = vec![
-                header(":method", "POST"),
-                header(":path", &method.name),
-                header(":authority", &host),
-                header(":scheme", from_utf8(http_scheme.as_bytes()).unwrap()),
+                Header::new(":method", "POST"),
+                Header::new(":path", method.name.clone()),
+                Header::new(":authority", host.clone()),
+                Header::new(":scheme", http_scheme.as_bytes()),
             ];
 
             let request_frames = {

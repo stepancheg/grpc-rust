@@ -33,11 +33,13 @@ impl<'a> fmt::Debug for HeaderDebug<'a> {
 
 
 /// work around https://github.com/mlalic/solicit/pull/33
+#[allow(dead_code)]
 pub struct OnceReceiveFrame<'a> {
     raw_frame: RawFrame<'a>,
     used: bool,
 }
 
+#[allow(dead_code)]
 impl<'a> OnceReceiveFrame<'a> {
     pub fn new(raw_frame: RawFrame<'a>) -> OnceReceiveFrame<'a> {
         OnceReceiveFrame {
