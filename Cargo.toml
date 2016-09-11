@@ -12,6 +12,7 @@ keywords = ["grpc"]
 [dependencies]
 #solicit         = { git = "http://github.com/mlalic/solicit.git" }
 solicit-fork   = { git = "http://github.com/stepancheg/solicit.git" }
+hpack          = "0.3"
 #protobuf       = { path = "../rust-protobuf" }
 protobuf        = { git = "http://github.com/stepancheg/rust-protobuf" }
 #futures         = { git = "https://github.com/alexcrichton/futures-rs" }

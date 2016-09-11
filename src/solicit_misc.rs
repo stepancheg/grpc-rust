@@ -221,6 +221,7 @@ impl<'a> HttpFrameStream<'a> {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_stream_id(&self) -> StreamId {
         match self {
             &HttpFrameStream::WindowUpdate(ref f) => f.get_stream_id(),

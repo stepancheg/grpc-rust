@@ -1,24 +1,17 @@
 use std::marker;
 use std::collections::HashMap;
-use std::collections::hash_map;
 
 use solicit::http::session::StreamState;
-use solicit::http::session::Session;
 use solicit::http::connection::HttpConnection;
 use solicit::http::connection::EndStream;
 use solicit::http::connection::SendFrame;
-use solicit::http::frame::SettingsFrame;
-use solicit::http::frame::RawFrame;
-use solicit::http::frame::HttpSetting;
-use solicit::http::frame::PingFrame;
-use solicit::http::frame::FrameIR;
+use solicit::http::frame::*;
 use solicit::http::StreamId;
 use solicit::http::HttpScheme;
 use solicit::http::HttpError;
-use solicit::http::ErrorCode;
-use solicit::http::HttpResult;
 use solicit::http::Header;
 use solicit::http::StaticHeader;
+use hpack;
 
 use futures;
 use futures::Future;
@@ -61,11 +54,7 @@ struct GrpcHttpServerStream<F : HttpServerHandlerFactory> {
 }
 
 impl<F : HttpServerHandlerFactory> GrpcHttpServerStream<F> {
-    fn on_rst_stream(&mut self, _error_code: ErrorCode) {
-        self.close();
-    }
-
-    fn close(&mut self) {
+    fn _close(&mut self) {
         self.set_state(StreamState::Closed);
     }
 
@@ -85,7 +74,7 @@ impl<F : HttpServerHandlerFactory> GrpcHttpServerStream<F> {
         self.set_state(next);
     }
 
-    fn is_closed(&self) -> bool {
+    fn _is_closed(&self) -> bool {
         self.state() == StreamState::Closed
     }
 
@@ -139,6 +128,7 @@ struct GrpcHttpServerSessionState<F : HttpServerHandlerFactory> {
     streams: HashMap<StreamId, GrpcHttpServerStream<F>>,
     to_write_tx: tokio_core::channel::Sender<ServerToWriteMessage<F>>,
     loop_handle: reactor::Handle,
+    decoder: hpack::Decoder<'static>,
 }
 
 impl<F : HttpServerHandlerFactory> GrpcHttpServerSessionState<F> {
@@ -159,81 +149,18 @@ impl<F : HttpServerHandlerFactory> GrpcHttpServerSessionState<F> {
         self.streams.remove(&stream_id)
     }
 
-}
-
-
-enum LastChunk {
-    _Empty,
-    _Headers(Vec<StaticHeader>),
-    _Chunk(Vec<u8>),
-    _Trailers(Vec<StaticHeader>),
-}
-
-struct MyServerSession<'a, F, S>
-    where
-        F : HttpServerHandlerFactory,
-        S : SendFrame + 'a,
-{
-    state: &'a mut GrpcHttpServerSessionState<F>,
-    sender: &'a mut S,
-    last: Option<(StreamId, LastChunk)>,
-}
-
-impl<'a, F, S> MyServerSession<'a, F, S>
-    where
-        F : HttpServerHandlerFactory,
-        S : SendFrame + 'a,
-{
-    fn new(state: &'a mut GrpcHttpServerSessionState<F>, sender: &'a mut S) -> MyServerSession<'a, F, S> {
-        MyServerSession {
-            state: state,
-            sender: sender,
-            last: None,
-        }
-    }
-}
-
-impl<'a, F, S> Session for MyServerSession<'a, F, S>
-    where
-        F : HttpServerHandlerFactory,
-        S : SendFrame + 'a,
-{
-    fn new_data_chunk(&mut self,
-                      stream_id: StreamId,
-                      data: &[u8],
-                      _: &mut HttpConnection)
-                      -> HttpResult<()> {
-        let mut stream = match self.state.get_stream_mut(stream_id) {
-            None => {
-                return Ok(());
-            }
-            Some(stream) => stream,
-        };
-        // Now let the stream handle the data chunk
-        stream.new_data_chunk(data);
-        Ok(())
-    }
-
-    fn new_headers<'n, 'v>(&mut self,
-                           stream_id: StreamId,
-                           headers: Vec<Header<'n, 'v>>,
-                           _conn: &mut HttpConnection)
-                           -> HttpResult<()> {
-        if let Some(stream) = self.state.get_stream_mut(stream_id) {
-            // This'd correspond to having received trailers...
-            stream.set_headers(headers);
-            return Ok(());
-        };
-
-        let (req_tx, req_rx) = tokio_core::channel::channel(&self.state.loop_handle).unwrap();
+    fn new_request(&mut self, stream_id: StreamId)
+        -> tokio_core::channel::Sender<ResultOrEof<HttpStreamPart, HttpError>>
+    {
+        let (req_tx, req_rx) = tokio_core::channel::channel(&self.loop_handle).unwrap();
 
         let req_rx = req_rx.map_err(HttpError::from);
         let req_rx = stream_with_eof_and_error(req_rx);
 
-        let response = self.state.factory.new_request(Box::new(req_rx));
+        let response = self.factory.new_request(Box::new(req_rx));
 
         {
-            let to_write_tx = self.state.to_write_tx.clone();
+            let to_write_tx = self.to_write_tx.clone();
             let to_write_tx2 = to_write_tx.clone();
 
             let process_response = response.for_each(move |part: HttpStreamPart| {
@@ -244,8 +171,19 @@ impl<'a, F, S> Session for MyServerSession<'a, F, S>
                 Ok(())
             }).map_err(|e| panic!("{:?}", e)); // TODO: handle
 
-            self.state.loop_handle.spawn(process_response);
+            self.loop_handle.spawn(process_response);
         }
+
+        req_tx
+    }
+
+    fn get_or_create_stream(&mut self, stream_id: StreamId) -> &mut GrpcHttpServerStream<F> {
+        if self.get_stream_mut(stream_id).is_some() {
+            // https://github.com/rust-lang/rust/issues/36403
+            return self.get_stream_mut(stream_id).unwrap();
+        }
+
+        let req_tx = self.new_request(stream_id);
 
         // New stream initiated by the client
         let stream = GrpcHttpServerStream {
@@ -253,48 +191,10 @@ impl<'a, F, S> Session for MyServerSession<'a, F, S>
             request_handler: Some(req_tx),
             _marker: marker::PhantomData,
         };
-        let stream = self.state.insert_stream(stream_id, stream);
-        stream.set_headers(headers);
-        Ok(())
+        self.insert_stream(stream_id, stream)
     }
 
-    fn end_of_stream(&mut self, stream_id: StreamId, _: &mut HttpConnection) -> HttpResult<()> {
-        let mut stream = match self.state.get_stream_mut(stream_id) {
-            None => {
-                return Ok(());
-            }
-            Some(stream) => stream,
-        };
-        stream.close_remote();
-        Ok(())
-    }
-
-    fn rst_stream(&mut self,
-                  stream_id: StreamId,
-                  error_code: ErrorCode,
-                  _: &mut HttpConnection)
-                  -> HttpResult<()> {
-        self.state.get_stream_mut(stream_id).map(|stream| stream.on_rst_stream(error_code));
-        Ok(())
-    }
-
-    fn new_settings(&mut self,
-                    _settings: Vec<HttpSetting>,
-                    conn: &mut HttpConnection)
-                    -> HttpResult<()> {
-        conn.sender(self.sender).send_settings_ack()
-    }
-
-    fn on_ping(&mut self, ping: &PingFrame, conn: &mut HttpConnection) -> HttpResult<()> {
-        conn.sender(self.sender).send_ping_ack(ping.opaque_data())
-    }
-
-    fn on_pong(&mut self, _ping: &PingFrame, _conn: &mut HttpConnection) -> HttpResult<()> {
-        Ok(())
-    }
 }
-
-
 
 
 struct ServerInner<F : HttpServerHandlerFactory> {
@@ -368,61 +268,64 @@ impl<F : HttpServerHandlerFactory> ServerReadLoop<F> {
         }
     }
 
-    fn process_stream_frame_new(self, frame: HttpFrameStream) -> HttpFuture<Self> {
+    fn process_data_frame(self, frame: DataFrame) -> HttpFuture<Self> {
         self.inner.with(move |inner: &mut ServerInner<F>| {
-            let stream = inner.session_state.streams.entry(frame.get_stream_id())
-                .or_insert_with(|| {
-                    GrpcHttpServerStream {
-                        request_handler: None, // TODO
-                        state: StreamState::Open,
-                        _marker: marker::PhantomData,
-                    }
-                });
+            let stream = inner.session_state.get_or_create_stream(frame.get_stream_id());
 
-            match frame {
-                HttpFrameStream::Data(data) => (),
-                HttpFrameStream::Headers(headers) => (),
-                HttpFrameStream::RstStream(rst) => (),
-                HttpFrameStream::WindowUpdate(settings) => (),
+            // TODO: decrease window
+
+            stream.new_data_chunk(&frame.data.as_ref());
+
+            if frame.is_set(DataFlag::EndStream) {
+                stream.close_remote()
             }
+
+            // TODO: drop stream if closed on both ends
         });
 
         Box::new(futures::finished(self))
     }
 
-    fn process_stream_frame(self, frame: HttpFrameStream) -> HttpFuture<Self> {
-        let last = self.inner.with(|inner: &mut ServerInner<F>| {
+    fn process_headers_frame(self, frame: HeadersFrame) -> HttpFuture<Self> {
+        self.inner.with(move |inner: &mut ServerInner<F>| {
+            let headers = inner.session_state.decoder
+                                   .decode(&frame.header_fragment())
+                                   .map_err(HttpError::CompressionError).unwrap();
+            let headers = headers.into_iter().map(|h| h.into()).collect();
 
-            let mut send = VecSendFrame(Vec::new());
-            let last = {
-                let mut session = MyServerSession::new(&mut inner.session_state, &mut send);
-                inner.conn.handle_frame(frame.into_frame(), &mut session)
-                    .unwrap();
-                session.last.take()
-            };
+            let stream = inner.session_state.get_or_create_stream(frame.get_stream_id());
 
-            if !send.0.is_empty() {
-                inner.session_state.to_write_tx.send(ServerToWriteMessage::FromRead(ServerReadToWriteMessage { buf: send.0 }))
-                    .expect("read to write");
+            stream.set_headers(headers);
+
+            if frame.is_end_of_stream() {
+                stream.close_remote();
             }
 
-            if let &Some((stream_id, _)) = &last {
-                let mut closed = false;
-                if let Some(stream) = inner.session_state.get_stream_mut(stream_id) {
-                    closed = stream.is_closed();
-                }
-                if closed {
-                   inner.session_state.remove_stream(stream_id);
-                }
-            }
-
-            last
+            // TODO: drop stream if closed on both ends
         });
 
-        if let Some((_stream_id, _last_chunk)) = last {
-            unimplemented!()
-        } else {
-            Box::new(futures::finished(self))
+        Box::new(futures::finished(self))    }
+
+    fn process_rst_stream_frame(self, frame: RstStreamFrame) -> HttpFuture<Self> {
+        self.inner.with(move |inner: &mut ServerInner<F>| {
+            // TODO: check actually removed
+            inner.session_state.remove_stream(frame.get_stream_id());
+        });
+
+        Box::new(futures::finished(self))
+    }
+
+    fn process_window_update_frame(self, _frame: WindowUpdateFrame) -> HttpFuture<Self> {
+        // TODO
+        Box::new(futures::finished(self))
+    }
+
+    fn process_stream_frame(self, frame: HttpFrameStream) -> HttpFuture<Self> {
+        match frame {
+            HttpFrameStream::Data(data) => self.process_data_frame(data),
+            HttpFrameStream::Headers(headers) => self.process_headers_frame(headers),
+            HttpFrameStream::RstStream(rst) => self.process_rst_stream_frame(rst),
+            HttpFrameStream::WindowUpdate(window_update) => self.process_window_update_frame(window_update),
         }
     }
 
@@ -531,6 +434,7 @@ impl<F : HttpServerHandlerFactory> HttpServerConnectionAsync<F> {
                     factory: factory,
                     to_write_tx: to_write_tx.clone(),
                     loop_handle: lh,
+                    decoder : hpack::Decoder::new(),
                 },
             });
 

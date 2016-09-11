@@ -1,6 +1,7 @@
 extern crate protobuf;
 //extern crate solicit;
 extern crate solicit_fork as solicit;
+extern crate hpack;
 #[macro_use]
 extern crate futures;
 extern crate futures_cpupool;
