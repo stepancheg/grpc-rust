@@ -1,28 +1,11 @@
-use std::marker;
-use std::cmp;
-use std::mem;
 use std::net::SocketAddr;
 use std::collections::HashMap;
-use std::iter::FromIterator;
 
-use solicit::http::client::RequestStream;
-use solicit::http::client::ClientSession;
-use solicit::http::session::Client;
-use solicit::http::session::SessionState;
-use solicit::http::session::DefaultSessionState;
-use solicit::http::session::DefaultStream;
 use solicit::http::session::StreamState;
-use solicit::http::session::StreamDataError;
-use solicit::http::session::StreamDataChunk;
-use solicit::http::session::Stream as solicit_Stream;
-use solicit::http::session::StreamIter;
 use solicit::http::session::Session;
 use solicit::http::connection::HttpConnection;
-use solicit::http::connection::SendStatus;
 use solicit::http::connection::EndStream;
-use solicit::http::connection::DataChunk;
 use solicit::http::connection::SendFrame;
-use solicit::http::priority::SimplePrioritizer;
 use solicit::http::frame::RawFrame;
 use solicit::http::frame::HttpSetting;
 use solicit::http::frame::PingFrame;
@@ -46,7 +29,6 @@ use tokio_core::io::ReadHalf;
 use tokio_core::io::WriteHalf;
 use tokio_core::reactor;
 
-use error::*;
 use futures_misc::*;
 
 use solicit_async::*;
@@ -95,7 +77,7 @@ impl<H : HttpClientResponseHandler> GrpcHttpClientStream<H> {
         self.set_state(StreamState::Closed);
     }
 
-    fn close_local(&mut self) {
+    fn _close_local(&mut self) {
         let next = match self.state() {
             StreamState::HalfClosedRemote => StreamState::Closed,
             _ => StreamState::HalfClosedLocal,
@@ -103,7 +85,7 @@ impl<H : HttpClientResponseHandler> GrpcHttpClientStream<H> {
         self.set_state(next);
     }
 
-    fn close_remote(&mut self) {
+    fn _close_remote(&mut self) {
         let next = match self.state() {
             StreamState::HalfClosedLocal => StreamState::Closed,
             _ => StreamState::HalfClosedRemote,
@@ -115,7 +97,7 @@ impl<H : HttpClientResponseHandler> GrpcHttpClientStream<H> {
         self.state() == StreamState::Closed
     }
 
-    fn is_closed_local(&self) -> bool {
+    fn _is_closed_local(&self) -> bool {
         match self.state() {
             StreamState::HalfClosedLocal | StreamState::Closed => true,
             _ => false,
@@ -213,7 +195,7 @@ impl<H : HttpClientResponseHandler> GrpcHttpClientSessionState<H> {
         id
     }
 
-    fn get_stream_ref(&self, stream_id: StreamId) -> Option<&GrpcHttpClientStream<H>> {
+    fn _get_stream_ref(&self, stream_id: StreamId) -> Option<&GrpcHttpClientStream<H>> {
         self.streams.get(&stream_id)
     }
 
@@ -221,7 +203,7 @@ impl<H : HttpClientResponseHandler> GrpcHttpClientSessionState<H> {
         self.streams.get_mut(&stream_id)
     }
 
-    fn remove_stream(&mut self, stream_id: StreamId) -> Option<GrpcHttpClientStream<H>> {
+    fn _remove_stream(&mut self, stream_id: StreamId) -> Option<GrpcHttpClientStream<H>> {
         self.streams.remove(&stream_id)
     }
 }
@@ -255,7 +237,7 @@ impl<'a, H, S> Session for MyClientSession<'a, H, S>
         H : HttpClientResponseHandler,
         S : SendFrame + 'a,
 {
-    fn new_data_chunk(&mut self, stream_id: StreamId, data: &[u8], conn: &mut HttpConnection) -> HttpResult<()> {
+    fn new_data_chunk(&mut self, stream_id: StreamId, data: &[u8], _conn: &mut HttpConnection) -> HttpResult<()> {
         println!("client: new_data_chunk: {}", data.len());
         let mut stream: &mut GrpcHttpClientStream<H> = match self.state.get_stream_mut(stream_id) {
             None => {
@@ -271,7 +253,7 @@ impl<'a, H, S> Session for MyClientSession<'a, H, S>
         Ok(())
     }
 
-    fn new_headers<'n, 'v>(&mut self, stream_id: StreamId, headers: Vec<Header<'n, 'v>>, conn: &mut HttpConnection) -> HttpResult<()> {
+    fn new_headers<'n, 'v>(&mut self, stream_id: StreamId, headers: Vec<Header<'n, 'v>>, _conn: &mut HttpConnection) -> HttpResult<()> {
         println!("client: new_headers: {}", headers.len());
         let mut stream: &mut GrpcHttpClientStream<H> = match self.state.get_stream_mut(stream_id) {
             None => {
@@ -286,7 +268,7 @@ impl<'a, H, S> Session for MyClientSession<'a, H, S>
         Ok(())
     }
 
-    fn end_of_stream(&mut self, stream_id: StreamId, conn: &mut HttpConnection) -> HttpResult<()> {
+    fn end_of_stream(&mut self, stream_id: StreamId, _conn: &mut HttpConnection) -> HttpResult<()> {
         let mut stream = match self.state.get_stream_mut(stream_id) {
             None => {
                 return Ok(());
@@ -303,13 +285,13 @@ impl<'a, H, S> Session for MyClientSession<'a, H, S>
         Ok(())
     }
 
-    fn rst_stream(&mut self, stream_id: StreamId, error_code: ErrorCode, conn: &mut HttpConnection) -> HttpResult<()> {
+    fn rst_stream(&mut self, stream_id: StreamId, error_code: ErrorCode, _conn: &mut HttpConnection) -> HttpResult<()> {
         self.state.get_stream_mut(stream_id).map(|stream| stream.on_rst_stream(error_code));
         self.last = Some((stream_id, LastChunk::Empty));
         Ok(())
     }
 
-    fn new_settings(&mut self, settings: Vec<HttpSetting>, conn: &mut HttpConnection) -> HttpResult<()> {
+    fn new_settings(&mut self, _settings: Vec<HttpSetting>, conn: &mut HttpConnection) -> HttpResult<()> {
         conn.sender(self.sender).send_settings_ack()
     }
 
@@ -317,7 +299,7 @@ impl<'a, H, S> Session for MyClientSession<'a, H, S>
         conn.sender(self.sender).send_ping_ack(ping.opaque_data())
     }
 
-    fn on_pong(&mut self, ping: &PingFrame, conn: &mut HttpConnection) -> HttpResult<()> {
+    fn on_pong(&mut self, _ping: &PingFrame, _conn: &mut HttpConnection) -> HttpResult<()> {
         Ok(())
     }
 }
@@ -401,7 +383,7 @@ impl<H : HttpClientResponseHandler> ClientWriteLoop<H> {
                         inner.to_write_tx.send(ClientToWriteMessage::BodyChunk(BodyChunkMessage {
                             stream_id: stream_id,
                             chunk: chunk,
-                        }))
+                        })).unwrap()
                     });
                     futures::finished::<_, HttpError>(wl)
                 })
@@ -410,7 +392,7 @@ impl<H : HttpClientResponseHandler> ClientWriteLoop<H> {
                 wl.inner.with(|inner: &mut ClientInner<H>| {
                     inner.to_write_tx.send(ClientToWriteMessage::End(EndRequestMessage {
                         stream_id: stream_id,
-                    }));
+                    })).unwrap()
                 });
                 futures::finished::<_, HttpError>(wl)
             }))
@@ -423,7 +405,7 @@ impl<H : HttpClientResponseHandler> ClientWriteLoop<H> {
 
         let buf = self.inner.with(move |inner: &mut ClientInner<H>| {
             {
-                let stream = inner.session_state.get_stream_mut(stream_id);
+                let _stream = inner.session_state.get_stream_mut(stream_id);
                 // TODO: check stream state
             }
 
@@ -571,7 +553,7 @@ impl<H : HttpClientResponseHandler> HttpClientConnectionAsync<H> {
             headers: headers,
             body: body,
             response_handler: response_handler,
-        }));
+        })).unwrap();
 
         // should use bounded queue here, so future result
         Box::new(futures::finished(()))

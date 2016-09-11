@@ -1,28 +1,11 @@
 use std::marker;
-use std::cmp;
-use std::mem;
-use std::net::SocketAddr;
 use std::collections::HashMap;
-use std::iter::FromIterator;
 
-use solicit::http::client::RequestStream;
-use solicit::http::client::ClientSession;
-use solicit::http::session::Client;
-use solicit::http::session::SessionState;
-use solicit::http::session::DefaultSessionState;
-use solicit::http::session::DefaultStream;
 use solicit::http::session::StreamState;
-use solicit::http::session::StreamDataError;
-use solicit::http::session::StreamDataChunk;
-use solicit::http::session::Stream as solicit_Stream;
-use solicit::http::session::StreamIter;
 use solicit::http::session::Session;
 use solicit::http::connection::HttpConnection;
-use solicit::http::connection::SendStatus;
 use solicit::http::connection::EndStream;
-use solicit::http::connection::DataChunk;
 use solicit::http::connection::SendFrame;
-use solicit::http::priority::SimplePrioritizer;
 use solicit::http::frame::RawFrame;
 use solicit::http::frame::HttpSetting;
 use solicit::http::frame::PingFrame;
@@ -46,13 +29,10 @@ use tokio_core::io::ReadHalf;
 use tokio_core::io::WriteHalf;
 use tokio_core::reactor;
 
-use error::*;
 use futures_misc::*;
 
 use solicit_async::*;
 use solicit_misc::*;
-use misc::*;
-use assert_types::*;
 use http_common::*;
 
 
@@ -93,7 +73,7 @@ impl<F : HttpServerHandlerFactory> GrpcHttpServerStream<F> {
         self.set_state(StreamState::Closed);
     }
 
-    fn close_local(&mut self) {
+    fn _close_local(&mut self) {
         let next = match self.state() {
             StreamState::HalfClosedRemote => StreamState::Closed,
             _ => StreamState::HalfClosedLocal,
@@ -109,18 +89,18 @@ impl<F : HttpServerHandlerFactory> GrpcHttpServerStream<F> {
         self.set_state(next);
     }
 
-    fn is_closed(&self) -> bool {
+    fn _is_closed(&self) -> bool {
         self.state() == StreamState::Closed
     }
 
-    fn is_closed_local(&self) -> bool {
+    fn _is_closed_local(&self) -> bool {
         match self.state() {
             StreamState::HalfClosedLocal | StreamState::Closed => true,
             _ => false,
         }
     }
 
-    fn is_closed_remote(&self) -> bool {
+    fn _is_closed_remote(&self) -> bool {
         match self.state() {
             StreamState::HalfClosedRemote | StreamState::Closed => true,
             _ => false,
@@ -159,7 +139,7 @@ impl<F : HttpServerHandlerFactory> GrpcHttpServerSessionState<F> {
         self.streams.get_mut(&stream_id).unwrap()
     }
 
-    fn get_stream_ref(&self, stream_id: StreamId) -> Option<&GrpcHttpServerStream<F>> {
+    fn _get_stream_ref(&self, stream_id: StreamId) -> Option<&GrpcHttpServerStream<F>> {
         self.streams.get(&stream_id)
     }
 
@@ -167,7 +147,7 @@ impl<F : HttpServerHandlerFactory> GrpcHttpServerSessionState<F> {
         self.streams.get_mut(&stream_id)
     }
 
-    fn remove_stream(&mut self, stream_id: StreamId) -> Option<GrpcHttpServerStream<F>> {
+    fn _remove_stream(&mut self, stream_id: StreamId) -> Option<GrpcHttpServerStream<F>> {
         self.streams.remove(&stream_id)
     }
 
@@ -175,10 +155,10 @@ impl<F : HttpServerHandlerFactory> GrpcHttpServerSessionState<F> {
 
 
 enum LastChunk {
-    Empty,
-    Headers(Vec<StaticHeader>),
-    Chunk(Vec<u8>),
-    Trailers(Vec<StaticHeader>),
+    _Empty,
+    _Headers(Vec<StaticHeader>),
+    _Chunk(Vec<u8>),
+    _Trailers(Vec<StaticHeader>),
 }
 
 struct MyServerSession<'a, F, S>
@@ -244,10 +224,10 @@ impl<'a, F, S> Session for MyServerSession<'a, F, S>
             let to_write_tx2 = to_write_tx.clone();
 
             let process_response = response.for_each(move |part: HttpStreamPart| {
-                to_write_tx.send(ServerToWriteMessage::ResponsePart(stream_id, part));
+                to_write_tx.send(ServerToWriteMessage::ResponsePart(stream_id, part)).unwrap();
                 Ok(())
             }).and_then(move |()| {
-                to_write_tx2.send(ServerToWriteMessage::ResponseStreamEnd(stream_id));
+                to_write_tx2.send(ServerToWriteMessage::ResponseStreamEnd(stream_id)).unwrap();
                 Ok(())
             }).map_err(|e| panic!("{:?}", e)); // TODO: handle
 
@@ -255,7 +235,7 @@ impl<'a, F, S> Session for MyServerSession<'a, F, S>
         }
 
         // New stream initiated by the client
-        let mut stream = GrpcHttpServerStream {
+        let stream = GrpcHttpServerStream {
             state: StreamState::Open,
             request_handler: Some(handler),
         };
@@ -327,11 +307,6 @@ enum ServerToWriteMessage<F : HttpServerHandlerFactory> {
     ResponseStreamEnd(StreamId),
 }
 
-fn assert_server_to_write_message_send<F : HttpServerHandlerFactory>() {
-    assert_send::<ServerToWriteMessage<F>>()
-}
-
-
 
 impl<F : HttpServerHandlerFactory> ServerReadLoop<F> {
     fn recv_raw_frame(self) -> HttpFuture<(Self, RawFrame<'static>)> {
@@ -364,7 +339,7 @@ impl<F : HttpServerHandlerFactory> ServerReadLoop<F> {
             last
         });
 
-        if let Some((stream_id, last_chunk)) = last {
+        if let Some((_stream_id, _last_chunk)) = last {
             //self.process_streams_after_handle_next_frame(stream_id, last_chunk)
             unimplemented!()
         } else {
@@ -391,11 +366,11 @@ struct ServerWriteLoop<F>
 }
 
 impl<F : HttpServerHandlerFactory> ServerWriteLoop<F> {
-    fn loop_handle(&self) -> reactor::Handle {
+    fn _loop_handle(&self) -> reactor::Handle {
         self.inner.with(move |inner: &mut ServerInner<F>| inner.session_state.loop_handle.clone())
     }
 
-    fn to_write_tx(&self) -> tokio_core::channel::Sender<ServerToWriteMessage<F>> {
+    fn _to_write_tx(&self) -> tokio_core::channel::Sender<ServerToWriteMessage<F>> {
         self.inner.with(move |inner: &mut ServerInner<F>| inner.session_state.to_write_tx.clone())
     }
 
@@ -449,7 +424,7 @@ impl<F : HttpServerHandlerFactory> ServerWriteLoop<F> {
 
 
 pub struct HttpServerConnectionAsync<F : HttpServerHandlerFactory> {
-    factory: F,
+    _marker: marker::PhantomData<F>,
 }
 
 impl<F : HttpServerHandlerFactory> HttpServerConnectionAsync<F> {

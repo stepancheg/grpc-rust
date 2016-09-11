@@ -3,22 +3,18 @@ extern crate futures;
 extern crate tokio_core;
 extern crate grpc;
 
-use std::io;
 use std::sync::mpsc;
 use std::net::ToSocketAddrs;
 use std::thread;
 
-use futures::Future;
 use futures::stream;
 use futures::stream::Stream;
 use tokio_core::reactor;
 use tokio_core::net::*;
 
-use solicit::http::HttpError;
 use solicit::http::HttpResult;
 use solicit::http::StaticHeader;
 
-use grpc::*;
 use grpc::for_test::*;
 
 
@@ -31,7 +27,7 @@ fn test() {
 
         let listener = TcpListener::bind(&("::1", 0).to_socket_addrs().unwrap().next().unwrap(), &lp.handle()).unwrap();
 
-        port_tx.send(listener.local_addr().unwrap().port());
+        port_tx.send(listener.local_addr().unwrap().port()).unwrap();
 
         let server_conn = lp.run(listener.incoming().into_future()).ok().expect("accept").0.unwrap().0;
 
@@ -99,11 +95,11 @@ fn test() {
 
             fn end(&mut self) {
                 println!("test: client: end");
-                self.client_complete_tx.send(());
+                self.client_complete_tx.send(()).unwrap();
             }
         }
 
-        let resp = client.start_request(Vec::new(), stream_once_send((&b"abcd"[..]).to_owned()), R { client_complete_tx: client_complete_tx });
+        let _resp = client.start_request(Vec::new(), stream_once_send((&b"abcd"[..]).to_owned()), R { client_complete_tx: client_complete_tx });
 
         client_lp.run(future).expect("client run");
     });

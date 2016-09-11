@@ -31,7 +31,6 @@ use futures::Future;
 use futures::stream;
 use futures::stream::Stream;
 use tokio_core::io as tokio_io;
-use tokio_core::io::IoFuture;
 use tokio_core::io::ReadHalf;
 use tokio_core::io::WriteHalf;
 use tokio_core;
@@ -65,11 +64,11 @@ pub struct MethodHandlerServerStreaming<F> {
 }
 
 pub struct MethodHandlerClientStreaming<F> {
-    f: F
+    _f: F
 }
 
 pub struct MethodHandlerBidi<F> {
-    f: F
+    _f: F
 }
 
 impl<F> MethodHandlerUnary<F> {
@@ -87,7 +86,7 @@ impl<F> MethodHandlerClientStreaming<F> {
         where F : Fn(GrpcStreamSend<Req>) -> GrpcFutureSend<Resp>
     {
         MethodHandlerClientStreaming {
-            f: f,
+            _f: f,
         }
     }
 }
@@ -107,7 +106,7 @@ impl<F> MethodHandlerBidi<F> {
         where F : Fn(GrpcStreamSend<Req>) -> GrpcStreamSend<Resp>
     {
         MethodHandlerBidi {
-            f: f,
+            _f: f,
         }
     }
 }
@@ -127,7 +126,7 @@ impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerClientStreaming<F>
         Resp : Send + 'static,
         F : Fn(GrpcStreamSend<Req>) -> GrpcFutureSend<Resp>,
 {
-    fn handle(&self, req: Req) -> GrpcStreamSend<Resp> {
+    fn handle(&self, _req: Req) -> GrpcStreamSend<Resp> {
         unimplemented!()
     }
 }
@@ -147,7 +146,7 @@ impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerBidi<F>
         Resp : Send + 'static,
         F : Fn(GrpcStreamSend<Req>) -> GrpcStreamSend<Resp>,
 {
-    fn handle(&self, req: Req) -> GrpcStreamSend<Resp> {
+    fn handle(&self, _req: Req) -> GrpcStreamSend<Resp> {
         unimplemented!()
     }
 }

@@ -4,40 +4,16 @@ use std::net::ToSocketAddrs;
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::str::from_utf8;
-use std::mem;
 
 use futures;
 use futures::Future;
-use futures::AndThen;
 use futures::stream::Stream;
-
-use tokio_core::io as tokio_io;
-use tokio_core::io::ReadHalf;
-use tokio_core::io::WriteHalf;
 
 use tokio_core;
 use tokio_core::reactor;
-use tokio_core::net::TcpStream;
 
-use solicit::http::client::RequestStream;
-use solicit::http::client::ClientSession;
-use solicit::http::session::Client;
-use solicit::http::session::SessionState;
-use solicit::http::session::DefaultSessionState;
-use solicit::http::session::DefaultStream;
-use solicit::http::session::StreamState;
-use solicit::http::session::StreamDataError;
-use solicit::http::session::StreamDataChunk;
-use solicit::http::session::Stream as solicit_Stream;
-use solicit::http::connection::HttpConnection;
-use solicit::http::connection::SendStatus;
-use solicit::http::connection::EndStream;
-use solicit::http::connection::DataChunk;
-use solicit::http::priority::SimplePrioritizer;
-use solicit::http::StreamId;
 use solicit::http::HttpScheme;
 use solicit::http::HttpError;
-use solicit::http::HttpResult;
 use solicit::http::Header;
 use solicit::http::StaticHeader;
 
@@ -51,13 +27,10 @@ use futures_misc::*;
 use futures_grpc::*;
 
 use grpc::*;
-use solicit_async::*;
-use solicit_misc::*;
 
 use http_client::*;
 
 use assert_types::*;
-
 
 
 trait GrpcResponseHandlerTrait : Send + 'static + HttpClientResponseHandler {
@@ -77,9 +50,9 @@ impl<Req : Send + 'static, Resp : Send + 'static> HttpClientResponseHandler for 
         println!("client: received headers");
         if slice_get_header(&headers, ":status") != Some("200") {
             if let Some(message) = slice_get_header(&headers, HEADER_GRPC_MESSAGE) {
-                self.complete.send(ResultOrEof::Error(GrpcError::GrpcMessage(GrpcMessageError { grpc_message: message.to_owned() })));
+                self.complete.send(ResultOrEof::Error(GrpcError::GrpcMessage(GrpcMessageError { grpc_message: message.to_owned() }))).unwrap();
             } else {
-                self.complete.send(ResultOrEof::Error(GrpcError::Other("not 200")));
+                self.complete.send(ResultOrEof::Error(GrpcError::Other("not 200"))).unwrap();
             }
             false
         } else {
@@ -92,7 +65,7 @@ impl<Req : Send + 'static, Resp : Send + 'static> HttpClientResponseHandler for 
         loop {
             let len = match parse_grpc_frame(&self.remaining_response) {
                 Err(e) => {
-                    self.complete.send(ResultOrEof::Error(e));
+                    self.complete.send(ResultOrEof::Error(e)).unwrap();
                     return false;
                 }
                 Ok(None) => break,
@@ -108,22 +81,22 @@ impl<Req : Send + 'static, Resp : Send + 'static> HttpClientResponseHandler for 
     }
 
     fn trailers(&mut self, headers: Vec<StaticHeader>) -> bool {
-        let status_200 = slice_get_header(&headers, ":status") == Some("200");
+        let _status_200 = slice_get_header(&headers, ":status") == Some("200");
         let grpc_status_0 = slice_get_header(&headers, HEADER_GRPC_STATUS) == Some("0");
         if /* status_200 && */ grpc_status_0 {
             true
         } else {
             if let Some(message) = slice_get_header(&headers, HEADER_GRPC_MESSAGE) {
-                self.complete.send(ResultOrEof::Error(GrpcError::GrpcMessage(GrpcMessageError { grpc_message: message.to_owned() })));
+                self.complete.send(ResultOrEof::Error(GrpcError::GrpcMessage(GrpcMessageError { grpc_message: message.to_owned() }))).unwrap();
             } else {
-                self.complete.send(ResultOrEof::Error(GrpcError::Other("not xxx")));
+                self.complete.send(ResultOrEof::Error(GrpcError::Other("not xxx"))).unwrap();
             }
             false
         }
     }
 
     fn end(&mut self) {
-        self.complete.send(ResultOrEof::Eof);
+        self.complete.send(ResultOrEof::Eof).unwrap();
     }
 }
 
@@ -318,13 +291,6 @@ fn slice_get_header<'a>(headers: &'a [Header<'a, 'a>], name: &str) -> Option<&'a
     headers.iter()
         .find(|h| h.name() == name.as_bytes())
         .and_then(|h| from_utf8(h.value()).ok())
-}
-
-fn default_stream_get_header<'a>(stream: &'a DefaultStream, name: &str) -> Option<&'a str> {
-    match stream.headers {
-        Some(ref v) => slice_get_header(v, name),
-        None => None,
-    }
 }
 
 

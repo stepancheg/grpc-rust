@@ -8,8 +8,6 @@ use futures::stream::Stream;
 use tokio_core;
 use tokio_core::reactor;
 
-use tokio_core::io::*;
-
 
 #[allow(dead_code)]
 pub fn oneshot<T : Send + 'static>(handle: &reactor::Handle) -> (Sender<T>, Receiver<T>) {
