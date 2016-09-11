@@ -6,7 +6,6 @@ use solicit::http::session::Session;
 use solicit::http::connection::HttpConnection;
 use solicit::http::connection::EndStream;
 use solicit::http::connection::SendFrame;
-use solicit::http::connection::HttpFrame;
 use solicit::http::frame::SettingsFrame;
 use solicit::http::frame::RawFrame;
 use solicit::http::frame::HttpSetting;
@@ -359,36 +358,21 @@ impl<F : HttpServerHandlerFactory> ServerReadLoop<F> {
         }
     }
 
-    fn process_special_frame(self, frame: HttpFrame) -> HttpFuture<Self> {
+    fn process_special_frame(self, frame: HttpFrameConn) -> HttpFuture<Self> {
         match frame {
-            HttpFrame::DataFrame(..)      |
-            HttpFrame::HeadersFrame(..)   |
-            HttpFrame::RstStreamFrame(..) => unreachable!(),
-            HttpFrame::SettingsFrame(f) => self.process_settings_global(f),
-            HttpFrame::PingFrame(f) => self.process_ping(f),
-            HttpFrame::GoawayFrame(_f) => panic!("TODO"),
-            HttpFrame::WindowUpdateFrame(_f) => panic!("TODO"),
-            HttpFrame::UnknownFrame(_f) => panic!("TODO"),
+            HttpFrameConn::Settings(f) => self.process_settings_global(f),
+            HttpFrameConn::Ping(f) => self.process_ping(f),
+            HttpFrameConn::Goaway(_f) => panic!("TODO"),
+            HttpFrameConn::WindowUpdate(_f) => panic!("TODO"),
         }
     }
 
-    fn process_stream_frame(self, frame: HttpFrame) -> HttpFuture<Self> {
+    fn process_stream_frame(self, frame: HttpFrameStream) -> HttpFuture<Self> {
         let last = self.inner.with(|inner: &mut ServerInner<F>| {
-            match &frame {
-                &HttpFrame::DataFrame(..) => {},
-                &HttpFrame::HeadersFrame(..) => {},
-                &HttpFrame::RstStreamFrame(..) => {},
-                &HttpFrame::SettingsFrame(..) => {},
-                &HttpFrame::WindowUpdateFrame(..) => {},
-                &HttpFrame::PingFrame(..) |
-                &HttpFrame::GoawayFrame(..) => unreachable!(),
-                &HttpFrame::UnknownFrame(..) => panic!("TODO"),
-            }
-
             let mut send = VecSendFrame(Vec::new());
             let last = {
                 let mut session = MyServerSession::new(&mut inner.session_state, &mut send);
-                inner.conn.handle_frame(frame, &mut session)
+                inner.conn.handle_frame(frame.into_frame(), &mut session)
                     .unwrap();
                 session.last.take()
             };
@@ -419,11 +403,11 @@ impl<F : HttpServerHandlerFactory> ServerReadLoop<F> {
     }
 
     fn process_raw_frame(self, raw_frame: RawFrame) -> HttpFuture<Self> {
-        let frame = HttpFrame::from_raw(&raw_frame).unwrap();
-        if frame.get_stream_id() == 0 {
-            self.process_special_frame(frame)
-        } else {
-            self.process_stream_frame(frame)
+        let frame = HttpFrameClassified::from_raw(&raw_frame).unwrap();
+        match frame {
+            HttpFrameClassified::Conn(f) => self.process_special_frame(f),
+            HttpFrameClassified::Stream(f) => self.process_stream_frame(f),
+            HttpFrameClassified::Unknown(_f) => panic!("TODO"),
         }
     }
 

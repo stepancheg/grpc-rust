@@ -7,8 +7,7 @@ use solicit::http::Header;
 use solicit::http::StreamId;
 use solicit::http::StaticHeader;
 use solicit::http::HttpResult;
-use solicit::http::frame::RawFrame;
-use solicit::http::frame::FrameIR;
+use solicit::http::frame::*;
 use solicit::http::connection::ReceiveFrame;
 use solicit::http::connection::HttpFrame;
 use solicit::http::connection::SendFrame;
@@ -200,5 +199,84 @@ pub trait HttpConnectionEx {
 impl HttpConnectionEx for HttpConnection {
     fn conn(&mut self) -> &mut HttpConnection {
         self
+    }
+}
+
+/// Frames with stream
+pub enum HttpFrameStream<'a> {
+    Data(DataFrame<'a>),
+    Headers(HeadersFrame<'a>),
+    RstStream(RstStreamFrame),
+    Settings(SettingsFrame),
+    WindowUpdate(WindowUpdateFrame),
+}
+
+impl<'a> HttpFrameStream<'a> {
+    #[allow(dead_code)]
+    pub fn into_frame(self) -> HttpFrame<'a> {
+        match self {
+            HttpFrameStream::WindowUpdate(f) => HttpFrame::WindowUpdateFrame(f),
+            HttpFrameStream::Data(f) => HttpFrame::DataFrame(f),
+            HttpFrameStream::Headers(f) => HttpFrame::HeadersFrame(f),
+            HttpFrameStream::RstStream(f) => HttpFrame::RstStreamFrame(f),
+            HttpFrameStream::Settings(f) => HttpFrame::SettingsFrame(f),
+        }
+    }
+}
+
+/// Frames without stream (zero stream id)
+pub enum HttpFrameConn<'a> {
+    Settings(SettingsFrame),
+    Ping(PingFrame),
+    Goaway(GoawayFrame<'a>),
+    WindowUpdate(WindowUpdateFrame),
+}
+
+impl<'a> HttpFrameConn<'a> {
+    #[allow(dead_code)]
+    pub fn into_frame(self) -> HttpFrame<'a> {
+        match self {
+            HttpFrameConn::Settings(f) => HttpFrame::SettingsFrame(f),
+            HttpFrameConn::Ping(f) => HttpFrame::PingFrame(f),
+            HttpFrameConn::Goaway(f) => HttpFrame::GoawayFrame(f),
+            HttpFrameConn::WindowUpdate(f) => HttpFrame::WindowUpdateFrame(f),
+        }
+    }
+}
+
+pub enum HttpFrameClassified<'a> {
+    Stream(HttpFrameStream<'a>),
+    Conn(HttpFrameConn<'a>),
+    Unknown(RawFrame<'a>),
+}
+
+impl<'a> HttpFrameClassified<'a> {
+    pub fn from(frame: HttpFrame<'a>) -> Self {
+        match frame {
+            HttpFrame::DataFrame(f) => HttpFrameClassified::Stream(HttpFrameStream::Data(f)),
+            HttpFrame::HeadersFrame(f) => HttpFrameClassified::Stream(HttpFrameStream::Headers(f)),
+            HttpFrame::RstStreamFrame(f) => HttpFrameClassified::Stream(HttpFrameStream::RstStream(f)),
+            HttpFrame::SettingsFrame(f) => {
+                if f.get_stream_id() != 0 {
+                    HttpFrameClassified::Stream(HttpFrameStream::Settings(f))
+                } else {
+                    HttpFrameClassified::Conn(HttpFrameConn::Settings(f))
+                }
+            }
+            HttpFrame::PingFrame(f) => HttpFrameClassified::Conn(HttpFrameConn::Ping(f)),
+            HttpFrame::GoawayFrame(f) => HttpFrameClassified::Conn(HttpFrameConn::Goaway(f)),
+            HttpFrame::WindowUpdateFrame(f) => {
+                if f.get_stream_id() != 0 {
+                    HttpFrameClassified::Stream(HttpFrameStream::WindowUpdate(f))
+                } else {
+                    HttpFrameClassified::Conn(HttpFrameConn::WindowUpdate(f))
+                }
+            },
+            HttpFrame::UnknownFrame(f) => HttpFrameClassified::Unknown(f),
+        }
+    }
+
+    pub fn from_raw(raw_frame: &'a RawFrame) -> HttpResult<HttpFrameClassified<'a>> {
+        Ok(HttpFrameClassified::from(try!(HttpFrame::from_raw(raw_frame))))
     }
 }
