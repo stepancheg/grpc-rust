@@ -82,7 +82,7 @@ impl<F : HttpServerHandlerFactory> GrpcHttpServerStream<F> {
         self.set_state(next);
     }
 
-    fn _is_closed(&self) -> bool {
+    fn is_closed(&self) -> bool {
         self.state() == StreamState::Closed
     }
 
@@ -152,7 +152,7 @@ impl<F : HttpServerHandlerFactory> GrpcHttpServerSessionState<F> {
         self.streams.get_mut(&stream_id)
     }
 
-    fn _remove_stream(&mut self, stream_id: StreamId) -> Option<GrpcHttpServerStream<F>> {
+    fn remove_stream(&mut self, stream_id: StreamId) -> Option<GrpcHttpServerStream<F>> {
         self.streams.remove(&stream_id)
     }
 
@@ -347,11 +347,20 @@ impl<F : HttpServerHandlerFactory> ServerReadLoop<F> {
                     .expect("read to write");
             }
 
+            if let &Some((stream_id, _)) = &last {
+                let mut closed = false;
+                if let Some(stream) = inner.session_state.get_stream_mut(stream_id) {
+                    closed = stream.is_closed();
+                }
+                if closed {
+                   inner.session_state.remove_stream(stream_id);
+                }
+            }
+
             last
         });
 
         if let Some((_stream_id, _last_chunk)) = last {
-            //self.process_streams_after_handle_next_frame(stream_id, last_chunk)
             unimplemented!()
         } else {
             Box::new(futures::finished(self))
