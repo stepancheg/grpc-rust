@@ -10,7 +10,6 @@ use solicit::http::StreamId;
 use solicit::http::HttpScheme;
 use solicit::http::HttpError;
 use solicit::http::Header;
-use solicit::http::StaticHeader;
 use hpack;
 
 use futures;
@@ -30,17 +29,6 @@ use futures_misc::*;
 use solicit_async::*;
 use solicit_misc::*;
 use http_common::*;
-
-
-pub enum AfterHeaders {
-    DataChunk(Vec<u8>, HttpFutureSend<AfterHeaders>),
-    Trailers(Vec<StaticHeader>),
-}
-
-pub struct ResponseHeaders {
-    pub headers: Vec<StaticHeader>,
-    pub after: HttpFutureSend<AfterHeaders>,
-}
 
 
 pub trait HttpServerHandlerFactory: Send + 'static {
