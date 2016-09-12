@@ -45,10 +45,11 @@ Client and server are implemented asynchronously, and sync versions are thin wra
 ### Build & install Rust protobuf compiler:
 
 ```bash
-git clone http://github.com/stepancheg/rust-protobuf
-cargo build --release
-cp target/release/protoc-gen-rust /usr/local/bin
+cargo install protobuf
 ```
+
+This command installs `protoc-gen-rust` to `~/.cargo/bin`, which
+should be added to `$PATH`.
 
 ### Build & install gRPC compiler:
 
@@ -56,9 +57,10 @@ cp target/release/protoc-gen-rust /usr/local/bin
 git clone https://github.com/stepancheg/grpc-rust.git
 cd grpc-rust
 cd grpc-compiler
-cargo build --release
-cp target/release/protoc-gen-rust-grpc /usr/local/bin
+cargo install
 ```
+
+Installs `protoc-gen-rust-grpc` to `~/.cargo/bin`.
 
 ### Compile your proto & gRPC to Rust:
 
