@@ -30,101 +30,107 @@ use http_common::*;
 
 
 pub trait MethodHandler<Req, Resp> {
-    fn handle(&self, req: Req) -> GrpcStreamSend<Resp>;
+    fn handle(&self, req: GrpcStreamSend<Req>) -> GrpcStreamSend<Resp>;
 }
 
 pub struct MethodHandlerUnary<F> {
-    f: F
+    f: Arc<F>
 }
 
 pub struct MethodHandlerServerStreaming<F> {
-    f: F
+    f: Arc<F>
 }
 
 pub struct MethodHandlerClientStreaming<F> {
-    _f: F
+    _f: Arc<F>
 }
 
 pub struct MethodHandlerBidi<F> {
-    _f: F
+    _f: Arc<F>
 }
 
 impl<F> MethodHandlerUnary<F> {
     pub fn new<Req, Resp>(f: F) -> Self
-        where F : Fn(Req) -> GrpcFutureSend<Resp>
+        where F : Fn(Req) -> GrpcFutureSend<Resp> + Send + Sync,
     {
         MethodHandlerUnary {
-            f: f,
+            f: Arc::new(f),
         }
     }
 }
 
 impl<F> MethodHandlerClientStreaming<F> {
     pub fn new<Req, Resp>(f: F) -> Self
-        where F : Fn(GrpcStreamSend<Req>) -> GrpcFutureSend<Resp>
+        where F : Fn(GrpcStreamSend<Req>) -> GrpcFutureSend<Resp> + Send + Sync,
     {
         MethodHandlerClientStreaming {
-            _f: f,
+            _f: Arc::new(f),
         }
     }
 }
 
 impl<F> MethodHandlerServerStreaming<F> {
     pub fn new<Req, Resp>(f: F) -> Self
-        where F : Fn(Req) -> GrpcStreamSend<Resp>
+        where F : Fn(Req) -> GrpcStreamSend<Resp> + Send + Sync,
     {
         MethodHandlerServerStreaming {
-            f: f,
+            f: Arc::new(f),
         }
     }
 }
 
 impl<F> MethodHandlerBidi<F> {
     pub fn new<Req, Resp>(f: F) -> Self
-        where F : Fn(GrpcStreamSend<Req>) -> GrpcStreamSend<Resp>
+        where F : Fn(GrpcStreamSend<Req>) -> GrpcStreamSend<Resp> + Send + Sync,
     {
         MethodHandlerBidi {
-            _f: f,
+            _f: Arc::new(f),
         }
     }
 }
 
 impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerUnary<F>
     where
+        Req : Send + 'static,
         Resp : Send + 'static,
-        F : Fn(Req) -> GrpcFutureSend<Resp>,
+        F : Fn(Req) -> GrpcFutureSend<Resp> + Send + Sync + 'static,
 {
-    fn handle(&self, req: Req) -> GrpcStreamSend<Resp> {
-        Box::new(future_to_stream_once((self.f)(req)))
+    fn handle(&self, req: GrpcStreamSend<Req>) -> GrpcStreamSend<Resp> {
+        let f = self.f.clone();
+        Box::new(future_to_stream_once(stream_single_send(req).and_then(move |req| f(req))))
     }
 }
 
 impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerClientStreaming<F>
     where
         Resp : Send + 'static,
-        F : Fn(GrpcStreamSend<Req>) -> GrpcFutureSend<Resp>,
+        F : Fn(GrpcStreamSend<Req>) -> GrpcFutureSend<Resp> + Send + Sync + 'static,
 {
-    fn handle(&self, _req: Req) -> GrpcStreamSend<Resp> {
+    fn handle(&self, _req: GrpcStreamSend<Req>) -> GrpcStreamSend<Resp> {
         unimplemented!()
     }
 }
 
 impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerServerStreaming<F>
     where
+        Req : Send + 'static,
         Resp : Send + 'static,
-        F : Fn(Req) -> GrpcStreamSend<Resp>,
+        F : Fn(Req) -> GrpcStreamSend<Resp> + Send + Sync + 'static,
 {
-    fn handle(&self, req: Req) -> GrpcStreamSend<Resp> {
-        Box::new((self.f)(req))
+    fn handle(&self, req: GrpcStreamSend<Req>) -> GrpcStreamSend<Resp> {
+        let f = self.f.clone();
+        Box::new(
+            future_flatten_to_stream(
+                stream_single_send(req).map(move |req| f(req))))
     }
 }
 
 impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerBidi<F>
     where
         Resp : Send + 'static,
-        F : Fn(GrpcStreamSend<Req>) -> GrpcStreamSend<Resp>,
+        F : Fn(GrpcStreamSend<Req>) -> GrpcStreamSend<Resp> + Send + Sync + 'static,
 {
-    fn handle(&self, _req: Req) -> GrpcStreamSend<Resp> {
+    fn handle(&self, _req: GrpcStreamSend<Req>) -> GrpcStreamSend<Resp> {
         unimplemented!()
     }
 }
@@ -154,13 +160,14 @@ impl<Req, Resp> MethodHandlerDispatch for MethodHandlerDispatchAsyncImpl<Req, Re
         Req : Send + 'static,
         Resp : Send + 'static,
 {
+    // TODO: stream
     fn on_message(&self, message: &[u8]) -> GrpcStreamSend<Vec<u8>> {
         let req = match self.desc.req_marshaller.read(message) {
             Ok(req) => req,
             Err(e) => return Box::new(future_to_stream_once(futures::done(Err(e)))),
         };
         let resp =
-            catch_unwind(AssertUnwindSafe(|| self.method_handler.handle(req)));
+            catch_unwind(AssertUnwindSafe(|| self.method_handler.handle(stream_once_send(req))));
         match resp {
             Ok(resp) => {
                 let desc_copy = self.desc.clone();
@@ -336,49 +343,52 @@ impl ProcessRequestState {
         let resp_tx_1 = shared.resp_tx.clone();
         let resp_tx_2 = shared.resp_tx.clone();
 
-        let future = stream.fold(ResponseProcessState::None, move |state, response| {
-            if let ResponseProcessState::None = state {
-                resp_tx_1.send(ResultOrEof::Item(HttpStreamPart::intermediate_headers(
-                    vec![
-                        Header::new(":status", "200"),
-                    ]),
-                )).unwrap();
-            }
+        let future = stream
+            .fold(ResponseProcessState::None, move |state, response| {
+                if let ResponseProcessState::None = state {
+                    resp_tx_1.send(ResultOrEof::Item(HttpStreamPart::intermediate_headers(
+                        vec![
+                            Header::new(":status", "200"),
+                        ]),
+                    )).unwrap();
+                }
 
-            let http_message = write_grpc_frame_to_vec(&response);
+                let http_message = write_grpc_frame_to_vec(&response);
 
-            resp_tx_1.send(ResultOrEof::Item(HttpStreamPart::intermediate_data(http_message))).unwrap();
+                resp_tx_1.send(ResultOrEof::Item(HttpStreamPart::intermediate_data(http_message))).unwrap();
 
-            futures::finished::<_, GrpcError>(ResponseProcessState::HeadersAndSomeDataSent)
-        }).then(move |r| {
-            match r {
-                Ok(state) => {
-                    match state {
-                        ResponseProcessState::None => {
-                            resp_tx_2.send(ResultOrEof::Item(HttpStreamPart::last_headers(vec![
-                                Header::new(":status", "500"),
-                                Header::new(HEADER_GRPC_MESSAGE, "empty response"),
-                            ]))).unwrap();
-                        },
-                        ResponseProcessState::HeadersAndSomeDataSent => {
-                            resp_tx_2.send(ResultOrEof::Item(HttpStreamPart::last_headers(vec![
-                                Header::new(HEADER_GRPC_STATUS, "0"),
-                            ]))).unwrap();
+                futures::finished::<_, GrpcError>(ResponseProcessState::HeadersAndSomeDataSent)
+            })
+            //.catch_unwind() // TODO
+            .then(move |r| {
+                match r {
+                    Ok(state) => {
+                        match state {
+                            ResponseProcessState::None => {
+                                resp_tx_2.send(ResultOrEof::Item(HttpStreamPart::last_headers(vec![
+                                    Header::new(":status", "500"),
+                                    Header::new(HEADER_GRPC_MESSAGE, "empty response"),
+                                ]))).unwrap();
+                            },
+                            ResponseProcessState::HeadersAndSomeDataSent => {
+                                resp_tx_2.send(ResultOrEof::Item(HttpStreamPart::last_headers(vec![
+                                    Header::new(HEADER_GRPC_STATUS, "0"),
+                                ]))).unwrap();
+                            }
                         }
-                    }
-                },
-                Err(e) => {
-                    resp_tx_2.send(ResultOrEof::Item(HttpStreamPart::last_headers(vec![
-                        Header::new(":status", "500"),
-                        Header::new(HEADER_GRPC_MESSAGE, format!("error: {:?}", e)),
-                    ]))).unwrap();
-                },
-            }
+                    },
+                    Err(e) => {
+                        resp_tx_2.send(ResultOrEof::Item(HttpStreamPart::last_headers(vec![
+                            Header::new(":status", "500"),
+                            Header::new(HEADER_GRPC_MESSAGE, format!("error: {:?}", e)),
+                        ]))).unwrap();
+                    },
+                }
 
-            resp_tx_2.send(ResultOrEof::Eof).unwrap();
+                resp_tx_2.send(ResultOrEof::Eof).unwrap();
 
-            Ok(())
-        });
+                Ok(())
+            });
 
         shared.remote.spawn(move |_handle| future);
 
