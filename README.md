@@ -40,7 +40,67 @@ $ greeter_client rust
 
 Client and server are implemented asynchronously, and sync versions are thin wrappers around async counterparts.
 
-### TODO
+## How to use gRPC compiler
+
+### Build & install Rust protobuf compiler:
+
+```bash
+git clone http://github.com/stepancheg/rust-protobuf
+cargo build --release
+cp target/release/protoc-gen-rust /usr/local/bin
+```
+
+### Build & install gRPC compiler:
+
+```bash
+git clone https://github.com/stepancheg/grpc-rust.git
+cd grpc-rust
+cd grpc-compiler
+cargo build --release
+cp target/release/protoc-gen-rust-grpc /usr/local/bin
+```
+
+### Compile your proto & gRPC to Rust:
+
+```bash
+cd $YOURPROJECT
+mkdir -p src
+protoc --rust_out=src *.proto
+protoc --rust-grpc_out=src *.proto
+```
+
+### Use compiled protos in your project:
+
+In Cargo.toml:
+
+```ini
+[dependencies]
+grpc = { git = "https://github.com/stepancheg/grpc-rust" }
+protobuf = { git = "http://github.com/stepancheg/rust-protobuf" }
+futures         = "0.1"
+futures-cpupool = "0.1"
+```
+
+In `lib.rs` or `main.rs` (or any other submodule):
+
+```rust
+extern crate protobuf;
+extern crate grpc;
+extern crate futures;
+extern crate futures_cpupool;
+
+pub mod myproto;
+pub mod myproto_grpc;
+```
+
+### Compiling protos manually is silly. Can Cargo do all of above for me?
+
+It seems possible, but looks like it requires some more work.
+
+See https://github.com/stepancheg/rust-protobuf/issues/57 and
+https://github.com/dwrensha/capnpc-rust for more details.
+
+## TODO
 
 * Tests
 * Proper error handling
