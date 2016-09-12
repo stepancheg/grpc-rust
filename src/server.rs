@@ -2,45 +2,20 @@ use std::sync::Arc;
 use std::thread;
 use std::net::SocketAddr;
 use std::net::ToSocketAddrs;
-use std::io;
-use std::iter;
 use std::sync::mpsc;
 use std::panic::catch_unwind;
 use std::panic::AssertUnwindSafe;
 use std::any::Any;
 
-use solicit::http::server::StreamFactory;
-use solicit::http::server::ServerSession;
-use solicit::http::session::Server;
-use solicit::http::session::DefaultSessionState;
-use solicit::http::session::DefaultStream;
-use solicit::http::session::StreamState;
-use solicit::http::session::StreamDataChunk;
-use solicit::http::session::StreamDataError;
-use solicit::http::session::Stream as solicit_Stream;
-use solicit::http::connection::HttpConnection;
-use solicit::http::connection::EndStream;
-use solicit::http::connection::DataChunk;
-use solicit::http::connection::HttpFrame;
-use solicit::http::HttpScheme;
-use solicit::http::StreamId;
+use solicit::http::HttpError;
 use solicit::http::Header;
-use solicit::http::session::SessionState;
 
 use futures;
 use futures::Future;
-use futures::stream;
 use futures::stream::Stream;
-use tokio_core::io as tokio_io;
-use tokio_core::io::ReadHalf;
-use tokio_core::io::WriteHalf;
 use tokio_core;
 use tokio_core::reactor;
-use tokio_core::io::Io;
-use tokio_core::net::TcpStream;
 use tokio_core::net::TcpListener;
-use tokio_core::channel::Sender;
-use tokio_core::channel::Receiver;
 
 use method::*;
 use error::*;
@@ -50,6 +25,8 @@ use solicit_async::*;
 use solicit_misc::*;
 use grpc::*;
 use assert_types::*;
+use http_server::*;
+use http_common::*;
 
 
 pub trait MethodHandler<Req, Resp> {
@@ -152,6 +129,7 @@ impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerBidi<F>
     }
 }
 
+
 trait MethodHandlerDispatch {
     fn on_message(&self, message: &[u8]) -> GrpcStreamSend<Vec<u8>>;
 }
@@ -237,7 +215,8 @@ impl ServerServiceDefinition {
             .expect(&format!("unknown method: {}", name))
     }
 
-    pub fn handle_method(&self, name: &str, message: &[u8]) -> GrpcStream<Vec<u8>> {
+    // TODO: stream
+    pub fn handle_method(&self, name: &str, message: &[u8]) -> GrpcStreamSend<Vec<u8>> {
         self.find_method(name).dispatch.on_message(message)
     }
 }
@@ -293,251 +272,139 @@ impl Drop for GrpcServer {
     }
 }
 
-struct GrpcHttp2ServerStream {
-    stream: DefaultStream,
+struct GrpcHttpServerHandlerFactory {
     service_definition: Arc<ServerServiceDefinition>,
-    path: String,
-    sender: Sender<ReadToWriteMessage>,
-    loop_handle: reactor::Handle,
 }
 
-impl solicit_Stream for GrpcHttp2ServerStream {
-    fn set_headers(&mut self, headers: Vec<Header>) {
-        for h in &headers {
-            if h.name() == b":path" {
-                self.path = String::from_utf8(h.value().to_owned()).unwrap();
+struct ProcessRequestShared {
+    service_definition: Arc<ServerServiceDefinition>,
+    resp_tx: tokio_core::channel::Sender<ResultOrEof<HttpStreamPart, HttpError>>,
+    remote: reactor::Remote,
+}
+
+enum ProcessRequestState {
+    Initial(ProcessRequestShared),
+    Body(ProcessRequestShared, String, Vec<u8>),
+}
+
+impl ProcessRequestState {
+    fn initial(shared: ProcessRequestShared, message: HttpStreamPart) -> HttpFutureSend<ProcessRequestState> {
+        let headers = match message.content {
+            HttpStreamPartContent::Headers(headers) => headers,
+            HttpStreamPartContent::Data(_data) => panic!("data before headers"), // TODO: send some response
+        };
+
+        let path = slice_get_header(&headers, ":path").expect(":path header").to_owned();
+
+        Box::new(futures::finished(ProcessRequestState::Body(shared, path, Vec::new())))
+    }
+
+    fn body(shared: ProcessRequestShared, path: String, mut body: Vec<u8>, message: HttpStreamPart) -> HttpFutureSend<ProcessRequestState> {
+        match message.content {
+            // that's unexpected
+            HttpStreamPartContent::Headers(_header) => Box::new(futures::finished(ProcessRequestState::Body(shared, path, body))),
+            HttpStreamPartContent::Data(data) => {
+                body.extend(&data);
+                Box::new(futures::finished(ProcessRequestState::Body(shared, path, body)))
             }
         }
-
-        self.stream.set_headers(headers)
     }
 
-    fn new_data_chunk(&mut self, data: &[u8]) {
-        self.stream.new_data_chunk(data)
-    }
-
-    fn set_state(&mut self, state: StreamState) {
-        println!("set state {:?}", state);
-        if state == StreamState::HalfClosedRemote {
-            let stream_id = self.stream.stream_id.unwrap();
-
-            let message = parse_grpc_frame_completely(&self.stream.body).expect("parse req body");
-
-            let stream = self.service_definition.handle_method(&self.path, message);
-
-            let sender = self.sender.clone();
-            self.loop_handle.spawn(
-                stream
-                    .fold((sender.clone(), 0), move |(sender, i), resp| {
-                        sender.send(ReadToWriteMessage {
-                            stream_id: stream_id,
-                            content: ResponseChunk::Resp(resp, i == 0),
-                        }).unwrap();
-                        futures::done::<_, GrpcError>(Ok((sender, i + 1)))
-                    })
-                    .then(move |result| {
-                        sender.send(ReadToWriteMessage {
-                            stream_id: stream_id,
-                            content: match result {
-                                Ok(..) => ResponseChunk::DoneSuccess,
-                                Err(e) => ResponseChunk::Error(e),
-                            }
-                        }).expect("send to write");
-
-                        futures::done::<_, GrpcError>(Ok(()))
-                    })
-                    .then(|_| Ok(())) // TODO: should not probably ignore errors
-                );
+    fn message(self, message: HttpStreamPart) -> HttpFutureSend<ProcessRequestState> {
+        match self {
+            ProcessRequestState::Initial(shared) => ProcessRequestState::initial(shared, message),
+            ProcessRequestState::Body(shared, path, body) => ProcessRequestState::body(shared, path, body, message),
         }
-        self.stream.set_state(state)
     }
 
-    fn get_data_chunk(&mut self, buf: &mut [u8]) -> Result<StreamDataChunk, StreamDataError> {
-        self.stream.get_data_chunk(buf)
-    }
+    fn finish(self) -> HttpFutureSend<()> {
+        let (shared, path, data) = match self {
+            ProcessRequestState::Initial(..) => panic!("no headers yet"),
+            ProcessRequestState::Body(shared, path, data) => (shared, path, data),
+        };
 
-    fn state(&self) -> StreamState {
-        self.stream.state()
-    }
-}
+        let message = parse_grpc_frame_completely(&data).expect("parse req body");
 
-struct GrpcStreamFactory {
-    service_definition: Arc<ServerServiceDefinition>,
-    sender: Sender<ReadToWriteMessage>,
-    loop_handle: reactor::Handle,
-}
+        let stream = shared.service_definition.handle_method(&path, message);
 
-impl StreamFactory for GrpcStreamFactory {
-	type Stream = GrpcHttp2ServerStream;
-
-	fn create(&mut self, stream_id: StreamId) -> GrpcHttp2ServerStream {
-        println!("new stream {}", stream_id);
-        GrpcHttp2ServerStream {
-            stream: DefaultStream::with_id(stream_id),
-            service_definition: self.service_definition.clone(),
-            path: String::new(),
-            sender: self.sender.clone(),
-            loop_handle: self.loop_handle.clone(),
+        enum ResponseProcessState {
+            None,
+            HeadersAndSomeDataSent,
         }
-	}
-}
 
-struct ServerSharedState {
-    conn: HttpConnection,
-    factory: GrpcStreamFactory,
-    state: DefaultSessionState<Server, GrpcHttp2ServerStream>,
-}
+        let shared: ProcessRequestShared = shared;
+        let resp_tx_1 = shared.resp_tx.clone();
+        let resp_tx_2 = shared.resp_tx.clone();
 
-enum ResponseChunk {
-    Resp(/* resp */ Vec<u8>, /* first */ bool),
-    DoneSuccess,
-    Error(GrpcError),
-}
+        let future = stream.fold(ResponseProcessState::None, move |state, response| {
+            if let ResponseProcessState::None = state {
+                resp_tx_1.send(ResultOrEof::Item(HttpStreamPart::intermediate_headers(
+                    vec![
+                        Header::new(":status", "200"),
+                    ]),
+                )).unwrap();
+            }
 
-struct ReadToWriteMessage {
-    stream_id: StreamId,
-    content: ResponseChunk,
-}
+            let http_message = write_grpc_frame_to_vec(&response);
 
-fn run_read(
-    read: ReadHalf<TcpStream>,
-    shared: TaskRcMutex<ServerSharedState>)
-        -> GrpcFuture<()>
-{
-    let stream = stream::iter(iter::repeat(()).map(|x| Ok(x)));
+            resp_tx_1.send(ResultOrEof::Item(HttpStreamPart::intermediate_data(http_message))).unwrap();
 
-    let future = stream.fold((read, shared), move |(read, shared), _| {
-        recv_raw_frame(read)
-            .map(|(read, raw_frame)| {
-                println!("server: received frame");
-
-                shared.with(|shared: &mut ServerSharedState| {
-
-                    let mut send_buf = VecSendFrame(Vec::new());
-
-                    let mut session = ServerSession::new(&mut shared.state, &mut shared.factory, &mut send_buf);
-                    shared.conn.handle_frame(HttpFrame::from_raw(&raw_frame).unwrap(), &mut session).unwrap();
-
-                    // TODO: process send
-                });
-                (read, shared)
-            })
-    });
-
-    Box::new(future
-        .map(|_| ()))
-}
-
-fn run_write(
-    write: WriteHalf<TcpStream>,
-    shared: TaskRcMutex<ServerSharedState>,
-    receiver: Receiver<ReadToWriteMessage>)
-    -> GrpcFuture<()>
-{
-    println!("run_write");
-    let future = receiver.fold((write, shared), |(write, shared), message: ReadToWriteMessage| {
-        println!("writer got message from reader");
-
-        let send_buf = shared.with(move |shared: &mut ServerSharedState| {
-            let mut send_buf = VecSendFrame(Vec::new());
-
-            match message.content {
-                ResponseChunk::Resp(resp_bytes, first) => {
-                    if first {
-                        println!("server: sending headers");
-                        shared.conn.sender(&mut send_buf).send_headers(
-                            vec![
-                            Header::new(b":status", b"200"),
-                            Header::new(&b"content-type"[..], &b"application/grpc"[..]),
-                        ],
-                            message.stream_id,
-                            EndStream::No).unwrap();
+            futures::finished::<_, GrpcError>(ResponseProcessState::HeadersAndSomeDataSent)
+        }).then(move |r| {
+            match r {
+                Ok(state) => {
+                    match state {
+                        ResponseProcessState::None => {
+                            resp_tx_2.send(ResultOrEof::Item(HttpStreamPart::last_headers(vec![
+                                Header::new(":status", "500"),
+                                Header::new(HEADER_GRPC_MESSAGE, "empty response"),
+                            ]))).unwrap();
+                        },
+                        ResponseProcessState::HeadersAndSomeDataSent => {
+                            resp_tx_2.send(ResultOrEof::Item(HttpStreamPart::last_headers(vec![
+                                Header::new(HEADER_GRPC_STATUS, "0"),
+                            ]))).unwrap();
+                        }
                     }
-
-                    let mut body = Vec::new();
-                    write_grpc_frame(&mut body, &resp_bytes);
-
-                    shared.conn.sender(&mut send_buf).send_data(
-                        DataChunk::new_borrowed(&body[..], message.stream_id, EndStream::No)).unwrap();
-                }
-                ResponseChunk::DoneSuccess => {
-                    shared.conn.sender(&mut send_buf).send_headers(
-                        vec![
-                            Header::new(HEADER_GRPC_STATUS.as_bytes(), b"0"),
-                        ],
-                        message.stream_id,
-                        EndStream::Yes)
-                            .unwrap();
-                }
-                ResponseChunk::Error(e) => {
-                    shared.conn.sender(&mut send_buf).send_headers(
-                        vec![
-                            Header::new(&b":status"[..], &b"500"[..]),
-                            Header::new(HEADER_GRPC_MESSAGE.as_bytes(), format!("{:?}", e).into_bytes()),
-                        ],
-                        message.stream_id,
-                        EndStream::Yes).unwrap();
-
-                    shared.state.remove_stream(message.stream_id).expect("unknown stream id");
-                }
+                },
+                Err(e) => {
+                    resp_tx_2.send(ResultOrEof::Item(HttpStreamPart::last_headers(vec![
+                        Header::new(":status", "500"),
+                        Header::new(HEADER_GRPC_MESSAGE, format!("error: {:?}", e)),
+                    ]))).unwrap();
+                },
             }
 
-            send_buf.0
+            resp_tx_2.send(ResultOrEof::Eof).unwrap();
+
+            Ok(())
         });
 
-        tokio_io::write_all(write, send_buf)
-            .map(|(write, _)| (write, shared))
-    });
+        shared.remote.spawn(move |_handle| future);
 
-    Box::new(future
-        .map(|_| ())
-        .map_err(GrpcError::from))
+        Box::new(futures::finished(()))
+    }
 }
 
+impl HttpServerHandlerFactory for GrpcHttpServerHandlerFactory {
+    fn new_request(&mut self, handle: &reactor::Handle, req: HttpStreamStreamSend) -> HttpStreamStreamSend {
+        let (resp_tx, resp_rx) = tokio_core::channel::channel(handle).unwrap();
 
-fn run_connection(
-    socket: TcpStream,
-    peer_addr: SocketAddr,
-    service_defintion: Arc<ServerServiceDefinition>,
-    loop_handle: reactor::Handle)
-    -> Box<Future<Item=(), Error=io::Error>>
-{
-    println!("accepted connection from {}", peer_addr);
-    let handshake = server_handshake(socket).map_err(GrpcError::from);
+        let shared = ProcessRequestShared {
+            service_definition: self.service_definition.clone(),
+            resp_tx: resp_tx,
+            remote: handle.remote().clone(),
+        };
+        let request_future = req
+            .fold(ProcessRequestState::Initial(shared), ProcessRequestState::message)
+            .and_then(ProcessRequestState::finish)
+            .map_err(|e| { panic!("{:?}", e); });
+        handle.spawn(request_future);
 
-    let loop_handle_for_channel = loop_handle.clone();
-    let three = handshake.and_then(move |conn| {
-        let (sender, receiver) = tokio_core::channel::channel(&loop_handle_for_channel).unwrap();
-        Ok((conn, sender, receiver))
-    });
+        let resp_rx = resp_rx.map_err(HttpError::from);
 
-    let run = three.and_then(|(conn, sender, receiver_stream)| {
-        let (read, write) = conn.split();
-
-        let shared_for_read = TaskRcMutex::new(ServerSharedState {
-            conn: HttpConnection::new(HttpScheme::Http),
-            state: DefaultSessionState::<Server, _>::new(),
-            factory: GrpcStreamFactory {
-                service_definition: service_defintion,
-                sender: sender,
-                loop_handle: loop_handle,
-            },
-        });
-        let shared_for_write = shared_for_read.clone();
-
-        run_read(read, shared_for_read)
-            .join(run_write(write, shared_for_write, receiver_stream))
-    });
-
-    let bye = run
-        .then(move |x| {
-            println!("closing connection from {}: {:?}", peer_addr, x);
-            x
-        });
-
-    Box::new(bye
-        .map(move |_| ())
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e)))
+        Box::new(stream_with_eof_and_error(resp_rx))
+    }
 }
 
 fn run_server_event_loop(
@@ -545,6 +412,8 @@ fn run_server_event_loop(
     service_definition: ServerServiceDefinition,
     send_to_back: mpsc::Sender<LoopToServer>)
 {
+    let service_definition = Arc::new(service_definition);
+
     let mut lp = reactor::Core::new().expect("loop new");
 
     let (shutdown_tx, shutdown_rx) = tokio_core::channel::channel(&lp.handle()).unwrap();
@@ -553,16 +422,17 @@ fn run_server_event_loop(
 
     let listen = TcpListener::bind(&listen_addr, &lp.handle()).unwrap();
 
-    let stuff = stream_repeat((Arc::new(service_definition), lp.handle()));
+    let stuff = stream_repeat(lp.handle());
 
     let local_addr = listen.local_addr().unwrap();
     send_to_back
         .send(LoopToServer { shutdown_tx: shutdown_tx, local_addr: local_addr })
         .expect("send back");
 
-    let loop_run = listen.incoming().map_err(GrpcError::from).zip(stuff).for_each(|((socket, peer_addr), (service_definition, loop_handle))| {
-        let loop_handle_for_conn = loop_handle.clone();
-        loop_handle.spawn(run_connection(socket, peer_addr, service_definition, loop_handle_for_conn).map_err(|_| ()));
+    let loop_run = listen.incoming().map_err(GrpcError::from).zip(stuff).for_each(move |((socket, _peer_addr), loop_handle)| {
+        loop_handle.spawn(HttpServerConnectionAsync::new(&loop_handle, socket, GrpcHttpServerHandlerFactory {
+            service_definition: service_definition.clone(),
+        }).map_err(|e| { println!("{:?}", e); () }));
         Ok(())
     });
 

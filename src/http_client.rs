@@ -116,7 +116,7 @@ impl<H : HttpClientResponseHandler> GrpcHttpClientStream<H> {
         let headers = headers.into_iter().map(|h| Header::new(h.name().to_owned(), h.value().to_owned())).collect();
         let (last_chunk, response_state) = match self.response_state {
             ResponseState::Init => (LastChunk::Headers(headers), ResponseState::GotHeaders),
-            ResponseState::GotHeaders => panic!(),
+            ResponseState::GotHeaders => panic!("headers at state GotHeaders"),
             ResponseState::GotBodyChunk => (LastChunk::Trailers(headers), ResponseState::GotTrailers),
             ResponseState::GotTrailers => panic!(),
         };
@@ -264,8 +264,11 @@ impl<'a, H, S> Session for MyClientSession<'a, H, S>
             }
             Some(stream) => stream,
         };
-        // Now let the stream handle the headers
-        self.last = Some((stream_id, stream.set_headers(headers)));
+        // TODO: hack
+        if headers.len() != 0 {
+            // Now let the stream handle the headers
+            self.last = Some((stream_id, stream.set_headers(headers)));
+        }
         Ok(())
     }
 
@@ -372,7 +375,7 @@ impl<H : HttpClientResponseHandler> ClientWriteLoop<H> {
             };
             let stream_id = inner.session_state.insert_stream(stream);
 
-            let send_buf = inner.conn.send_headers_to_vec(stream_id, headers, EndStream::No).unwrap();
+            let send_buf = inner.conn.send_headers_to_vec(stream_id, &headers, EndStream::No).unwrap();
 
             (send_buf, stream_id)
         });

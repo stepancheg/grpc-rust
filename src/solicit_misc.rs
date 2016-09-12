@@ -2,6 +2,7 @@ use std::fmt;
 use std::io;
 use std::mem;
 use std::cmp;
+use std::str;
 
 use solicit::http::Header;
 use solicit::http::StreamId;
@@ -77,7 +78,7 @@ pub trait HttpConnectionEx {
         &mut self,
         send: &mut S,
         stream_id: StreamId,
-        headers: Vec<StaticHeader>,
+        headers: &[StaticHeader],
         end_stream: EndStream)
             -> HttpResult<()>
     {
@@ -87,7 +88,7 @@ pub trait HttpConnectionEx {
     fn send_headers_to_vec(
         &mut self,
         stream_id: StreamId,
-        headers: Vec<StaticHeader>,
+        headers: &[StaticHeader],
         end_stream: EndStream)
              -> HttpResult<Vec<u8>>
     {
@@ -173,25 +174,24 @@ pub trait HttpConnectionEx {
         &mut self,
         send: &mut S,
         stream_id: StreamId,
-        part: HttpStreamPart,
-        end_stream: EndStream)
+        part: &HttpStreamPart)
             -> HttpResult<()>
     {
-        match part {
-            HttpStreamPart::Data(data) => self.send_data_frames(send, stream_id, &data, end_stream),
-            HttpStreamPart::Headers(headers) => self.send_headers(send, stream_id, headers, end_stream),
+        let end_stream = if part.last { EndStream::Yes } else { EndStream::No };
+        match part.content {
+            HttpStreamPartContent::Data(ref data) => self.send_data_frames(send, stream_id, &data, end_stream),
+            HttpStreamPartContent::Headers(ref headers) => self.send_headers(send, stream_id, &headers, end_stream),
         }
     }
 
     fn send_part_to_vec(
         &mut self,
         stream_id: StreamId,
-        part: HttpStreamPart,
-        end_stream: EndStream)
+        part: &HttpStreamPart)
             -> HttpResult<Vec<u8>>
     {
         let mut send = VecSendFrame(Vec::new());
-        try!(self.send_part(&mut send, stream_id, part, end_stream));
+        try!(self.send_part(&mut send, stream_id, part));
         Ok(send.0)
     }
 }
@@ -282,3 +282,11 @@ impl<'a> HttpFrameClassified<'a> {
         Ok(HttpFrameClassified::from(try!(HttpFrame::from_raw(raw_frame))))
     }
 }
+
+
+pub fn slice_get_header<'a>(headers: &'a [Header<'a, 'a>], name: &str) -> Option<&'a str> {
+    headers.iter()
+        .find(|h| h.name() == name.as_bytes())
+        .and_then(|h| str::from_utf8(h.value()).ok())
+}
+

@@ -37,30 +37,30 @@ fn test() {
         }
 
         impl HttpServerHandlerFactory for F {
-            fn new_request(&mut self, req: HttpStreamStreamSend) -> HttpStreamStreamSend {
+            fn new_request(&mut self, _handle: &reactor::Handle, req: HttpStreamStreamSend) -> HttpStreamStreamSend {
                 future_flatten_to_stream(req
                     .fold(Vec::new(), |mut v, message| {
-                        match message {
-                            HttpStreamPart::Headers(..) => (),
-                            HttpStreamPart::Data(d) => v.extend(d),
+                        match message.content {
+                            HttpStreamPartContent::Headers(..) => (),
+                            HttpStreamPartContent::Data(d) => v.extend(d),
                         }
 
                         futures::finished::<_, HttpError>(v)
                     })
                     .and_then(|v| {
                         let mut r = Vec::new();
-                        r.push(HttpStreamPart::Headers(
+                        r.push(HttpStreamPart::intermediate_headers(
                             vec![
                                 Header::new(":status", "200"),
                             ]
                         ));
-                        r.push(HttpStreamPart::Data(v));
+                        r.push(HttpStreamPart::last_data(v));
                         Ok(stream::iter(r.into_iter().map(Ok)))
                     }))
             }
         }
 
-        let http_server_future = HttpServerConnectionAsync::new(lp.handle(), server_conn, F {});
+        let http_server_future = HttpServerConnectionAsync::new(&lp.handle(), server_conn, F {});
 
         lp.run(http_server_future).expect("server run");
     });

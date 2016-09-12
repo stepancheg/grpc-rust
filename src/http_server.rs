@@ -3,7 +3,6 @@ use std::collections::HashMap;
 
 use solicit::http::session::StreamState;
 use solicit::http::connection::HttpConnection;
-use solicit::http::connection::EndStream;
 use solicit::http::connection::SendFrame;
 use solicit::http::frame::*;
 use solicit::http::StreamId;
@@ -32,7 +31,7 @@ use http_common::*;
 
 
 pub trait HttpServerHandlerFactory: Send + 'static {
-    fn new_request(&mut self, req: HttpStreamStreamSend) -> HttpStreamStreamSend;
+    fn new_request(&mut self, handle: &reactor::Handle, req: HttpStreamStreamSend) -> HttpStreamStreamSend;
 }
 
 struct GrpcHttpServerStream<F : HttpServerHandlerFactory> {
@@ -46,7 +45,7 @@ impl<F : HttpServerHandlerFactory> GrpcHttpServerStream<F> {
         self.set_state(StreamState::Closed);
     }
 
-    fn _close_local(&mut self) {
+    fn close_local(&mut self) {
         let next = match self.state() {
             StreamState::HalfClosedRemote => StreamState::Closed,
             _ => StreamState::HalfClosedLocal,
@@ -66,7 +65,7 @@ impl<F : HttpServerHandlerFactory> GrpcHttpServerStream<F> {
         self.state() == StreamState::Closed
     }
 
-    fn _is_closed_local(&self) -> bool {
+    fn is_closed_local(&self) -> bool {
         match self.state() {
             StreamState::HalfClosedLocal | StreamState::Closed => true,
             _ => false,
@@ -80,18 +79,26 @@ impl<F : HttpServerHandlerFactory> GrpcHttpServerStream<F> {
         }
     }
 
-    fn new_data_chunk(&mut self, data: &[u8]) {
+    fn new_data_chunk(&mut self, data: &[u8], last: bool) {
         if let Some(ref mut sender) = self.request_handler {
+            let part = HttpStreamPart {
+                content: HttpStreamPartContent::Data(data.to_owned()),
+                last: last,
+            };
             // ignore error
-            sender.send(ResultOrEof::Item(HttpStreamPart::Data(data.to_owned()))).ok();
+            sender.send(ResultOrEof::Item(part)).ok();
         }
     }
 
-    fn set_headers<'n, 'v>(&mut self, headers: Vec<Header<'n, 'v>>) {
+    fn set_headers<'n, 'v>(&mut self, headers: Vec<Header<'n, 'v>>, last: bool) {
         let headers = headers.into_iter().map(|h| Header::new(h.name().to_owned(), h.value().to_owned())).collect();
         if let Some(ref mut sender) = self.request_handler {
+            let part = HttpStreamPart {
+                content: HttpStreamPartContent::Headers(headers),
+                last: last,
+            };
             // ignore error
-            sender.send(ResultOrEof::Item(HttpStreamPart::Headers(headers))).ok();
+            sender.send(ResultOrEof::Item(part)).ok();
         }
     }
 
@@ -145,7 +152,7 @@ impl<F : HttpServerHandlerFactory> GrpcHttpServerSessionState<F> {
         let req_rx = req_rx.map_err(HttpError::from);
         let req_rx = stream_with_eof_and_error(req_rx);
 
-        let response = self.factory.new_request(Box::new(req_rx));
+        let response = self.factory.new_request(&self.loop_handle, Box::new(req_rx));
 
         {
             let to_write_tx = self.to_write_tx.clone();
@@ -247,12 +254,17 @@ impl<F : HttpServerHandlerFactory> ServerReadLoop<F> {
         }
     }
 
-    fn process_special_frame(self, frame: HttpFrameConn) -> HttpFuture<Self> {
+    fn process_conn_window_update(self, _frame: WindowUpdateFrame) -> HttpFuture<Self> {
+        // TODO
+        Box::new(futures::finished(self))
+    }
+
+    fn process_conn_frame(self, frame: HttpFrameConn) -> HttpFuture<Self> {
         match frame {
             HttpFrameConn::Settings(f) => self.process_settings_global(f),
             HttpFrameConn::Ping(f) => self.process_ping(f),
             HttpFrameConn::Goaway(_f) => panic!("TODO"),
-            HttpFrameConn::WindowUpdate(_f) => panic!("TODO"),
+            HttpFrameConn::WindowUpdate(f) => self.process_conn_window_update(f),
         }
     }
 
@@ -262,7 +274,7 @@ impl<F : HttpServerHandlerFactory> ServerReadLoop<F> {
 
             // TODO: decrease window
 
-            stream.new_data_chunk(&frame.data.as_ref());
+            stream.new_data_chunk(&frame.data.as_ref(), frame.is_end_of_stream());
 
             if frame.is_set(DataFlag::EndStream) {
                 stream.close_remote()
@@ -283,7 +295,7 @@ impl<F : HttpServerHandlerFactory> ServerReadLoop<F> {
 
             let stream = inner.session_state.get_or_create_stream(frame.get_stream_id());
 
-            stream.set_headers(headers);
+            stream.set_headers(headers, frame.is_end_of_stream());
 
             if frame.is_end_of_stream() {
                 stream.close_remote();
@@ -320,7 +332,7 @@ impl<F : HttpServerHandlerFactory> ServerReadLoop<F> {
     fn process_raw_frame(self, raw_frame: RawFrame) -> HttpFuture<Self> {
         let frame = HttpFrameClassified::from_raw(&raw_frame).unwrap();
         match frame {
-            HttpFrameClassified::Conn(f) => self.process_special_frame(f),
+            HttpFrameClassified::Conn(f) => self.process_conn_frame(f),
             HttpFrameClassified::Stream(f) => self.process_stream_frame(f),
             HttpFrameClassified::Unknown(_f) => panic!("TODO"),
         }
@@ -367,7 +379,20 @@ impl<F : HttpServerHandlerFactory> ServerWriteLoop<F> {
 
     fn process_response_part(self, stream_id: StreamId, part: HttpStreamPart) -> HttpFuture<Self> {
         let send_buf = self.inner.with(move |inner: &mut ServerInner<F>| {
-            inner.conn.send_part_to_vec(stream_id, part, EndStream::No).unwrap()
+            let stream = inner.session_state.get_stream_mut(stream_id);
+            if let Some(stream) = stream {
+                if !stream.is_closed_local() {
+                    if part.last {
+                        stream.close_local();
+                        // TODO: GC stream
+                    }
+                    inner.conn.send_part_to_vec(stream_id, &part).unwrap()
+                } else {
+                    Vec::new()
+                }
+            } else {
+                Vec::new()
+            }
         });
         self.write_all(send_buf)
     }
@@ -375,7 +400,17 @@ impl<F : HttpServerHandlerFactory> ServerWriteLoop<F> {
     fn process_response_end(self, stream_id: StreamId) -> HttpFuture<Self> {
         println!("http server: process_response_end");
         let send_buf = self.inner.with(move |inner: &mut ServerInner<F>| {
-            inner.conn.send_end_of_stream_to_vec(stream_id).unwrap()
+            let stream = inner.session_state.get_stream_mut(stream_id);
+            if let Some(stream) = stream {
+                if !stream.is_closed_local() {
+                    stream.close_local();
+                    inner.conn.send_end_of_stream_to_vec(stream_id).unwrap()
+                } else {
+                    Vec::new()
+                }
+            } else {
+                Vec::new()
+            }
         });
         self.write_all(send_buf)
     }
@@ -407,7 +442,9 @@ pub struct HttpServerConnectionAsync<F : HttpServerHandlerFactory> {
 }
 
 impl<F : HttpServerHandlerFactory> HttpServerConnectionAsync<F> {
-    pub fn new(lh: reactor::Handle, socket: TcpStream, factory : F) -> HttpFuture<()> {
+    pub fn new(lh: &reactor::Handle, socket: TcpStream, factory : F) -> HttpFuture<()> {
+        let lh = lh.clone();
+
         let (to_write_tx, to_write_rx) = tokio_core::channel::channel::<ServerToWriteMessage<F>>(&lh).unwrap();
 
         let handshake = server_handshake(socket);
@@ -432,6 +469,6 @@ impl<F : HttpServerHandlerFactory> HttpServerConnectionAsync<F> {
             run_write.join(run_read).map(|_| ())
         });
 
-        Box::new(run.then(|x| { println!("server: end"); x }))
+        Box::new(run.then(|x| { println!("server: end: {:?}", x); x }))
     }
 }

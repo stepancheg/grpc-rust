@@ -3,7 +3,6 @@ use std::net::SocketAddr;
 use std::net::ToSocketAddrs;
 use std::sync::mpsc;
 use std::sync::Arc;
-use std::str::from_utf8;
 
 use futures;
 use futures::Future;
@@ -29,6 +28,7 @@ use futures_grpc::*;
 use grpc::*;
 
 use http_client::*;
+use solicit_misc::*;
 
 use assert_types::*;
 
@@ -281,12 +281,6 @@ impl Drop for GrpcClient {
         self.thread_join_handle.take().expect("handle.take")
             .join().expect("join thread");
     }
-}
-
-fn slice_get_header<'a>(headers: &'a [Header<'a, 'a>], name: &str) -> Option<&'a str> {
-    headers.iter()
-        .find(|h| h.name() == name.as_bytes())
-        .and_then(|h| from_utf8(h.value()).ok())
 }
 
 
