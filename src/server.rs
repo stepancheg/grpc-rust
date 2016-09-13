@@ -11,6 +11,7 @@ use solicit::http::HttpError;
 use solicit::http::Header;
 
 use futures;
+use futures::stream;
 use futures::Future;
 use futures::Poll;
 use futures::Async;
@@ -138,7 +139,7 @@ impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerBidi<F>
 
 
 trait MethodHandlerDispatch {
-    fn on_message(&self, message: &[u8]) -> GrpcStreamSend<Vec<u8>>;
+    fn start_request(&self, req: GrpcStreamSend<Vec<u8>>) -> GrpcStreamSend<Vec<u8>>;
 }
 
 struct MethodHandlerDispatchAsyncImpl<Req, Resp> {
@@ -161,14 +162,11 @@ impl<Req, Resp> MethodHandlerDispatch for MethodHandlerDispatchAsyncImpl<Req, Re
         Req : Send + 'static,
         Resp : Send + 'static,
 {
-    // TODO: stream
-    fn on_message(&self, message: &[u8]) -> GrpcStreamSend<Vec<u8>> {
-        let req = match self.desc.req_marshaller.read(message) {
-            Ok(req) => req,
-            Err(e) => return Box::new(future_to_stream_once(futures::done(Err(e)))),
-        };
+    fn start_request(&self, req_grpc_frames: GrpcStreamSend<Vec<u8>>) -> GrpcStreamSend<Vec<u8>> {
+        let desc = self.desc.clone();
+        let req = req_grpc_frames.and_then(move |frame| desc.req_marshaller.read(&frame));
         let resp =
-            catch_unwind(AssertUnwindSafe(|| self.method_handler.handle(stream_once_send(req))));
+            catch_unwind(AssertUnwindSafe(|| self.method_handler.handle(Box::new(req))));
         match resp {
             Ok(resp) => {
                 let desc_copy = self.desc.clone();
@@ -224,8 +222,8 @@ impl ServerServiceDefinition {
     }
 
     // TODO: stream
-    pub fn handle_method(&self, name: &str, message: &[u8]) -> GrpcStreamSend<Vec<u8>> {
-        self.find_method(name).dispatch.on_message(message)
+    pub fn handle_method(&self, name: &str, message: GrpcStreamSend<Vec<u8>>) -> GrpcStreamSend<Vec<u8>> {
+        self.find_method(name).dispatch.start_request(message)
     }
 }
 
@@ -340,10 +338,15 @@ impl ProcessRequestStream {
     }
 
     fn poll_eof(&mut self) -> Poll<Option<HttpStreamPart>, HttpError> {
-        let message = parse_grpc_frame_completely(&self.data).expect("parse req body");
+        // TODO: do not unwrap
+        // TODO: stream
+        let grpc_frames = parse_grpc_frames_completely(&self.data).expect("parse req body")
+            .into_iter()
+            .map(|v| v.to_vec())
+            .collect::<Vec<_>>();
 
         // TODO: catch unwind
-        let grpc_frames = self.service_definition.handle_method(&self.path, message);
+        let grpc_frames = self.service_definition.handle_method(&self.path, Box::new(stream::iter(grpc_frames.into_iter().map(Ok))));
         let http_parts = stream_concat(
             grpc_frames
                 .map(|frame| HttpStreamPart::intermediate_data(write_grpc_frame_to_vec(&frame)))

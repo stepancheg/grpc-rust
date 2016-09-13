@@ -63,6 +63,7 @@ pub fn parse_grpc_frames_completely(stream: &[u8]) -> GrpcResult<Vec<&[u8]>> {
     Ok(r)
 }
 
+#[allow(dead_code)]
 pub fn parse_grpc_frame_completely(stream: &[u8]) -> GrpcResult<&[u8]> {
     let frames = try!(parse_grpc_frames_completely(stream));
     if frames.len() == 1 {
