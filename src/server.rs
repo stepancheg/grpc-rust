@@ -1,3 +1,4 @@
+use std::mem;
 use std::sync::Arc;
 use std::thread;
 use std::net::SocketAddr;
@@ -282,15 +283,53 @@ struct GrpcHttpServerHandlerFactory {
     service_definition: Arc<ServerServiceDefinition>,
 }
 
+
+struct GrpcFrameFromHttpFramesStream {
+    http_stream_stream: HttpStreamStreamSend,
+    buf: Vec<u8>,
+}
+
+impl Stream for GrpcFrameFromHttpFramesStream {
+    type Item = Vec<u8>;
+    type Error = GrpcError;
+
+    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+        loop {
+            if let Some((frame, len)) = try!(parse_grpc_frame(&self.buf)).map(|(frame, len)| (frame.to_owned(), len)) {
+                self.buf.drain(..len);
+                return Ok(Async::Ready(Some(frame)));
+            }
+
+            let part_opt = try_ready!(self.http_stream_stream.poll());
+            let part = match part_opt {
+                None => {
+                    if self.buf.is_empty() {
+                        return Ok(Async::Ready(None));
+                    } else {
+                        return Err(GrpcError::Other("partial frame"));
+                    }
+                },
+                Some(part) => part,
+            };
+
+            match part.content {
+                // unexpected, but seem OK
+                HttpStreamPartContent::Headers(..) => continue,
+                HttpStreamPartContent::Data(data) => self.buf.extend(data),
+            }
+        }
+    }
+}
+
+
 enum ProcessRequestState {
-    Initial,
-    Body,
-    Stream(HttpStreamStreamSend),
+    Request(HttpStreamStreamSend),
+    Response(HttpStreamStreamSend),
+    Stub,
 }
 
 struct ProcessRequestStream {
     service_definition: Arc<ServerServiceDefinition>,
-    http_stream_stream: HttpStreamStreamSend,
     state: ProcessRequestState,
     path: String,
     data: Vec<u8>,
@@ -315,25 +354,44 @@ impl ProcessRequestStream {
             None => return self.poll_send_500("no :path header"),
         };
 
-        self.state = ProcessRequestState::Body;
-        Ok(Async::NotReady)
-    }
-
-    fn poll_part_body(&mut self, part: HttpStreamPart) -> Poll<Option<HttpStreamPart>, HttpError> {
-        let data = match part.content {
-            HttpStreamPartContent::Headers(..) => return Ok(Async::NotReady),
-            HttpStreamPartContent::Data(data) => data,
+        let http_request = match mem::replace(&mut self.state, ProcessRequestState::Stub) {
+            ProcessRequestState::Request(http_request) => http_request,
+            _ => unreachable!(),
         };
 
-        self.data.extend(&data);
+        let grpc_request = GrpcFrameFromHttpFramesStream {
+            http_stream_stream: http_request,
+            buf: Vec::new(),
+        };
+
+        // TODO: catch unwind
+        let grpc_frames = self.service_definition.handle_method(&self.path, Box::new(grpc_request));
+
+        let http_parts = stream_concat(
+            grpc_frames
+                .map(|frame| HttpStreamPart::intermediate_data(write_grpc_frame_to_vec(&frame)))
+                .then(|result| {
+                    match result {
+                        Ok(part) => { let r: Result<_, HttpError> = Ok(part); r }
+                        Err(e) =>
+                            Ok(HttpStreamPart::last_headers(vec![
+                                Header::new(":status", "500"),
+                                Header::new(HEADER_GRPC_MESSAGE, format!("error: {:?}", e)),
+                            ]))
+                    }
+                }),
+                stream_once_send(HttpStreamPart::last_headers(vec![
+                    Header::new(HEADER_GRPC_STATUS, "0"),
+                ])));
+
+        self.state = ProcessRequestState::Response(Box::new(http_parts));
         Ok(Async::NotReady)
     }
 
     fn poll_part(&mut self, part: HttpStreamPart) -> Poll<Option<HttpStreamPart>, HttpError> {
         match self.state {
-            ProcessRequestState::Initial => self.poll_part_initial(part),
-            ProcessRequestState::Body => self.poll_part_body(part),
-            ProcessRequestState::Stream(..) => unreachable!(),
+            ProcessRequestState::Request(..) => self.poll_part_initial(part),
+            _ => unreachable!(),
         }
     }
 
@@ -364,7 +422,7 @@ impl ProcessRequestStream {
                     Header::new(HEADER_GRPC_STATUS, "0"),
                 ])));
 
-        self.state = ProcessRequestState::Stream(Box::new(http_parts));
+        self.state = ProcessRequestState::Response(Box::new(http_parts));
         Ok(Async::NotReady)
     }
 
@@ -377,17 +435,19 @@ impl ProcessRequestStream {
 
     fn poll_with_repoll(&mut self) -> Poll<Option<HttpStreamPart>, HttpError> {
         loop {
-            if let ProcessRequestState::Stream(ref mut stream) = self.state {
-                return stream.poll();
-            }
-
-            let part = try_ready!(self.http_stream_stream.poll());
+            let part = match self.state {
+                ProcessRequestState::Request(ref mut request) => {
+                    try_ready!(request.poll())
+                },
+                ProcessRequestState::Response(ref mut s) => return s.poll(),
+                ProcessRequestState::Stub => unreachable!(),
+            };
 
             match self.poll_without_repoll(part) {
                 Err(e) => return Err(e),
                 Ok(Async::Ready(part)) => return Ok(Async::Ready(part)),
-                Ok(Async::NotReady) => continue, // repoll
-            }
+                Ok(Async::NotReady) => (), // repoll
+            };
         }
     }
 }
@@ -405,8 +465,7 @@ impl HttpServerHandlerFactory for GrpcHttpServerHandlerFactory {
     fn new_request(&mut self, _handle: &reactor::Handle, req: HttpStreamStreamSend) -> HttpStreamStreamSend {
         let s = ProcessRequestStream {
             service_definition: self.service_definition.clone(),
-            http_stream_stream: req,
-            state: ProcessRequestState::Initial,
+            state: ProcessRequestState::Request(req),
             path: String::new(),
             data: Vec::new(),
         };

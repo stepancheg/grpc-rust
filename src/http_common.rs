@@ -11,6 +11,7 @@ pub enum HttpStreamPartContent {
 
 pub struct HttpStreamPart {
     pub content: HttpStreamPartContent,
+    /// END_STREAM
     pub last: bool,
 }
 
