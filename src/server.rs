@@ -381,12 +381,7 @@ impl ProcessRequestStream {
                 return stream.poll();
             }
 
-            let poll = self.http_stream_stream.poll();
-            let part = match poll {
-                Err(e) => return Err(e),
-                Ok(Async::Ready(part)) => part,
-                Ok(Async::NotReady) => return Ok(Async::NotReady),
-            };
+            let part = try_ready!(self.http_stream_stream.poll());
 
             match self.poll_without_repoll(part) {
                 Err(e) => return Err(e),
