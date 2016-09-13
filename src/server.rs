@@ -12,7 +12,6 @@ use solicit::http::HttpError;
 use solicit::http::Header;
 
 use futures;
-use futures::stream;
 use futures::Future;
 use futures::Poll;
 use futures::Async;
@@ -331,8 +330,6 @@ enum ProcessRequestState {
 struct ProcessRequestStream {
     service_definition: Arc<ServerServiceDefinition>,
     state: ProcessRequestState,
-    path: String,
-    data: Vec<u8>,
 }
 
 impl ProcessRequestStream {
@@ -349,7 +346,7 @@ impl ProcessRequestStream {
             HttpStreamPartContent::Headers(headers) => headers,
         };
 
-        self.path = match slice_get_header(&headers, ":path") {
+        let path = match slice_get_header(&headers, ":path") {
             Some(path) => path.to_owned(),
             None => return self.poll_send_500("no :path header"),
         };
@@ -365,7 +362,7 @@ impl ProcessRequestStream {
         };
 
         // TODO: catch unwind
-        let grpc_frames = self.service_definition.handle_method(&self.path, Box::new(grpc_request));
+        let grpc_frames = self.service_definition.handle_method(&path, Box::new(grpc_request));
 
         let http_parts = stream_concat(
             grpc_frames
@@ -396,34 +393,10 @@ impl ProcessRequestStream {
     }
 
     fn poll_eof(&mut self) -> Poll<Option<HttpStreamPart>, HttpError> {
-        // TODO: do not unwrap
-        // TODO: stream
-        let grpc_frames = parse_grpc_frames_completely(&self.data).expect("parse req body")
-            .into_iter()
-            .map(|v| v.to_vec())
-            .collect::<Vec<_>>();
-
-        // TODO: catch unwind
-        let grpc_frames = self.service_definition.handle_method(&self.path, Box::new(stream::iter(grpc_frames.into_iter().map(Ok))));
-        let http_parts = stream_concat(
-            grpc_frames
-                .map(|frame| HttpStreamPart::intermediate_data(write_grpc_frame_to_vec(&frame)))
-                .then(|result| {
-                    match result {
-                        Ok(part) => { let r: Result<_, HttpError> = Ok(part); r }
-                        Err(e) =>
-                            Ok(HttpStreamPart::last_headers(vec![
-                                Header::new(":status", "500"),
-                                Header::new(HEADER_GRPC_MESSAGE, format!("error: {:?}", e)),
-                            ]))
-                    }
-                }),
-                stream_once_send(HttpStreamPart::last_headers(vec![
-                    Header::new(HEADER_GRPC_STATUS, "0"),
-                ])));
-
-        self.state = ProcessRequestState::Response(Box::new(http_parts));
-        Ok(Async::NotReady)
+        Ok(Async::Ready(Some(HttpStreamPart::last_headers(vec![
+            Header::new(":status", "500"),
+            Header::new(HEADER_GRPC_MESSAGE, "no header"),
+        ]))))
     }
 
     fn poll_without_repoll(&mut self, part: Option<HttpStreamPart>) -> Poll<Option<HttpStreamPart>, HttpError> {
@@ -466,8 +439,6 @@ impl HttpServerHandlerFactory for GrpcHttpServerHandlerFactory {
         let s = ProcessRequestStream {
             service_definition: self.service_definition.clone(),
             state: ProcessRequestState::Request(req),
-            path: String::new(),
-            data: Vec::new(),
         };
         Box::new(s)
     }
