@@ -12,6 +12,8 @@ use solicit::http::Header;
 
 use futures;
 use futures::Future;
+use futures::Poll;
+use futures::Async;
 use futures::stream::Stream;
 use tokio_core;
 use tokio_core::reactor;
@@ -21,7 +23,6 @@ use method::*;
 use error::*;
 use futures_grpc::*;
 use futures_misc::*;
-use solicit_async::*;
 use solicit_misc::*;
 use grpc::*;
 use assert_types::*;
@@ -283,137 +284,135 @@ struct GrpcHttpServerHandlerFactory {
     service_definition: Arc<ServerServiceDefinition>,
 }
 
-struct ProcessRequestShared {
-    service_definition: Arc<ServerServiceDefinition>,
-    resp_tx: tokio_core::channel::Sender<ResultOrEof<HttpStreamPart, HttpError>>,
-    remote: reactor::Remote,
-}
-
 enum ProcessRequestState {
-    Initial(ProcessRequestShared),
-    Body(ProcessRequestShared, String, Vec<u8>),
+    Initial,
+    Body,
+    Stream(HttpStreamStreamSend),
 }
 
-impl ProcessRequestState {
-    fn initial(shared: ProcessRequestShared, message: HttpStreamPart) -> HttpFutureSend<ProcessRequestState> {
-        let headers = match message.content {
-            HttpStreamPartContent::Headers(headers) => headers,
-            HttpStreamPartContent::Data(_data) => panic!("data before headers"), // TODO: send some response
-        };
+struct ProcessRequestStream {
+    service_definition: Arc<ServerServiceDefinition>,
+    http_stream_stream: HttpStreamStreamSend,
+    state: ProcessRequestState,
+    path: String,
+    data: Vec<u8>,
+}
 
-        let path = slice_get_header(&headers, ":path").expect(":path header").to_owned();
-
-        Box::new(futures::finished(ProcessRequestState::Body(shared, path, Vec::new())))
+impl ProcessRequestStream {
+    fn poll_send_500(&mut self, message: &str) -> Poll<Option<HttpStreamPart>, HttpError> {
+        Ok(Async::Ready(Some(HttpStreamPart::last_headers(vec![
+            Header::new(":status", "500"),
+            Header::new(HEADER_GRPC_MESSAGE, message.to_owned()),
+        ]))))
     }
 
-    fn body(shared: ProcessRequestShared, path: String, mut body: Vec<u8>, message: HttpStreamPart) -> HttpFutureSend<ProcessRequestState> {
-        match message.content {
-            // that's unexpected
-            HttpStreamPartContent::Headers(_header) => Box::new(futures::finished(ProcessRequestState::Body(shared, path, body))),
-            HttpStreamPartContent::Data(data) => {
-                body.extend(&data);
-                Box::new(futures::finished(ProcessRequestState::Body(shared, path, body)))
+    fn poll_part_initial(&mut self, part: HttpStreamPart) -> Poll<Option<HttpStreamPart>, HttpError> {
+        let headers = match part.content {
+            HttpStreamPartContent::Data(..) => return self.poll_send_500("body before headers"),
+            HttpStreamPartContent::Headers(headers) => headers,
+        };
+
+        self.path = match slice_get_header(&headers, ":path") {
+            Some(path) => path.to_owned(),
+            None => return self.poll_send_500("no :path header"),
+        };
+
+        self.state = ProcessRequestState::Body;
+        Ok(Async::NotReady)
+    }
+
+    fn poll_part_body(&mut self, part: HttpStreamPart) -> Poll<Option<HttpStreamPart>, HttpError> {
+        let data = match part.content {
+            HttpStreamPartContent::Headers(..) => return Ok(Async::NotReady),
+            HttpStreamPartContent::Data(data) => data,
+        };
+
+        self.data.extend(&data);
+        Ok(Async::NotReady)
+    }
+
+    fn poll_part(&mut self, part: HttpStreamPart) -> Poll<Option<HttpStreamPart>, HttpError> {
+        match self.state {
+            ProcessRequestState::Initial => self.poll_part_initial(part),
+            ProcessRequestState::Body => self.poll_part_body(part),
+            ProcessRequestState::Stream(..) => unreachable!(),
+        }
+    }
+
+    fn poll_eof(&mut self) -> Poll<Option<HttpStreamPart>, HttpError> {
+        let message = parse_grpc_frame_completely(&self.data).expect("parse req body");
+
+        // TODO: catch unwind
+        let grpc_frames = self.service_definition.handle_method(&self.path, message);
+        let http_parts = stream_concat(
+            grpc_frames
+                .map(|frame| HttpStreamPart::intermediate_data(write_grpc_frame_to_vec(&frame)))
+                .then(|result| {
+                    match result {
+                        Ok(part) => { let r: Result<_, HttpError> = Ok(part); r }
+                        Err(e) =>
+                            Ok(HttpStreamPart::last_headers(vec![
+                                Header::new(":status", "500"),
+                                Header::new(HEADER_GRPC_MESSAGE, format!("error: {:?}", e)),
+                            ]))
+                    }
+                }),
+                stream_once_send(HttpStreamPart::last_headers(vec![
+                    Header::new(HEADER_GRPC_STATUS, "0"),
+                ])));
+
+        self.state = ProcessRequestState::Stream(Box::new(http_parts));
+        Ok(Async::NotReady)
+    }
+
+    fn poll_without_repoll(&mut self, part: Option<HttpStreamPart>) -> Poll<Option<HttpStreamPart>, HttpError> {
+        match part {
+            Some(part) => self.poll_part(part),
+            None => self.poll_eof(),
+        }
+    }
+
+    fn poll_with_repoll(&mut self) -> Poll<Option<HttpStreamPart>, HttpError> {
+        loop {
+            if let ProcessRequestState::Stream(ref mut stream) = self.state {
+                return stream.poll();
+            }
+
+            let poll = self.http_stream_stream.poll();
+            let part = match poll {
+                Err(e) => return Err(e),
+                Ok(Async::Ready(part)) => part,
+                Ok(Async::NotReady) => return Ok(Async::NotReady),
+            };
+
+            match self.poll_without_repoll(part) {
+                Err(e) => return Err(e),
+                Ok(Async::Ready(part)) => return Ok(Async::Ready(part)),
+                Ok(Async::NotReady) => continue, // repoll
             }
         }
     }
+}
 
-    fn message(self, message: HttpStreamPart) -> HttpFutureSend<ProcessRequestState> {
-        match self {
-            ProcessRequestState::Initial(shared) => ProcessRequestState::initial(shared, message),
-            ProcessRequestState::Body(shared, path, body) => ProcessRequestState::body(shared, path, body, message),
-        }
-    }
+impl Stream for ProcessRequestStream {
+    type Item = HttpStreamPart;
+    type Error = HttpError;
 
-    fn finish(self) -> HttpFutureSend<()> {
-        let (shared, path, data) = match self {
-            ProcessRequestState::Initial(..) => panic!("no headers yet"),
-            ProcessRequestState::Body(shared, path, data) => (shared, path, data),
-        };
-
-        let message = parse_grpc_frame_completely(&data).expect("parse req body");
-
-        let stream = shared.service_definition.handle_method(&path, message);
-
-        enum ResponseProcessState {
-            None,
-            HeadersAndSomeDataSent,
-        }
-
-        let shared: ProcessRequestShared = shared;
-        let resp_tx_1 = shared.resp_tx.clone();
-        let resp_tx_2 = shared.resp_tx.clone();
-
-        let future = stream
-            .fold(ResponseProcessState::None, move |state, response| {
-                if let ResponseProcessState::None = state {
-                    resp_tx_1.send(ResultOrEof::Item(HttpStreamPart::intermediate_headers(
-                        vec![
-                            Header::new(":status", "200"),
-                        ]),
-                    )).unwrap();
-                }
-
-                let http_message = write_grpc_frame_to_vec(&response);
-
-                resp_tx_1.send(ResultOrEof::Item(HttpStreamPart::intermediate_data(http_message))).unwrap();
-
-                futures::finished::<_, GrpcError>(ResponseProcessState::HeadersAndSomeDataSent)
-            })
-            //.catch_unwind() // TODO
-            .then(move |r| {
-                match r {
-                    Ok(state) => {
-                        match state {
-                            ResponseProcessState::None => {
-                                resp_tx_2.send(ResultOrEof::Item(HttpStreamPart::last_headers(vec![
-                                    Header::new(":status", "500"),
-                                    Header::new(HEADER_GRPC_MESSAGE, "empty response"),
-                                ]))).unwrap();
-                            },
-                            ResponseProcessState::HeadersAndSomeDataSent => {
-                                resp_tx_2.send(ResultOrEof::Item(HttpStreamPart::last_headers(vec![
-                                    Header::new(HEADER_GRPC_STATUS, "0"),
-                                ]))).unwrap();
-                            }
-                        }
-                    },
-                    Err(e) => {
-                        resp_tx_2.send(ResultOrEof::Item(HttpStreamPart::last_headers(vec![
-                            Header::new(":status", "500"),
-                            Header::new(HEADER_GRPC_MESSAGE, format!("error: {:?}", e)),
-                        ]))).unwrap();
-                    },
-                }
-
-                resp_tx_2.send(ResultOrEof::Eof).unwrap();
-
-                Ok(())
-            });
-
-        shared.remote.spawn(move |_handle| future);
-
-        Box::new(futures::finished(()))
+    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+        self.poll_with_repoll()
     }
 }
 
 impl HttpServerHandlerFactory for GrpcHttpServerHandlerFactory {
-    fn new_request(&mut self, handle: &reactor::Handle, req: HttpStreamStreamSend) -> HttpStreamStreamSend {
-        let (resp_tx, resp_rx) = tokio_core::channel::channel(handle).unwrap();
-
-        let shared = ProcessRequestShared {
+    fn new_request(&mut self, _handle: &reactor::Handle, req: HttpStreamStreamSend) -> HttpStreamStreamSend {
+        let s = ProcessRequestStream {
             service_definition: self.service_definition.clone(),
-            resp_tx: resp_tx,
-            remote: handle.remote().clone(),
+            http_stream_stream: req,
+            state: ProcessRequestState::Initial,
+            path: String::new(),
+            data: Vec::new(),
         };
-        let request_future = req
-            .fold(ProcessRequestState::Initial(shared), ProcessRequestState::message)
-            .and_then(ProcessRequestState::finish)
-            .map_err(|e| { panic!("{:?}", e); });
-        handle.spawn(request_future);
-
-        let resp_rx = resp_rx.map_err(HttpError::from);
-
-        Box::new(stream_with_eof_and_error(resp_rx))
+        Box::new(s)
     }
 }
 

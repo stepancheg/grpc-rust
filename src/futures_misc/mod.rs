@@ -11,6 +11,8 @@ mod stream_merge2;
 mod stream_with_eof;
 mod stream_with_eof_and_error;
 mod channel_sync_sender;
+pub mod stream_deferred;
+pub mod stream_concat;
 
 pub use self::task_data::TaskRcMut;
 pub use self::task_data::TaskRcMutex;
@@ -40,3 +42,6 @@ pub use self::stream_with_eof_and_error::*;
 
 pub use self::channel_sync_sender::channel_sync_sender;
 pub use self::channel_sync_sender::SyncSender;
+
+pub use self::stream_deferred::stream_deferred;
+pub use self::stream_concat::stream_concat;

@@ -94,4 +94,8 @@ impl From<GrpcError> for io::Error {
     }
 }
 
-
+impl From<GrpcError> for HttpError {
+    fn from(err: GrpcError) -> HttpError {
+        HttpError::Other(Box::new(err))
+    }
+}

@@ -14,6 +14,7 @@ pub struct FutureToStreamOnce<F> {
     future: FutureToStreamState<F>,
 }
 
+/// Convert a future into single element stream
 pub fn future_to_stream_once<F : Future>(f: F) -> FutureToStreamOnce<F> {
     FutureToStreamOnce {
         future: FutureToStreamState::Future(f)
@@ -33,11 +34,15 @@ impl<F : Future> Stream for FutureToStreamOnce<F> {
             &mut FutureToStreamState::Done => {
                 panic!("cannot poll after eof");
             },
-            &mut FutureToStreamState::Future(ref mut future) => try_ready!(future.poll()),
+            &mut FutureToStreamState::Future(ref mut future) => match future.poll() {
+                Ok(Async::NotReady) => return Ok(Async::NotReady),
+                Ok(Async::Ready(r)) => Ok(r),
+                Err(e) => Err(e),
+            }
         };
 
         self.future = FutureToStreamState::Eof;
 
-        Ok(Async::Ready(Some(r)))
+        r.map(Some).map(Async::Ready)
     }
 }
