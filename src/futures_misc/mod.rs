@@ -27,6 +27,7 @@ pub use self::stream_once::stream_once;
 pub use self::stream_once::stream_once_send;
 
 pub use self::stream_repeat::stream_repeat;
+pub use self::stream_repeat::StreamRepeat;
 
 pub use self::stream_err::stream_err;
 
