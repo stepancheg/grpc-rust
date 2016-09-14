@@ -219,58 +219,7 @@ enum ServerToWriteMessage<F : HttpService> {
     ResponseStreamEnd(StreamId),
 }
 
-
-impl<F : HttpService> ServerReadLoop<F> {
-    fn recv_raw_frame(self) -> HttpFuture<(Self, RawFrame<'static>)> {
-        let ServerReadLoop { read, inner } = self;
-        Box::new(recv_raw_frame(read)
-            .map(|(read, frame)| (ServerReadLoop { read: read, inner: inner}, frame))
-            .map_err(HttpError::from))
-    }
-
-    fn read_process_frame(self) -> HttpFuture<Self> {
-        Box::new(self.recv_raw_frame()
-            .and_then(move |(rl, frame)| rl.process_raw_frame(frame)))
-    }
-
-    fn process_settings_global(self, _frame: SettingsFrame) -> HttpFuture<Self> {
-        // TODO: apply settings
-        Box::new(futures::finished(self))
-    }
-
-    fn send_frame<R : FrameIR>(self, frame: R) -> HttpFuture<Self> {
-        self.inner.with(|inner: &mut ServerInner<F>| {
-            let mut send_buf = VecSendFrame(Vec::new());
-            send_buf.send_frame(frame).unwrap();
-            inner.session_state.to_write_tx.send(ServerToWriteMessage::FromRead(ServerReadToWriteMessage { buf: send_buf.0 }))
-                .expect("read to write");
-        });
-
-        Box::new(futures::finished(self))
-    }
-
-    fn process_ping(self, frame: PingFrame) -> HttpFuture<Self> {
-        if frame.is_ack() {
-            Box::new(futures::finished(self))
-        } else {
-            self.send_frame(PingFrame::new_ack(frame.opaque_data()))
-        }
-    }
-
-    fn process_conn_window_update(self, _frame: WindowUpdateFrame) -> HttpFuture<Self> {
-        // TODO
-        Box::new(futures::finished(self))
-    }
-
-    fn process_conn_frame(self, frame: HttpFrameConn) -> HttpFuture<Self> {
-        match frame {
-            HttpFrameConn::Settings(f) => self.process_settings_global(f),
-            HttpFrameConn::Ping(f) => self.process_ping(f),
-            HttpFrameConn::Goaway(_f) => panic!("TODO"),
-            HttpFrameConn::WindowUpdate(f) => self.process_conn_window_update(f),
-        }
-    }
-
+impl<F : HttpService> HttpReadLoop for ServerReadLoop<F> {
     fn process_data_frame(self, frame: DataFrame) -> HttpFuture<Self> {
         self.inner.with(move |inner: &mut ServerInner<F>| {
             let stream = inner.session_state.get_stream_mut(frame.get_stream_id()).expect("stream not found");
@@ -306,7 +255,8 @@ impl<F : HttpService> ServerReadLoop<F> {
             // TODO: drop stream if closed on both ends
         });
 
-        Box::new(futures::finished(self))    }
+        Box::new(futures::finished(self))
+    }
 
     fn process_rst_stream_frame(self, frame: RstStreamFrame) -> HttpFuture<Self> {
         self.inner.with(move |inner: &mut ServerInner<F>| {
@@ -322,22 +272,41 @@ impl<F : HttpService> ServerReadLoop<F> {
         Box::new(futures::finished(self))
     }
 
-    fn process_stream_frame(self, frame: HttpFrameStream) -> HttpFuture<Self> {
-        match frame {
-            HttpFrameStream::Data(data) => self.process_data_frame(data),
-            HttpFrameStream::Headers(headers) => self.process_headers_frame(headers),
-            HttpFrameStream::RstStream(rst) => self.process_rst_stream_frame(rst),
-            HttpFrameStream::WindowUpdate(window_update) => self.process_window_update_frame(window_update),
-        }
+    fn process_settings_global(self, _frame: SettingsFrame) -> HttpFuture<Self> {
+        // TODO: apply settings
+        // TODO: send ack
+        Box::new(futures::finished(self))
     }
 
-    fn process_raw_frame(self, raw_frame: RawFrame) -> HttpFuture<Self> {
-        let frame = HttpFrameClassified::from_raw(&raw_frame).unwrap();
-        match frame {
-            HttpFrameClassified::Conn(f) => self.process_conn_frame(f),
-            HttpFrameClassified::Stream(f) => self.process_stream_frame(f),
-            HttpFrameClassified::Unknown(_f) => panic!("TODO"),
-        }
+    fn send_frame<R : FrameIR>(self, frame: R) -> HttpFuture<Self> {
+        self.inner.with(|inner: &mut ServerInner<F>| {
+            let mut send_buf = VecSendFrame(Vec::new());
+            send_buf.send_frame(frame).unwrap();
+            inner.session_state.to_write_tx.send(ServerToWriteMessage::FromRead(ServerReadToWriteMessage { buf: send_buf.0 }))
+                .expect("read to write");
+        });
+
+        Box::new(futures::finished(self))
+    }
+
+    fn process_conn_window_update(self, _frame: WindowUpdateFrame) -> HttpFuture<Self> {
+        // TODO
+        Box::new(futures::finished(self))
+    }
+
+}
+
+impl<F : HttpService> ServerReadLoop<F> {
+    fn recv_raw_frame(self) -> HttpFuture<(Self, RawFrame<'static>)> {
+        let ServerReadLoop { read, inner } = self;
+        Box::new(recv_raw_frame(read)
+            .map(|(read, frame)| (ServerReadLoop { read: read, inner: inner}, frame))
+            .map_err(HttpError::from))
+    }
+
+    fn read_process_frame(self) -> HttpFuture<Self> {
+        Box::new(self.recv_raw_frame()
+            .and_then(move |(rl, frame)| rl.process_raw_frame(frame)))
     }
 
     fn run(self) -> HttpFuture<()> {

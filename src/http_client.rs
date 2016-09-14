@@ -7,9 +7,7 @@ use solicit::http::connection::HttpConnection;
 use solicit::http::connection::EndStream;
 use solicit::http::connection::SendFrame;
 use solicit::http::connection::HttpFrame;
-use solicit::http::frame::RawFrame;
-use solicit::http::frame::HttpSetting;
-use solicit::http::frame::PingFrame;
+use solicit::http::frame::*;
 use solicit::http::StreamId;
 use solicit::http::HttpScheme;
 use solicit::http::HttpError;
@@ -433,6 +431,47 @@ struct ClientReadLoop<H : HttpClientResponseHandler> {
     inner: TaskRcMut<ClientInner<H>>,
 }
 
+impl<H : HttpClientResponseHandler> HttpReadLoop for ClientReadLoop<H> {
+    fn process_data_frame(self, frame: DataFrame) -> HttpFuture<Self> {
+        unimplemented!()
+    }
+
+    fn process_headers_frame(self, frame: HeadersFrame) -> HttpFuture<Self> {
+        unimplemented!()
+    }
+
+    fn process_rst_stream_frame(self, frame: RstStreamFrame) -> HttpFuture<Self> {
+        unimplemented!()
+    }
+
+    fn process_window_update_frame(self, _frame: WindowUpdateFrame) -> HttpFuture<Self> {
+        // TODO
+        Box::new(futures::finished(self))
+    }
+
+    fn process_settings_global(self, _frame: SettingsFrame) -> HttpFuture<Self> {
+        // TODO: apply settings
+        // TODO: send ack
+        Box::new(futures::finished(self))
+    }
+
+    fn send_frame<R : FrameIR>(self, frame: R) -> HttpFuture<Self> {
+        self.inner.with(|inner: &mut ClientInner<H>| {
+            let mut send_buf = VecSendFrame(Vec::new());
+            send_buf.send_frame(frame).unwrap();
+            inner.to_write_tx.send(ClientToWriteMessage::FromRead(ClientReadToWriteMessage { buf: send_buf.0 }))
+                .expect("read to write");
+        });
+
+        Box::new(futures::finished(self))
+    }
+
+    fn process_conn_window_update(self, _frame: WindowUpdateFrame) -> HttpFuture<Self> {
+        // TODO
+        Box::new(futures::finished(self))
+    }
+}
+
 impl<H : HttpClientResponseHandler> ClientReadLoop<H> {
     fn recv_raw_frame(self) -> HttpFuture<(Self, RawFrame<'static>)> {
         let ClientReadLoop { read, inner } = self;
@@ -449,41 +488,69 @@ impl<H : HttpClientResponseHandler> ClientReadLoop<H> {
         Box::new(future.map(|_| self))
     }
 
-    fn process_raw_frame(self, raw_frame: RawFrame) -> HttpFuture<Self> {
-        println!("client: process_raw_frame");
-        let last = self.inner.with(move |inner: &mut ClientInner<H>| {
-            let mut send = VecSendFrame(Vec::new());
-            let last = {
-                let mut session = MyClientSession::new(&mut inner.session_state, &mut send);
-                let frame = HttpFrame::from_raw(&raw_frame).unwrap();
-                let end_stream = match &frame {
-                    &HttpFrame::DataFrame(ref data_frame) => data_frame.is_end_of_stream(),
-                    &HttpFrame::HeadersFrame(ref headers_frame) => headers_frame.is_end_of_stream(),
-                    _ => false,
-                };
-                inner.conn.handle_frame(frame, &mut session)
-                    .unwrap();
-                session.last.take().map(|(stream_id, last_chunk)| (stream_id, last_chunk, if end_stream { EndStream::Yes } else { EndStream::No }))
-            };
+    fn process_settings_global(self, _frame: SettingsFrame) -> HttpFuture<Self> {
+        // TODO: apply settings
+        // TODO: send ack
+        Box::new(futures::finished(self))
+    }
 
-            if !send.0.is_empty() {
-                inner.to_write_tx.send(ClientToWriteMessage::FromRead(ClientReadToWriteMessage { buf: send.0 }))
-                    .expect("read to write");
-            }
+    fn process_conn_window_update(self, _frame: WindowUpdateFrame) -> HttpFuture<Self> {
+        // TODO
+        Box::new(futures::finished(self))
+    }
 
-            last
-        });
+    fn process_conn_frame(self, frame: HttpFrameConn) -> HttpFuture<Self> {
+        match frame {
+            HttpFrameConn::Settings(f) => self.process_settings_global(f),
+            HttpFrameConn::Ping(f) => self.process_ping(f),
+            HttpFrameConn::Goaway(_f) => panic!("TODO"),
+            HttpFrameConn::WindowUpdate(f) => self.process_conn_window_update(f),
+        }
+    }
 
-        if let Some((stream_id, last_chunk, end_stream)) = last {
-            self.process_streams_after_handle_next_frame(stream_id, last_chunk, end_stream)
+    fn process_stream_frame(self, frame: HttpFrameStream) -> HttpFuture<Self> {
+        unimplemented!()
+    }
+
+    fn process_raw_frame_old(self, raw_frame: RawFrame) -> HttpFuture<Self> {
+        if false {
+            self.process_raw_frame(raw_frame)
         } else {
-            Box::new(futures::finished(self))
+            println!("client: process_raw_frame");
+            let last = self.inner.with(move |inner: &mut ClientInner<H>| {
+                let mut send = VecSendFrame(Vec::new());
+                let last = {
+                    let mut session = MyClientSession::new(&mut inner.session_state, &mut send);
+                    let frame = HttpFrame::from_raw(&raw_frame).unwrap();
+                    let end_stream = match &frame {
+                        &HttpFrame::DataFrame(ref data_frame) => data_frame.is_end_of_stream(),
+                        &HttpFrame::HeadersFrame(ref headers_frame) => headers_frame.is_end_of_stream(),
+                        _ => false,
+                    };
+                    inner.conn.handle_frame(frame, &mut session)
+                        .unwrap();
+                    session.last.take().map(|(stream_id, last_chunk)| (stream_id, last_chunk, if end_stream { EndStream::Yes } else { EndStream::No }))
+                };
+
+                if !send.0.is_empty() {
+                    inner.to_write_tx.send(ClientToWriteMessage::FromRead(ClientReadToWriteMessage { buf: send.0 }))
+                        .expect("read to write");
+                }
+
+                last
+            });
+
+            if let Some((stream_id, last_chunk, end_stream)) = last {
+                self.process_streams_after_handle_next_frame(stream_id, last_chunk, end_stream)
+            } else {
+                Box::new(futures::finished(self))
+            }
         }
     }
 
     fn read_process_frame(self) -> HttpFuture<Self> {
         Box::new(self.recv_raw_frame()
-            .and_then(move |(rl, frame)| rl.process_raw_frame(frame)))
+            .and_then(move |(rl, frame)| rl.process_raw_frame_old(frame)))
     }
 
     fn run(self) -> HttpFuture<()> {
