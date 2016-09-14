@@ -220,6 +220,13 @@ enum ServerToWriteMessage<F : HttpService> {
 }
 
 impl<F : HttpService> HttpReadLoop for ServerReadLoop<F> {
+    fn recv_raw_frame(self) -> HttpFuture<(Self, RawFrame<'static>)> {
+        let ServerReadLoop { read, inner } = self;
+        Box::new(recv_raw_frame(read)
+            .map(|(read, frame)| (ServerReadLoop { read: read, inner: inner}, frame))
+            .map_err(HttpError::from))
+    }
+
     fn process_data_frame(self, frame: DataFrame) -> HttpFuture<Self> {
         self.inner.with(move |inner: &mut ServerInner<F>| {
             let stream = inner.session_state.get_stream_mut(frame.get_stream_id()).expect("stream not found");
@@ -297,13 +304,6 @@ impl<F : HttpService> HttpReadLoop for ServerReadLoop<F> {
 }
 
 impl<F : HttpService> ServerReadLoop<F> {
-    fn recv_raw_frame(self) -> HttpFuture<(Self, RawFrame<'static>)> {
-        let ServerReadLoop { read, inner } = self;
-        Box::new(recv_raw_frame(read)
-            .map(|(read, frame)| (ServerReadLoop { read: read, inner: inner}, frame))
-            .map_err(HttpError::from))
-    }
-
     fn read_process_frame(self) -> HttpFuture<Self> {
         Box::new(self.recv_raw_frame()
             .and_then(move |(rl, frame)| rl.process_raw_frame(frame)))

@@ -70,6 +70,9 @@ pub trait HttpReadLoop
     fn process_settings_global(self, _frame: SettingsFrame) -> HttpFuture<Self>;
     fn process_conn_window_update(self, _frame: WindowUpdateFrame) -> HttpFuture<Self>;
 
+    /// Recv a frame from the network
+    fn recv_raw_frame(self) -> HttpFuture<(Self, RawFrame<'static>)>;
+
     /// Send a frame back to the network
     fn send_frame<R : FrameIR>(self, frame: R) -> HttpFuture<Self>;
 
