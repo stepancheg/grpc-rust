@@ -37,7 +37,7 @@ fn test() {
         }
 
         impl HttpService for F {
-            fn new_request(&mut self, _handle: &reactor::Handle, req: HttpStreamStreamSend) -> HttpStreamStreamSend {
+            fn new_request(&mut self, req: HttpStreamStreamSend) -> HttpStreamStreamSend {
                 future_flatten_to_stream(req
                     .fold(Vec::new(), |mut v, message| {
                         match message.content {

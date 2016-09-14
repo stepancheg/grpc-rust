@@ -148,7 +148,7 @@ impl<F : HttpService> GrpcHttpServerSessionState<F> {
         let req_rx = req_rx.map_err(HttpError::from);
         let req_rx = stream_with_eof_and_error(req_rx);
 
-        let response = self.factory.new_request(&self.loop_handle, Box::new(req_rx));
+        let response = self.factory.new_request(Box::new(req_rx));
 
         {
             let to_write_tx = self.to_write_tx.clone();
