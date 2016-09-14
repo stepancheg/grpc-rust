@@ -9,6 +9,7 @@ use solicit::http::StreamId;
 use solicit::http::HttpScheme;
 use solicit::http::HttpError;
 use solicit::http::Header;
+use solicit::http::StaticHeader;
 use hpack;
 
 use futures;
@@ -140,7 +141,7 @@ impl<F : HttpService> GrpcHttpServerSessionState<F> {
         self.streams.remove(&stream_id)
     }
 
-    fn new_request(&mut self, stream_id: StreamId)
+    fn new_request(&mut self, stream_id: StreamId, headers: Vec<StaticHeader>)
         -> tokio_core::channel::Sender<ResultOrEof<HttpStreamPart, HttpError>>
     {
         let (req_tx, req_rx) = tokio_core::channel::channel(&self.loop_handle).unwrap();
@@ -148,7 +149,7 @@ impl<F : HttpService> GrpcHttpServerSessionState<F> {
         let req_rx = req_rx.map_err(HttpError::from);
         let req_rx = stream_with_eof_and_error(req_rx);
 
-        let response = self.factory.new_request(Box::new(req_rx));
+        let response = self.factory.new_request(headers, Box::new(req_rx));
 
         {
             let to_write_tx = self.to_write_tx.clone();
@@ -168,13 +169,8 @@ impl<F : HttpService> GrpcHttpServerSessionState<F> {
         req_tx
     }
 
-    fn get_or_create_stream(&mut self, stream_id: StreamId) -> &mut GrpcHttpServerStream<F> {
-        if self.get_stream_mut(stream_id).is_some() {
-            // https://github.com/rust-lang/rust/issues/36403
-            return self.get_stream_mut(stream_id).unwrap();
-        }
-
-        let req_tx = self.new_request(stream_id);
+    fn new_stream(&mut self, stream_id: StreamId, headers: Vec<StaticHeader>) -> &mut GrpcHttpServerStream<F> {
+        let req_tx = self.new_request(stream_id, headers);
 
         // New stream initiated by the client
         let stream = GrpcHttpServerStream {
@@ -183,6 +179,17 @@ impl<F : HttpService> GrpcHttpServerSessionState<F> {
             _marker: marker::PhantomData,
         };
         self.insert_stream(stream_id, stream)
+    }
+
+    fn get_or_create_stream(&mut self, stream_id: StreamId, headers: Vec<StaticHeader>, last: bool) -> &mut GrpcHttpServerStream<F> {
+        if self.get_stream_mut(stream_id).is_some() {
+            // https://github.com/rust-lang/rust/issues/36403
+            let stream = self.get_stream_mut(stream_id).unwrap();
+            stream.set_headers(headers, last);
+            stream
+        } else {
+            self.new_stream(stream_id, headers)
+        }
     }
 
 }
@@ -266,7 +273,7 @@ impl<F : HttpService> ServerReadLoop<F> {
 
     fn process_data_frame(self, frame: DataFrame) -> HttpFuture<Self> {
         self.inner.with(move |inner: &mut ServerInner<F>| {
-            let stream = inner.session_state.get_or_create_stream(frame.get_stream_id());
+            let stream = inner.session_state.get_stream_mut(frame.get_stream_id()).expect("stream not found");
 
             // TODO: decrease window
 
@@ -289,9 +296,8 @@ impl<F : HttpService> ServerReadLoop<F> {
                                    .map_err(HttpError::CompressionError).unwrap();
             let headers = headers.into_iter().map(|h| h.into()).collect();
 
-            let stream = inner.session_state.get_or_create_stream(frame.get_stream_id());
-
-            stream.set_headers(headers, frame.is_end_of_stream());
+            let stream = inner.session_state
+                .get_or_create_stream(frame.get_stream_id(), headers, frame.is_end_of_stream());
 
             if frame.is_end_of_stream() {
                 stream.close_remote();

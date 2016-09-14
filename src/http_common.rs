@@ -51,5 +51,5 @@ pub type HttpStreamStreamSend = Box<Stream<Item=HttpStreamPart, Error=HttpError>
 
 
 pub trait HttpService: Send + 'static {
-    fn new_request(&mut self, req: HttpStreamStreamSend) -> HttpStreamStreamSend;
+    fn new_request(&mut self, headers: Vec<StaticHeader>, req: HttpStreamStreamSend) -> HttpStreamStreamSend;
 }
