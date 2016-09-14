@@ -30,17 +30,13 @@ use solicit_misc::*;
 use http_common::*;
 
 
-pub trait HttpServerHandlerFactory: Send + 'static {
-    fn new_request(&mut self, handle: &reactor::Handle, req: HttpStreamStreamSend) -> HttpStreamStreamSend;
-}
-
-struct GrpcHttpServerStream<F : HttpServerHandlerFactory> {
+struct GrpcHttpServerStream<F : HttpService> {
     state: StreamState,
     request_handler: Option<tokio_core::channel::Sender<ResultOrEof<HttpStreamPart, HttpError>>>,
     _marker: marker::PhantomData<F>,
 }
 
-impl<F : HttpServerHandlerFactory> GrpcHttpServerStream<F> {
+impl<F : HttpService> GrpcHttpServerStream<F> {
     fn _close(&mut self) {
         self.set_state(StreamState::Closed);
     }
@@ -118,7 +114,7 @@ impl<F : HttpServerHandlerFactory> GrpcHttpServerStream<F> {
 
 }
 
-struct GrpcHttpServerSessionState<F : HttpServerHandlerFactory> {
+struct GrpcHttpServerSessionState<F : HttpService> {
     factory: F,
     streams: HashMap<StreamId, GrpcHttpServerStream<F>>,
     to_write_tx: tokio_core::channel::Sender<ServerToWriteMessage<F>>,
@@ -126,7 +122,7 @@ struct GrpcHttpServerSessionState<F : HttpServerHandlerFactory> {
     decoder: hpack::Decoder<'static>,
 }
 
-impl<F : HttpServerHandlerFactory> GrpcHttpServerSessionState<F> {
+impl<F : HttpService> GrpcHttpServerSessionState<F> {
     fn insert_stream(&mut self, stream_id: StreamId, stream: GrpcHttpServerStream<F>) -> &mut GrpcHttpServerStream<F> {
         self.streams.insert(stream_id, stream);
         self.streams.get_mut(&stream_id).unwrap()
@@ -192,13 +188,13 @@ impl<F : HttpServerHandlerFactory> GrpcHttpServerSessionState<F> {
 }
 
 
-struct ServerInner<F : HttpServerHandlerFactory> {
+struct ServerInner<F : HttpService> {
     conn: HttpConnection,
     session_state: GrpcHttpServerSessionState<F>,
 }
 
 struct ServerReadLoop<F>
-    where F : HttpServerHandlerFactory
+    where F : HttpService
 {
     read: ReadHalf<TcpStream>,
     inner: TaskRcMut<ServerInner<F>>,
@@ -209,7 +205,7 @@ struct ServerReadToWriteMessage {
     buf: Vec<u8>,
 }
 
-enum ServerToWriteMessage<F : HttpServerHandlerFactory> {
+enum ServerToWriteMessage<F : HttpService> {
     _Dummy(F),
     FromRead(ServerReadToWriteMessage),
     ResponsePart(StreamId, HttpStreamPart),
@@ -217,7 +213,7 @@ enum ServerToWriteMessage<F : HttpServerHandlerFactory> {
 }
 
 
-impl<F : HttpServerHandlerFactory> ServerReadLoop<F> {
+impl<F : HttpService> ServerReadLoop<F> {
     fn recv_raw_frame(self) -> HttpFuture<(Self, RawFrame<'static>)> {
         let ServerReadLoop { read, inner } = self;
         Box::new(recv_raw_frame(read)
@@ -350,13 +346,13 @@ impl<F : HttpServerHandlerFactory> ServerReadLoop<F> {
 }
 
 struct ServerWriteLoop<F>
-    where F : HttpServerHandlerFactory
+    where F : HttpService
 {
     write: WriteHalf<TcpStream>,
     inner: TaskRcMut<ServerInner<F>>,
 }
 
-impl<F : HttpServerHandlerFactory> ServerWriteLoop<F> {
+impl<F : HttpService> ServerWriteLoop<F> {
     fn _loop_handle(&self) -> reactor::Handle {
         self.inner.with(move |inner: &mut ServerInner<F>| inner.session_state.loop_handle.clone())
     }
@@ -437,11 +433,11 @@ impl<F : HttpServerHandlerFactory> ServerWriteLoop<F> {
 
 
 
-pub struct HttpServerConnectionAsync<F : HttpServerHandlerFactory> {
+pub struct HttpServerConnectionAsync<F : HttpService> {
     _marker: marker::PhantomData<F>,
 }
 
-impl<F : HttpServerHandlerFactory> HttpServerConnectionAsync<F> {
+impl<F : HttpService> HttpServerConnectionAsync<F> {
     pub fn new(lh: &reactor::Handle, socket: TcpStream, factory : F) -> HttpFuture<()> {
         let lh = lh.clone();
 

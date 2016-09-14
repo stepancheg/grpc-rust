@@ -434,7 +434,7 @@ impl Stream for ProcessRequestStream {
     }
 }
 
-impl HttpServerHandlerFactory for GrpcHttpServerHandlerFactory {
+impl HttpService for GrpcHttpServerHandlerFactory {
     fn new_request(&mut self, _handle: &reactor::Handle, req: HttpStreamStreamSend) -> HttpStreamStreamSend {
         let s = ProcessRequestStream {
             service_definition: self.service_definition.clone(),
