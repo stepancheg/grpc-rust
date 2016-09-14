@@ -13,6 +13,7 @@ mod stream_with_eof_and_error;
 mod channel_sync_sender;
 pub mod stream_deferred;
 pub mod stream_concat;
+pub mod stream_concat3;
 
 pub use self::task_data::TaskRcMut;
 pub use self::task_data::TaskRcMutex;
@@ -21,7 +22,6 @@ pub use self::future_flatten_to_stream::future_flatten_to_stream;
 pub use self::future_flatten_to_stream::FutureFlattenToStream;
 
 pub use self::stream_single::stream_single;
-pub use self::stream_single::stream_single_send;
 
 pub use self::stream_once::stream_once;
 pub use self::stream_once::stream_once_send;
@@ -45,3 +45,6 @@ pub use self::channel_sync_sender::SyncSender;
 
 pub use self::stream_deferred::stream_deferred;
 pub use self::stream_concat::stream_concat;
+pub use self::stream_concat::Concat;
+pub use self::stream_concat3::stream_concat3;
+pub use self::stream_concat3::Concat3;

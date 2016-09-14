@@ -1,42 +1,47 @@
 use futures::stream::Stream;
 use futures::Future;
-use futures;
+use futures::Poll;
+use futures::Async;
+
+
+pub struct StreamSingle<S>
+    where S : Stream
+{
+    stream: S,
+    state: Option<S::Item>,
+}
 
 
 /// Convert a stream into single element future.
 /// It is an error, is stream is empty or has more than one element.
-pub fn stream_single<S>(stream: S) -> Box<Future<Item=S::Item, Error=S::Error>>
-    where
-        S : Stream + 'static,
-        S::Item : 'static,
-        S::Error : 'static,
+pub fn stream_single<S>(stream: S) -> StreamSingle<S>
+    where S : Stream
 {
-    Box::new(stream
-        .fold(None, |option, item| {
-            match option {
-                Some(..) => panic!("more than one element"), // TODO: better error
-                None => futures::finished::<_, S::Error>(Some(item))
-            }
-        })
-        .map(|option| {
-            option.expect("expecting one element, found none") // TODO: better error
-        }))
+    StreamSingle {
+        stream: stream,
+        state: None,
+    }
 }
 
-pub fn stream_single_send<S>(stream: S) -> Box<Future<Item=S::Item, Error=S::Error> + Send>
-    where
-        S : Stream + Send + 'static,
-        S::Item : Send + 'static,
-        S::Error : Send + 'static,
+impl<S> Future for StreamSingle<S>
+    where S : Stream
 {
-    Box::new(stream
-        .fold(None, |option, item| {
-            match option {
-                Some(..) => panic!("more than one element"), // TODO: better error
-                None => futures::finished::<_, S::Error>(Some(item))
+    type Item = S::Item;
+    type Error = S::Error;
+
+    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+        loop {
+            match try_ready!(self.stream.poll()) {
+                // TODO: better errors
+                None => return Ok(Async::Ready(self.state.take().expect("expecting one element, found none"))),
+                Some(item) => {
+                    if self.state.is_some() {
+                        panic!("more than one element");
+                    }
+                    self.state = Some(item);
+                }
             }
-        })
-        .map(|option| {
-            option.expect("expecting one element, found none") // TODO: better error
-        }))
+        }
+    }
 }
+

@@ -80,25 +80,17 @@ fn test() {
         }
 
         impl HttpClientResponseHandler for R {
-            fn headers(&mut self, headers: Vec<StaticHeader>) -> bool {
-                println!("test: client: response headers: {}", headers.len());
+            fn part(&mut self, part: HttpStreamPart) -> bool {
+                match part.content {
+                    HttpStreamPartContent::Headers(_headers) => (),
+                    HttpStreamPartContent::Data(data) => {
+                        self.response.extend(data);
+                    },
+                }
+                if part.last {
+                    self.client_complete_tx.send(self.response.clone()).unwrap();
+                }
                 true
-            }
-
-            fn data_frame(&mut self, chunk: Vec<u8>) -> bool {
-                println!("test: client: response data frame: {}", chunk.len());
-                self.response.extend(&chunk);
-                true
-            }
-
-            fn trailers(&mut self, headers: Vec<StaticHeader>) -> bool {
-                println!("test: client: response trailers: {}", headers.len());
-                true
-            }
-
-            fn end(&mut self) {
-                println!("test: client: end");
-                self.client_complete_tx.send(self.response.clone()).unwrap();
             }
         }
 

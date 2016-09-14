@@ -99,7 +99,7 @@ impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerUnary<F>
 {
     fn handle(&self, req: GrpcStreamSend<Req>) -> GrpcStreamSend<Resp> {
         let f = self.f.clone();
-        Box::new(future_to_stream_once(stream_single_send(req).and_then(move |req| f(req))))
+        Box::new(future_to_stream_once(stream_single(req).and_then(move |req| f(req))))
     }
 }
 
@@ -123,7 +123,7 @@ impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerServerStreaming<F>
         let f = self.f.clone();
         Box::new(
             future_flatten_to_stream(
-                stream_single_send(req).map(move |req| f(req))))
+                stream_single(req).map(move |req| f(req))))
     }
 }
 
@@ -344,7 +344,10 @@ impl HttpService for GrpcHttpServerHandlerFactory {
         // TODO: catch unwind
         let grpc_frames = self.service_definition.handle_method(&path, Box::new(grpc_request));
 
-        let http_parts = stream_concat(
+        let http_parts = stream_concat3(
+            stream_once_send(HttpStreamPart::intermediate_headers(vec![
+                Header::new(":status", "200"),
+            ])),
             grpc_frames
                 .map(|frame| HttpStreamPart::intermediate_data(write_grpc_frame_to_vec(&frame)))
                 .then(|result| {
@@ -357,9 +360,9 @@ impl HttpService for GrpcHttpServerHandlerFactory {
                             ]))
                     }
                 }),
-                stream_once_send(HttpStreamPart::last_headers(vec![
-                    Header::new(HEADER_GRPC_STATUS, "0"),
-                ])));
+            stream_once_send(HttpStreamPart::last_headers(vec![
+                Header::new(HEADER_GRPC_STATUS, "0"),
+            ])));
 
 
         Box::new(http_parts)

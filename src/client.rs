@@ -14,7 +14,6 @@ use tokio_core::reactor;
 use solicit::http::HttpScheme;
 use solicit::http::HttpError;
 use solicit::http::Header;
-use solicit::http::StaticHeader;
 
 
 use method::MethodDescriptor;
@@ -28,6 +27,7 @@ use futures_grpc::*;
 use grpc::*;
 
 use http_client::*;
+use http_common::*;
 use solicit_misc::*;
 
 use assert_types::*;
@@ -39,6 +39,7 @@ trait GrpcResponseHandlerTrait : Send + 'static + HttpClientResponseHandler {
 struct GrpcResponseHandlerTyped<Req : Send + 'static, Resp : Send + 'static> {
     method: Arc<MethodDescriptor<Req, Resp>>,
     complete: tokio_core::channel::Sender<ResultOrEof<Resp, GrpcError>>,
+    got_headers: bool,
     remaining_response: Vec<u8>,
 }
 
@@ -46,58 +47,65 @@ impl<Req : Send + 'static, Resp : Send + 'static> GrpcResponseHandlerTrait for G
 }
 
 impl<Req : Send + 'static, Resp : Send + 'static> HttpClientResponseHandler for GrpcResponseHandlerTyped<Req, Resp> {
-    fn headers(&mut self, headers: Vec<StaticHeader>) -> bool {
-        println!("client: received headers");
-        if slice_get_header(&headers, ":status") != Some("200") {
-            if let Some(message) = slice_get_header(&headers, HEADER_GRPC_MESSAGE) {
-                self.complete.send(ResultOrEof::Error(GrpcError::GrpcMessage(GrpcMessageError { grpc_message: message.to_owned() }))).unwrap();
-            } else {
-                self.complete.send(ResultOrEof::Error(GrpcError::Other("not 200"))).unwrap();
-            }
-            false
-        } else {
-            true
-        }
-    }
 
-    fn data_frame(&mut self, chunk: Vec<u8>) -> bool {
-        self.remaining_response.extend(&chunk);
-        loop {
-            let len = match parse_grpc_frame(&self.remaining_response) {
-                Err(e) => {
-                    self.complete.send(ResultOrEof::Error(e)).unwrap();
-                    return false;
+    fn part(&mut self, part: HttpStreamPart) -> bool {
+        match part.content {
+            HttpStreamPartContent::Headers(headers) => {
+                if !self.got_headers {
+                    self.got_headers = true;
+                    // headers
+                    let status = slice_get_header(&headers, ":status");
+                    if status != Some("200") {
+                        if let Some(message) = slice_get_header(&headers, HEADER_GRPC_MESSAGE) {
+                            self.complete.send(ResultOrEof::Error(GrpcError::GrpcMessage(GrpcMessageError { grpc_message: message.to_owned() }))).unwrap();
+                        } else {
+                            println!(":status: {:?}", status);
+                            self.complete.send(ResultOrEof::Error(GrpcError::Other("not 200"))).unwrap();
+                        }
+                        return false;
+                    }
+                } else {
+                    // trailers
+                    let grpc_status_0 = slice_get_header(&headers, HEADER_GRPC_STATUS) == Some("0");
+                    if /* status_200 && */ grpc_status_0 {
+                    } else {
+                        if let Some(message) = slice_get_header(&headers, HEADER_GRPC_MESSAGE) {
+                            self.complete.send(ResultOrEof::Error(GrpcError::GrpcMessage(GrpcMessageError { grpc_message: message.to_owned() }))).unwrap();
+                        } else {
+                            self.complete.send(ResultOrEof::Error(GrpcError::Other("not xxx"))).unwrap();
+                        }
+                        return false;
+                    }
                 }
-                Ok(None) => break,
-                Ok(Some((message, len))) => {
-                    let resp = self.method.resp_marshaller.read(&message);
-                    self.complete.send(From::from(resp)).ok();
-                    len
+            },
+            HttpStreamPartContent::Data(data) => {
+                self.remaining_response.extend(&data);
+                loop {
+                    let len = match parse_grpc_frame(&self.remaining_response) {
+                        Err(e) => {
+                            self.complete.send(ResultOrEof::Error(e)).unwrap();
+                            return false;
+                        }
+                        Ok(None) => break,
+                        Ok(Some((message, len))) => {
+                            let resp = self.method.resp_marshaller.read(&message);
+                            self.complete.send(From::from(resp)).ok();
+                            len
+                        }
+                    };
+                    self.remaining_response.drain(..len);
                 }
-            };
-            self.remaining_response.drain(..len);
+            },
         }
+
+        if part.last {
+            self.complete.send(ResultOrEof::Eof).unwrap();
+        }
+
         true
     }
 
-    fn trailers(&mut self, headers: Vec<StaticHeader>) -> bool {
-        let _status_200 = slice_get_header(&headers, ":status") == Some("200");
-        let grpc_status_0 = slice_get_header(&headers, HEADER_GRPC_STATUS) == Some("0");
-        if /* status_200 && */ grpc_status_0 {
-            true
-        } else {
-            if let Some(message) = slice_get_header(&headers, HEADER_GRPC_MESSAGE) {
-                self.complete.send(ResultOrEof::Error(GrpcError::GrpcMessage(GrpcMessageError { grpc_message: message.to_owned() }))).unwrap();
-            } else {
-                self.complete.send(ResultOrEof::Error(GrpcError::Other("not xxx"))).unwrap();
-            }
-            false
-        }
-    }
 
-    fn end(&mut self) {
-        self.complete.send(ResultOrEof::Eof).unwrap();
-    }
 }
 
 struct GrpcResponseHandler {
@@ -105,20 +113,8 @@ struct GrpcResponseHandler {
 }
 
 impl HttpClientResponseHandler for GrpcResponseHandler {
-    fn headers(&mut self, headers: Vec<StaticHeader>) -> bool {
-        self.tr.headers(headers)
-    }
-
-    fn data_frame(&mut self, chunk: Vec<u8>) -> bool {
-        self.tr.data_frame(chunk)
-    }
-
-    fn trailers(&mut self, headers: Vec<StaticHeader>) -> bool {
-        self.tr.trailers(headers)
-    }
-
-    fn end(&mut self) {
-        self.tr.end()
+    fn part(&mut self, part: HttpStreamPart) -> bool {
+        self.tr.part(part)
     }
 }
 
@@ -233,6 +229,7 @@ impl GrpcClient {
                         method: method.clone(),
                         complete: complete,
                         remaining_response: Vec::new(),
+                        got_headers: false,
                     }),
                 }
             ).map_err(GrpcError::from);
@@ -249,7 +246,7 @@ impl GrpcClient {
     pub fn call_unary<Req : Send + 'static, Resp : Send + 'static>(&self, req: Req, method: Arc<MethodDescriptor<Req, Resp>>)
         -> GrpcFutureSend<Resp>
     {
-        stream_single_send(self.call_impl(Box::new(stream_once_send(req)), method))
+        Box::new(stream_single(self.call_impl(Box::new(stream_once_send(req)), method)))
     }
 
     pub fn call_server_streaming<Req : Send + 'static, Resp : Send + 'static>(&self, req: Req, method: Arc<MethodDescriptor<Req, Resp>>)
@@ -261,7 +258,7 @@ impl GrpcClient {
     pub fn call_client_streaming<Req : Send + 'static, Resp : Send + 'static>(&self, req: GrpcStreamSend<Req>, method: Arc<MethodDescriptor<Req, Resp>>)
         -> GrpcFutureSend<Resp>
     {
-        stream_single_send(self.call_impl(req, method))
+        Box::new(stream_single(self.call_impl(req, method)))
     }
 
     pub fn call_bidi<Req : Send + 'static, Resp : Send + 'static>(&self, req: GrpcStreamSend<Req>, method: Arc<MethodDescriptor<Req, Resp>>)

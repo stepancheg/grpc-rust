@@ -35,36 +35,23 @@ use futures_misc::*;
 use solicit_async::*;
 use solicit_misc::*;
 
+use http_common::*;
+
 
 // TODO: make async
+// TODO: replace with stream
 pub trait HttpClientResponseHandler : Send + 'static {
-    // called once response headers received
-    fn headers(&mut self, headers: Vec<StaticHeader>) -> bool;
-    // called for each response data frame
-    fn data_frame(&mut self, chunk: Vec<u8>) -> bool;
-    // called for response trailers
-    fn trailers(&mut self, headers: Vec<StaticHeader>) -> bool;
-    // called at the end of reponse stream
-    fn end(&mut self);
-}
-
-enum ResponseState {
-    Init,
-    GotHeaders,
-    GotBodyChunk,
-    GotTrailers,
+    fn part(&mut self, part: HttpStreamPart) -> bool;
 }
 
 enum LastChunk {
     Empty,
     Headers(Vec<StaticHeader>),
     Chunk(Vec<u8>),
-    Trailers(Vec<StaticHeader>),
 }
 
 struct GrpcHttpClientStream<H : HttpClientResponseHandler> {
     state: StreamState,
-    response_state: ResponseState,
     response_handler: Option<H>,
 }
 
@@ -114,18 +101,10 @@ impl<H : HttpClientResponseHandler> GrpcHttpClientStream<H> {
 
     fn set_headers<'n, 'v>(&mut self, headers: Vec<Header<'n, 'v>>) -> LastChunk {
         let headers = headers.into_iter().map(|h| Header::new(h.name().to_owned(), h.value().to_owned())).collect();
-        let (last_chunk, response_state) = match self.response_state {
-            ResponseState::Init => (LastChunk::Headers(headers), ResponseState::GotHeaders),
-            ResponseState::GotHeaders => panic!("headers at state GotHeaders"),
-            ResponseState::GotBodyChunk => (LastChunk::Trailers(headers), ResponseState::GotTrailers),
-            ResponseState::GotTrailers => panic!(),
-        };
-        self.response_state = response_state;
-        last_chunk
+        LastChunk::Headers(headers)
     }
 
     fn new_data_chunk(&mut self, data: &[u8]) -> LastChunk {
-        self.response_state = ResponseState::GotBodyChunk;
         LastChunk::Chunk(data.to_owned())
     }
 
@@ -144,7 +123,8 @@ struct GrpcHttpClientSessionState<H : HttpClientResponseHandler> {
 }
 
 impl<H : HttpClientResponseHandler> GrpcHttpClientSessionState<H> {
-    fn process_streams_after_handle_next_frame(&mut self, stream_id: StreamId, last_chunk: LastChunk) -> HttpFuture<()> {
+    fn process_streams_after_handle_next_frame(&mut self, stream_id: StreamId, last_chunk: LastChunk, end_stream: EndStream) -> HttpFuture<()> {
+        let last = end_stream == EndStream::Yes;
         let remove;
         if let Some(ref mut s) = self.streams.get_mut(&stream_id) {
             let mut ok = false;
@@ -152,22 +132,22 @@ impl<H : HttpClientResponseHandler> GrpcHttpClientSessionState<H> {
                 ok = match last_chunk {
                     LastChunk::Empty => true,
                     LastChunk::Chunk(chunk) => {
-                        response_handler.data_frame(chunk)
+                        response_handler.part(HttpStreamPart {
+                            content: HttpStreamPartContent::Data(chunk),
+                            last: last,
+                        })
                     }
                     LastChunk::Headers(headers) => {
-                        response_handler.headers(headers)
-                    }
-                    LastChunk::Trailers(headers) => {
-                        response_handler.trailers(headers)
+                        response_handler.part(HttpStreamPart {
+                            content: HttpStreamPartContent::Headers(headers),
+                            last: last,
+                        })
                     }
                 };
 
             }
 
             if ok && s.is_closed_remote() {
-                if let Some(ref mut response_handler) = s.response_handler {
-                    response_handler.end();
-                }
             }
 
             if !ok {
@@ -371,7 +351,6 @@ impl<H : HttpClientResponseHandler> ClientWriteLoop<H> {
             let stream = GrpcHttpClientStream {
                 state: StreamState::Open,
                 response_handler: Some(response_handler),
-                response_state: ResponseState::Init,
             };
             let stream_id = inner.session_state.insert_stream(stream);
 
@@ -462,9 +441,9 @@ impl<H : HttpClientResponseHandler> ClientReadLoop<H> {
             .map_err(HttpError::from))
     }
 
-    fn process_streams_after_handle_next_frame(self, stream_id: StreamId, last_chunk: LastChunk) -> HttpFuture<Self> {
+    fn process_streams_after_handle_next_frame(self, stream_id: StreamId, last_chunk: LastChunk, end_stream: EndStream) -> HttpFuture<Self> {
         let future = self.inner.with(|inner: &mut ClientInner<H>| {
-            inner.session_state.process_streams_after_handle_next_frame(stream_id, last_chunk)
+            inner.session_state.process_streams_after_handle_next_frame(stream_id, last_chunk, end_stream)
         });
 
         Box::new(future.map(|_| self))
@@ -476,9 +455,15 @@ impl<H : HttpClientResponseHandler> ClientReadLoop<H> {
             let mut send = VecSendFrame(Vec::new());
             let last = {
                 let mut session = MyClientSession::new(&mut inner.session_state, &mut send);
-                inner.conn.handle_frame(HttpFrame::from_raw(&raw_frame).unwrap(), &mut session)
+                let frame = HttpFrame::from_raw(&raw_frame).unwrap();
+                let end_stream = match &frame {
+                    &HttpFrame::DataFrame(ref data_frame) => data_frame.is_end_of_stream(),
+                    &HttpFrame::HeadersFrame(ref headers_frame) => headers_frame.is_end_of_stream(),
+                    _ => false,
+                };
+                inner.conn.handle_frame(frame, &mut session)
                     .unwrap();
-                session.last.take()
+                session.last.take().map(|(stream_id, last_chunk)| (stream_id, last_chunk, if end_stream { EndStream::Yes } else { EndStream::No }))
             };
 
             if !send.0.is_empty() {
@@ -489,8 +474,8 @@ impl<H : HttpClientResponseHandler> ClientReadLoop<H> {
             last
         });
 
-        if let Some((stream_id, last_chunk)) = last {
-            self.process_streams_after_handle_next_frame(stream_id, last_chunk)
+        if let Some((stream_id, last_chunk, end_stream)) = last {
+            self.process_streams_after_handle_next_frame(stream_id, last_chunk, end_stream)
         } else {
             Box::new(futures::finished(self))
         }
