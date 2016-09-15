@@ -13,8 +13,6 @@ use solicit::http::StaticHeader;
 
 use futures;
 use futures::Future;
-use futures::Poll;
-use futures::Async;
 use futures::stream::Stream;
 use tokio_core;
 use tokio_core::reactor;
@@ -26,6 +24,7 @@ use futures_grpc::*;
 use futures_misc::*;
 use solicit_misc::*;
 use grpc::*;
+use grpc_frame::*;
 use assert_types::*;
 use http_server::*;
 use http_common::*;
@@ -283,44 +282,6 @@ struct GrpcHttpServerHandlerFactory {
 }
 
 
-struct GrpcFrameFromHttpFramesStream {
-    http_stream_stream: HttpStreamStreamSend,
-    buf: Vec<u8>,
-}
-
-impl Stream for GrpcFrameFromHttpFramesStream {
-    type Item = Vec<u8>;
-    type Error = GrpcError;
-
-    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-        loop {
-            if let Some((frame, len)) = try!(parse_grpc_frame(&self.buf)).map(|(frame, len)| (frame.to_owned(), len)) {
-                self.buf.drain(..len);
-                return Ok(Async::Ready(Some(frame)));
-            }
-
-            let part_opt = try_ready!(self.http_stream_stream.poll());
-            let part = match part_opt {
-                None => {
-                    if self.buf.is_empty() {
-                        return Ok(Async::Ready(None));
-                    } else {
-                        return Err(GrpcError::Other("partial frame"));
-                    }
-                },
-                Some(part) => part,
-            };
-
-            match part.content {
-                // unexpected, but seem OK
-                HttpStreamPartContent::Headers(..) => continue,
-                HttpStreamPartContent::Data(data) => self.buf.extend(data),
-            }
-        }
-    }
-}
-
-
 fn stream_500(message: &str) -> HttpStreamStreamSend {
     Box::new(stream_once_send(HttpStreamPart::last_headers(vec![
         Header::new(":status", "500"),
@@ -336,10 +297,7 @@ impl HttpService for GrpcHttpServerHandlerFactory {
             None => return stream_500("no :path header"),
         };
 
-        let grpc_request = GrpcFrameFromHttpFramesStream {
-            http_stream_stream: req,
-            buf: Vec::new(),
-        };
+        let grpc_request = GrpcFrameFromHttpFramesStreamRequest::new(req);
 
         // TODO: catch unwind
         let grpc_frames = self.service_definition.handle_method(&path, Box::new(grpc_request));

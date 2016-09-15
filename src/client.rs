@@ -24,99 +24,11 @@ use result::*;
 use futures_misc::*;
 use futures_grpc::*;
 
-use grpc::*;
+use grpc_frame::*;
 
 use http_client::*;
-use http_common::*;
-use solicit_misc::*;
 
 use assert_types::*;
-
-
-trait GrpcResponseHandlerTrait : Send + 'static + HttpClientResponseHandler {
-}
-
-struct GrpcResponseHandlerTyped<Req : Send + 'static, Resp : Send + 'static> {
-    method: Arc<MethodDescriptor<Req, Resp>>,
-    complete: tokio_core::channel::Sender<ResultOrEof<Resp, GrpcError>>,
-    got_headers: bool,
-    remaining_response: Vec<u8>,
-}
-
-impl<Req : Send + 'static, Resp : Send + 'static> GrpcResponseHandlerTrait for GrpcResponseHandlerTyped<Req, Resp> {
-}
-
-impl<Req : Send + 'static, Resp : Send + 'static> HttpClientResponseHandler for GrpcResponseHandlerTyped<Req, Resp> {
-
-    fn part(&mut self, part: HttpStreamPart) -> bool {
-        match part.content {
-            HttpStreamPartContent::Headers(headers) => {
-                if !self.got_headers {
-                    self.got_headers = true;
-                    // headers
-                    let status = slice_get_header(&headers, ":status");
-                    if status != Some("200") {
-                        if let Some(message) = slice_get_header(&headers, HEADER_GRPC_MESSAGE) {
-                            self.complete.send(ResultOrEof::Error(GrpcError::GrpcMessage(GrpcMessageError { grpc_message: message.to_owned() }))).unwrap();
-                        } else {
-                            println!(":status: {:?}", status);
-                            self.complete.send(ResultOrEof::Error(GrpcError::Other("not 200"))).unwrap();
-                        }
-                        return false;
-                    }
-                } else {
-                    // trailers
-                    let grpc_status_0 = slice_get_header(&headers, HEADER_GRPC_STATUS) == Some("0");
-                    if /* status_200 && */ grpc_status_0 {
-                    } else {
-                        if let Some(message) = slice_get_header(&headers, HEADER_GRPC_MESSAGE) {
-                            self.complete.send(ResultOrEof::Error(GrpcError::GrpcMessage(GrpcMessageError { grpc_message: message.to_owned() }))).unwrap();
-                        } else {
-                            self.complete.send(ResultOrEof::Error(GrpcError::Other("not xxx"))).unwrap();
-                        }
-                        return false;
-                    }
-                }
-            },
-            HttpStreamPartContent::Data(data) => {
-                self.remaining_response.extend(&data);
-                loop {
-                    let len = match parse_grpc_frame(&self.remaining_response) {
-                        Err(e) => {
-                            self.complete.send(ResultOrEof::Error(e)).unwrap();
-                            return false;
-                        }
-                        Ok(None) => break,
-                        Ok(Some((message, len))) => {
-                            let resp = self.method.resp_marshaller.read(&message);
-                            self.complete.send(From::from(resp)).ok();
-                            len
-                        }
-                    };
-                    self.remaining_response.drain(..len);
-                }
-            },
-        }
-
-        if part.last {
-            self.complete.send(ResultOrEof::Eof).unwrap();
-        }
-
-        true
-    }
-
-
-}
-
-struct GrpcResponseHandler {
-    tr: Box<GrpcResponseHandlerTrait>,
-}
-
-impl HttpClientResponseHandler for GrpcResponseHandler {
-    fn part(&mut self, part: HttpStreamPart) -> bool {
-        self.tr.part(part)
-    }
-}
 
 
 // Data sent from event loop to GrpcClient
@@ -124,15 +36,11 @@ struct LoopToClient {
     // used only once to send shutdown signal
     shutdown_tx: tokio_core::channel::Sender<()>,
     loop_handle: reactor::Remote,
-    http_conn: Arc<HttpClientConnectionAsync<GrpcResponseHandler>>,
+    http_conn: Arc<HttpClientConnectionAsync>,
 }
 
 fn _assert_loop_to_client() {
     assert_send::<reactor::Remote>();
-    assert_send::<HttpClientConnectionAsync<GrpcResponseHandler>>();
-    assert_send::<HttpClientConnectionAsync<GrpcResponseHandler>>();
-    assert_sync::<HttpClientConnectionAsync<GrpcResponseHandler>>();
-    assert_send::<Arc<HttpClientConnectionAsync<GrpcResponseHandler>>>();
     assert_send::<tokio_core::channel::Sender<()>>();
     assert_send::<LoopToClient>();
 }
@@ -201,46 +109,33 @@ impl GrpcClient {
         let http_scheme = self.http_scheme.clone();
         let http_conn = self.loop_to_client.http_conn.clone();
 
-        // A channel to send response back to caller
-        let future = self.new_resp_channel().map_err(GrpcError::from).and_then(move |(complete, receiver)| {
+        let headers = vec![
+            Header::new(":method", "POST"),
+            Header::new(":path", method.name.clone()),
+            Header::new(":authority", host.clone()),
+            Header::new(":scheme", http_scheme.as_bytes()),
+        ];
 
-            let headers = vec![
-                Header::new(":method", "POST"),
-                Header::new(":path", method.name.clone()),
-                Header::new(":authority", host.clone()),
-                Header::new(":scheme", http_scheme.as_bytes()),
-            ];
+        let request_frames = {
+            let method = method.clone();
+            req
+                .and_then(move |req| {
+                    let grpc_frame = try!(method.req_marshaller.write(&req));
+                    Ok(write_grpc_frame_to_vec(&grpc_frame))
+                })
+                .map_err(|e| HttpError::Other(Box::new(e)))
+        };
 
-            let request_frames = {
-                let method = method.clone();
-                req
-                    .and_then(move |req| {
-                        let grpc_frame = try!(method.req_marshaller.write(&req));
-                        Ok(write_grpc_frame_to_vec(&grpc_frame))
-                    })
-                    .map_err(|e| HttpError::Other(Box::new(e)))
-            };
-
-            let start_request = http_conn.start_request(
+        let http_response_stream = http_conn
+            .start_request(
                 headers,
-                Box::new(request_frames),
-                GrpcResponseHandler {
-                    tr: Box::new(GrpcResponseHandlerTyped {
-                        method: method.clone(),
-                        complete: complete,
-                        remaining_response: Vec::new(),
-                        got_headers: false,
-                    }),
-                }
-            ).map_err(GrpcError::from);
+                Box::new(request_frames));
 
-            let receiver: GrpcStreamSend<Resp> = receiver;
+        let grpc_frames = GrpcFrameFromHttpFramesStreamResponse::new(http_response_stream);
 
-            start_request.map(move |()| receiver)
-        });
+        let grpc_messages = grpc_frames.and_then(move |frame| method.resp_marshaller.read(&frame));
 
-        let s: GrpcStreamSend<Resp> = future_flatten_to_stream(future);
-        s
+        Box::new(grpc_messages)
     }
 
     pub fn call_unary<Req : Send + 'static, Resp : Send + 'static>(&self, req: Req, method: Arc<MethodDescriptor<Req, Resp>>)

@@ -38,7 +38,7 @@ fn test() {
 
         impl HttpService for F {
             fn new_request(&mut self, _headers: Vec<StaticHeader>, req: HttpStreamStreamSend) -> HttpStreamStreamSend {
-                future_flatten_to_stream(req
+                Box::new(future_flatten_to_stream(req
                     .fold(Vec::new(), |mut v, message| {
                         match message.content {
                             HttpStreamPartContent::Headers(..) => (),
@@ -56,7 +56,7 @@ fn test() {
                         ));
                         r.push(HttpStreamPart::last_data(v));
                         Ok(stream::iter(r.into_iter().map(Ok)))
-                    }))
+                    })))
             }
         }
 
@@ -74,32 +74,22 @@ fn test() {
 
         let (client, future) = HttpClientConnectionAsync::new(client_lp.handle(), &("::1", port).to_socket_addrs().unwrap().next().unwrap());
 
-        struct R {
-            response: Vec<u8>,
-            client_complete_tx: mpsc::Sender<Vec<u8>>,
-        }
-
-        impl HttpClientResponseHandler for R {
-            fn part(&mut self, part: HttpStreamPart) -> bool {
-                match part.content {
-                    HttpStreamPartContent::Headers(_headers) => (),
-                    HttpStreamPartContent::Data(data) => {
-                        self.response.extend(data);
-                    },
-                }
-                if part.last {
-                    self.client_complete_tx.send(self.response.clone()).unwrap();
-                }
-                true
-            }
-        }
-
-        let _resp = client.start_request(
+        let resp = client.start_request(
             Vec::new(),
-            stream_once_send((&b"abcd"[..]).to_owned()),
-            R { client_complete_tx: client_complete_tx, response: Vec::new() });
+            stream_once_send((&b"abcd"[..]).to_owned()));
 
-        client_lp.run(future).expect("client run");
+        let request_future = resp.fold(Vec::new(), move |mut v, part| {
+            match part.content {
+                HttpStreamPartContent::Headers(..) => (),
+                HttpStreamPartContent::Data(data) => v.extend(data),
+            }
+            if part.last {
+                client_complete_tx.send(v.clone()).unwrap()
+            }
+            futures::finished::<_, HttpError>(v)
+        }).map(|_| ());
+
+        client_lp.run(future.select(request_future)).ok();
     });
 
     assert_eq!(&b"abcd"[..], &client_complete_rx.recv().expect("client complete recv")[..]);

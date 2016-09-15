@@ -1,5 +1,6 @@
 use std::net::SocketAddr;
 use std::collections::HashMap;
+use std::io;
 
 use solicit::http::session::StreamState;
 use solicit::http::connection::HttpConnection;
@@ -32,18 +33,12 @@ use solicit_misc::*;
 use http_common::*;
 
 
-// TODO: make async
-// TODO: replace with stream
-pub trait HttpClientResponseHandler : Send + 'static {
-    fn part(&mut self, part: HttpStreamPart) -> bool;
-}
-
-struct GrpcHttpClientStream<H : HttpClientResponseHandler> {
+struct GrpcHttpClientStream {
     state: StreamState,
-    response_handler: Option<H>,
+    response_handler: Option<tokio_core::channel::Sender<ResultOrEof<HttpStreamPart, HttpError>>>,
 }
 
-impl<H : HttpClientResponseHandler> GrpcHttpClientStream<H> {
+impl GrpcHttpClientStream {
 
     fn _close(&mut self) {
         self.set_state(StreamState::Closed);
@@ -63,7 +58,9 @@ impl<H : HttpClientResponseHandler> GrpcHttpClientStream<H> {
             _ => StreamState::HalfClosedRemote,
         };
         self.set_state(next);
-        self.response_handler.take();
+        if let Some(response_handler) = self.response_handler.take() {
+            response_handler.send(ResultOrEof::Eof).unwrap();
+        }
     }
 
     fn _is_closed(&self) -> bool {
@@ -93,50 +90,51 @@ impl<H : HttpClientResponseHandler> GrpcHttpClientStream<H> {
     }
 }
 
-struct GrpcHttpClientSessionState<H : HttpClientResponseHandler> {
-    streams: HashMap<StreamId, GrpcHttpClientStream<H>>,
+struct GrpcHttpClientSessionState {
+    streams: HashMap<StreamId, GrpcHttpClientStream>,
     next_stream_id: StreamId,
     decoder: hpack::Decoder<'static>,
 }
 
-impl<H : HttpClientResponseHandler> GrpcHttpClientSessionState<H> {
+impl GrpcHttpClientSessionState {
 
-    fn insert_stream(&mut self, stream: GrpcHttpClientStream<H>) -> StreamId {
+    fn insert_stream(&mut self, stream: GrpcHttpClientStream) -> StreamId {
         let id = self.next_stream_id;
         self.streams.insert(id, stream);
         self.next_stream_id += 2;
         id
     }
 
-    fn _get_stream_ref(&self, stream_id: StreamId) -> Option<&GrpcHttpClientStream<H>> {
+    fn _get_stream_ref(&self, stream_id: StreamId) -> Option<&GrpcHttpClientStream> {
         self.streams.get(&stream_id)
     }
 
-    fn get_stream_mut(&mut self, stream_id: StreamId) -> Option<&mut GrpcHttpClientStream<H>> {
+    fn get_stream_mut(&mut self, stream_id: StreamId) -> Option<&mut GrpcHttpClientStream> {
         self.streams.get_mut(&stream_id)
     }
 
-    fn remove_stream(&mut self, stream_id: StreamId) -> Option<GrpcHttpClientStream<H>> {
+    fn remove_stream(&mut self, stream_id: StreamId) -> Option<GrpcHttpClientStream> {
         self.streams.remove(&stream_id)
     }
 }
 
-struct ClientInner<H : HttpClientResponseHandler> {
+struct ClientInner {
     conn: HttpConnection,
-    to_write_tx: tokio_core::channel::Sender<ClientToWriteMessage<H>>,
-    session_state: GrpcHttpClientSessionState<H>,
+    to_write_tx: tokio_core::channel::Sender<ClientToWriteMessage>,
+    session_state: GrpcHttpClientSessionState,
 }
 
-pub struct HttpClientConnectionAsync<H : HttpClientResponseHandler> {
-    call_tx: tokio_core::channel::Sender<ClientToWriteMessage<H>>,
+pub struct HttpClientConnectionAsync {
+    call_tx: tokio_core::channel::Sender<ClientToWriteMessage>,
+    remote: reactor::Remote,
 }
 
-unsafe impl <H : HttpClientResponseHandler> Sync for HttpClientConnectionAsync<H> {}
+unsafe impl  Sync for HttpClientConnectionAsync {}
 
-struct StartRequestMessage<H : HttpClientResponseHandler> {
+struct StartRequestMessage {
     headers: Vec<StaticHeader>,
     body: HttpStreamSend<Vec<u8>>,
-    response_handler: H,
+    response_handler: tokio_core::channel::Sender<ResultOrEof<HttpStreamPart, HttpError>>,
 }
 
 struct BodyChunkMessage {
@@ -152,19 +150,19 @@ struct ClientReadToWriteMessage {
     buf: Vec<u8>,
 }
 
-enum ClientToWriteMessage<H : HttpClientResponseHandler> {
-    Start(StartRequestMessage<H>),
+enum ClientToWriteMessage {
+    Start(StartRequestMessage),
     BodyChunk(BodyChunkMessage),
     End(EndRequestMessage),
     FromRead(ClientReadToWriteMessage),
 }
 
-struct ClientWriteLoop<H : HttpClientResponseHandler> {
+struct ClientWriteLoop {
     write: WriteHalf<TcpStream>,
-    inner: TaskRcMut<ClientInner<H>>,
+    inner: TaskRcMut<ClientInner>,
 }
 
-impl<H : HttpClientResponseHandler> ClientWriteLoop<H> {
+impl ClientWriteLoop {
     fn write_all(self, buf: Vec<u8>) -> HttpFuture<Self> {
         let ClientWriteLoop { write, inner } = self;
 
@@ -177,9 +175,9 @@ impl<H : HttpClientResponseHandler> ClientWriteLoop<H> {
         self.write_all(message.buf)
     }
 
-    fn process_start(self, start: StartRequestMessage<H>) -> HttpFuture<Self> {
+    fn process_start(self, start: StartRequestMessage) -> HttpFuture<Self> {
         let StartRequestMessage { headers, body, response_handler } = start;
-        let (buf, stream_id) = self.inner.with(move |inner: &mut ClientInner<H>| {
+        let (buf, stream_id) = self.inner.with(move |inner: &mut ClientInner| {
 
             let stream = GrpcHttpClientStream {
                 state: StreamState::Open,
@@ -193,9 +191,9 @@ impl<H : HttpClientResponseHandler> ClientWriteLoop<H> {
         });
 
         Box::new(self.write_all(buf)
-            .and_then(move |wl: ClientWriteLoop<H>| {
-                body.fold(wl, move |wl: ClientWriteLoop<H>, chunk| {
-                    wl.inner.with(|inner: &mut ClientInner<H>| {
+            .and_then(move |wl: ClientWriteLoop| {
+                body.fold(wl, move |wl: ClientWriteLoop, chunk| {
+                    wl.inner.with(|inner: &mut ClientInner| {
                         inner.to_write_tx.send(ClientToWriteMessage::BodyChunk(BodyChunkMessage {
                             stream_id: stream_id,
                             chunk: chunk,
@@ -204,8 +202,8 @@ impl<H : HttpClientResponseHandler> ClientWriteLoop<H> {
                     futures::finished::<_, HttpError>(wl)
                 })
             })
-            .and_then(move |wl: ClientWriteLoop<H>| {
-                wl.inner.with(|inner: &mut ClientInner<H>| {
+            .and_then(move |wl: ClientWriteLoop| {
+                wl.inner.with(|inner: &mut ClientInner| {
                     inner.to_write_tx.send(ClientToWriteMessage::End(EndRequestMessage {
                         stream_id: stream_id,
                     })).unwrap()
@@ -219,7 +217,7 @@ impl<H : HttpClientResponseHandler> ClientWriteLoop<H> {
 
         let BodyChunkMessage { stream_id, chunk } = body_chunk;
 
-        let buf = self.inner.with(move |inner: &mut ClientInner<H>| {
+        let buf = self.inner.with(move |inner: &mut ClientInner| {
             {
                 let _stream = inner.session_state.get_stream_mut(stream_id);
                 // TODO: check stream state
@@ -235,14 +233,14 @@ impl<H : HttpClientResponseHandler> ClientWriteLoop<H> {
         println!("client: process request end");
         let EndRequestMessage { stream_id } = end;
 
-        let buf = self.inner.with(move |inner: &mut ClientInner<H>| {
+        let buf = self.inner.with(move |inner: &mut ClientInner| {
             inner.conn.send_end_of_stream_to_vec(stream_id).unwrap()
         });
 
         self.write_all(buf)
     }
 
-    fn process_message(self, message: ClientToWriteMessage<H>) -> HttpFuture<Self> {
+    fn process_message(self, message: ClientToWriteMessage) -> HttpFuture<Self> {
         match message {
             ClientToWriteMessage::Start(start) => self.process_start(start),
             ClientToWriteMessage::BodyChunk(body_chunk) => self.process_body_chunk(body_chunk),
@@ -251,22 +249,22 @@ impl<H : HttpClientResponseHandler> ClientWriteLoop<H> {
         }
     }
 
-    fn run(self, requests: HttpStreamSend<ClientToWriteMessage<H>>) -> HttpFuture<()> {
+    fn run(self, requests: HttpStreamSend<ClientToWriteMessage>) -> HttpFuture<()> {
         let requests = requests.map_err(HttpError::from);
         Box::new(requests
-            .fold(self, move |wl, message: ClientToWriteMessage<H>| {
+            .fold(self, move |wl, message: ClientToWriteMessage| {
                 wl.process_message(message)
             })
             .map(|_| ()))
     }
 }
 
-struct ClientReadLoop<H : HttpClientResponseHandler> {
+struct ClientReadLoop {
     read: ReadHalf<TcpStream>,
-    inner: TaskRcMut<ClientInner<H>>,
+    inner: TaskRcMut<ClientInner>,
 }
 
-impl<H : HttpClientResponseHandler> HttpReadLoop for ClientReadLoop<H> {
+impl HttpReadLoop for ClientReadLoop {
     fn recv_raw_frame(self) -> HttpFuture<(Self, RawFrame<'static>)> {
         let ClientReadLoop { read, inner } = self;
         Box::new(recv_raw_frame(read)
@@ -276,8 +274,8 @@ impl<H : HttpClientResponseHandler> HttpReadLoop for ClientReadLoop<H> {
 
 
     fn process_data_frame(self, frame: DataFrame) -> HttpFuture<Self> {
-        self.inner.with(|inner: &mut ClientInner<H>| {
-            let mut stream: &mut GrpcHttpClientStream<H> = match inner.session_state.get_stream_mut(frame.get_stream_id()) {
+        self.inner.with(|inner: &mut ClientInner| {
+            let mut stream: &mut GrpcHttpClientStream = match inner.session_state.get_stream_mut(frame.get_stream_id()) {
                 None => {
                     // TODO(mlalic): This can currently indicate two things:
                     //                 1) the stream was idle => PROTOCOL_ERROR
@@ -288,10 +286,10 @@ impl<H : HttpClientResponseHandler> HttpReadLoop for ClientReadLoop<H> {
             };
 
             if let Some(ref mut response_handler) = stream.response_handler {
-                response_handler.part(HttpStreamPart {
+                response_handler.send(ResultOrEof::Item(HttpStreamPart {
                     content: HttpStreamPartContent::Data(frame.data.clone().into_owned()),
                     last: frame.is_end_of_stream(),
-                });
+                })).unwrap();
             }
 
             if frame.is_end_of_stream() {
@@ -303,13 +301,13 @@ impl<H : HttpClientResponseHandler> HttpReadLoop for ClientReadLoop<H> {
     }
 
     fn process_headers_frame(self, frame: HeadersFrame) -> HttpFuture<Self> {
-        self.inner.with(|inner: &mut ClientInner<H>| {
+        self.inner.with(|inner: &mut ClientInner| {
             let headers = inner.session_state.decoder
                                    .decode(&frame.header_fragment())
                                    .map_err(HttpError::CompressionError).unwrap();
             let headers: Vec<StaticHeader> = headers.into_iter().map(|h| h.into()).collect();
 
-            let mut stream: &mut GrpcHttpClientStream<H> = match inner.session_state.get_stream_mut(frame.get_stream_id()) {
+            let mut stream: &mut GrpcHttpClientStream = match inner.session_state.get_stream_mut(frame.get_stream_id()) {
                 None => {
                     // TODO(mlalic): This means that the server's header is not associated to any
                     //               request made by the client nor any server-initiated stream (pushed)
@@ -321,10 +319,10 @@ impl<H : HttpClientResponseHandler> HttpReadLoop for ClientReadLoop<H> {
             if headers.len() != 0 {
 
                 if let Some(ref mut response_handler) = stream.response_handler {
-                    response_handler.part(HttpStreamPart {
+                    response_handler.send(ResultOrEof::Item(HttpStreamPart {
                         content: HttpStreamPartContent::Headers(headers),
                         last: frame.is_end_of_stream(),
-                    });
+                    })).unwrap();
                 }
             }
 
@@ -337,7 +335,7 @@ impl<H : HttpClientResponseHandler> HttpReadLoop for ClientReadLoop<H> {
     }
 
     fn process_rst_stream_frame(self, frame: RstStreamFrame) -> HttpFuture<Self> {
-        self.inner.with(move |inner: &mut ClientInner<H>| {
+        self.inner.with(move |inner: &mut ClientInner| {
             // TODO: check actually removed
             inner.session_state.remove_stream(frame.get_stream_id());
         });
@@ -357,7 +355,7 @@ impl<H : HttpClientResponseHandler> HttpReadLoop for ClientReadLoop<H> {
     }
 
     fn send_frame<R : FrameIR>(self, frame: R) -> HttpFuture<Self> {
-        self.inner.with(|inner: &mut ClientInner<H>| {
+        self.inner.with(|inner: &mut ClientInner| {
             let mut send_buf = VecSendFrame(Vec::new());
             send_buf.send_frame(frame).unwrap();
             inner.to_write_tx.send(ClientToWriteMessage::FromRead(ClientReadToWriteMessage { buf: send_buf.0 }))
@@ -373,7 +371,7 @@ impl<H : HttpClientResponseHandler> HttpReadLoop for ClientReadLoop<H> {
     }
 }
 
-impl<H : HttpClientResponseHandler> ClientReadLoop<H> {
+impl ClientReadLoop {
     fn read_process_frame(self) -> HttpFuture<Self> {
         Box::new(self.recv_raw_frame()
             .and_then(move |(rl, frame)| rl.process_raw_frame(frame)))
@@ -390,13 +388,14 @@ impl<H : HttpClientResponseHandler> ClientReadLoop<H> {
     }
 }
 
-impl<H : HttpClientResponseHandler> HttpClientConnectionAsync<H> {
+impl HttpClientConnectionAsync {
     pub fn new(lh: reactor::Handle, addr: &SocketAddr) -> (Self, HttpFuture<()>) {
         let (to_write_tx, to_write_rx) = tokio_core::channel::channel(&lh).unwrap();
 
         let to_write_rx = Box::new(to_write_rx.map_err(HttpError::from));
 
         let c = HttpClientConnectionAsync {
+            remote: lh.remote().clone(),
             call_tx: to_write_tx.clone(),
         };
 
@@ -428,17 +427,31 @@ impl<H : HttpClientResponseHandler> HttpClientConnectionAsync<H> {
     pub fn start_request(
         &self,
         headers: Vec<StaticHeader>,
-        body: HttpStreamSend<Vec<u8>>,
-        response_handler: H)
-            -> HttpFutureSend<()>
+        body: HttpStreamSend<Vec<u8>>)
+            -> HttpStreamStreamSend
     {
-        self.call_tx.send(ClientToWriteMessage::Start(StartRequestMessage {
-            headers: headers,
-            body: body,
-            response_handler: response_handler,
-        })).unwrap();
+        let (tx, rx) = futures::oneshot();
 
-        // should use bounded queue here, so future result
-        Box::new(futures::finished(()))
+        let call_tx = self.call_tx.clone();
+
+        self.remote.spawn(move |handle| {
+            let (req_tx, req_rx) = tokio_core::channel::channel(&handle).unwrap();
+
+            call_tx.send(ClientToWriteMessage::Start(StartRequestMessage {
+                headers: headers,
+                body: body,
+                response_handler: req_tx,
+            })).unwrap();
+
+            let req_rx = req_rx.map_err(HttpError::from);
+
+            tx.complete(stream_with_eof_and_error(req_rx));
+
+            Ok(())
+        });
+
+        let rx = rx.map_err(|_| HttpError::from(io::Error::new(io::ErrorKind::Other, "oneshot canceled")));
+
+        Box::new(future_flatten_to_stream(rx))
     }
 }

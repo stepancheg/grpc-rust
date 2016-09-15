@@ -10,6 +10,7 @@ extern crate tokio_core;
 pub mod client;
 pub mod server;
 mod grpc;
+mod grpc_frame;
 pub mod method;
 pub mod grpc_protobuf;
 pub mod marshall;

@@ -33,7 +33,9 @@ impl<T, E> From<Result<T, E>> for ResultOrEof<T, E> {
 
 
 
-pub fn stream_with_eof_and_error<S>(s: S) -> StreamWithEofAndError<S> {
+pub fn stream_with_eof_and_error<T, E, S>(s: S) -> StreamWithEofAndError<S>
+    where S : Stream<Item=ResultOrEof<T, E>, Error=E>
+{
     StreamWithEofAndError {
         stream: s,
         seen_eof: false,
@@ -46,7 +48,7 @@ pub struct StreamWithEofAndError<S> {
 }
 
 impl<T, E, S> Stream for StreamWithEofAndError<S>
-    where S : Stream<Item=ResultOrEof<T, E>, Error=E> + Send
+    where S : Stream<Item=ResultOrEof<T, E>, Error=E>
 {
     type Item = T;
     type Error = E;
