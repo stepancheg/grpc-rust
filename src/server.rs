@@ -43,7 +43,7 @@ pub struct MethodHandlerServerStreaming<F> {
 }
 
 pub struct MethodHandlerClientStreaming<F> {
-    _f: Arc<F>
+    f: Arc<F>
 }
 
 pub struct MethodHandlerBidi<F> {
@@ -65,7 +65,7 @@ impl<F> MethodHandlerClientStreaming<F> {
         where F : Fn(GrpcStreamSend<Req>) -> GrpcFutureSend<Resp> + Send + Sync,
     {
         MethodHandlerClientStreaming {
-            _f: Arc::new(f),
+            f: Arc::new(f),
         }
     }
 }
@@ -107,8 +107,8 @@ impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerClientStreaming<F>
         Resp : Send + 'static,
         F : Fn(GrpcStreamSend<Req>) -> GrpcFutureSend<Resp> + Send + Sync + 'static,
 {
-    fn handle(&self, _req: GrpcStreamSend<Req>) -> GrpcStreamSend<Resp> {
-        unimplemented!()
+    fn handle(&self, req: GrpcStreamSend<Req>) -> GrpcStreamSend<Resp> {
+        Box::new(future_to_stream_once((self.f)(req)))
     }
 }
 

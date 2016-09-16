@@ -57,6 +57,13 @@ fn new_server_server_streaming<H>(name: &str, handler: H) -> GrpcServer
     new_server(name, GrpcStreaming::ServerStreaming, MethodHandlerServerStreaming::new(handler))
 }
 
+/// Single server streaming method server
+fn new_server_client_streaming<H>(name: &str, handler: H) -> GrpcServer
+    where H : Fn(GrpcStreamSend<String>) -> GrpcFutureSend<String> + Sync + Send + 'static
+{
+    new_server(name, GrpcStreaming::ClientStreaming, MethodHandlerClientStreaming::new(handler))
+}
+
 
 /// Tester for unary methods
 struct TesterUnary {
@@ -113,7 +120,7 @@ struct TesterServerStreaming {
 }
 
 impl TesterServerStreaming {
-    fn new<H>(handler: H) -> TesterServerStreaming
+    fn new<H>(handler: H) -> Self
         where H : Fn(String) -> GrpcStreamSend<String> + Sync + Send + 'static
     {
         let name = "/test/ServerStreaming";
@@ -130,6 +137,34 @@ impl TesterServerStreaming {
         self.client.call_server_streaming(param.to_owned(), string_string_method(&self.name, GrpcStreaming::ServerStreaming))
     }
 }
+
+
+struct TesterClientStreaming {
+    name: String,
+    client: GrpcClient,
+    _server: GrpcServer,
+}
+
+impl TesterClientStreaming {
+    fn new<H>(handler: H) -> Self
+        where H : Fn(GrpcStreamSend<String>) -> GrpcFutureSend<String> + Sync + Send + 'static
+    {
+        let name = "/test/ClientStreaming";
+        let server = new_server_client_streaming(name, handler);
+        let port = server.local_addr().port();
+        TesterClientStreaming {
+            name: name.to_owned(),
+            _server: server,
+            client: GrpcClient::new("::1", port).unwrap()
+        }
+    }
+
+    fn call(&self) -> (stream::Sender<String, GrpcError>, GrpcFutureSend<String>) {
+        let (tx, rx) = stream::channel();
+        (tx, self.client.call_client_streaming(Box::new(rx), string_string_method(&self.name, GrpcStreaming::ClientStreaming)))
+    }
+}
+
 
 #[test]
 fn unary() {
@@ -189,4 +224,22 @@ fn server_streaming() {
     test_sync.take(4);
     assert_eq!("x2", rs.next().unwrap().unwrap());
     assert!(rs.next().is_none());
+}
+
+#[test]
+fn client_streaming() {
+    let tester = TesterClientStreaming::new(move |s| {
+        Box::new(s.fold(String::new(), |mut s, message| {
+            s.push_str(&message);
+            futures::finished::<_, GrpcError>(s)
+        }))
+    });
+
+    let (tx, result) = tester.call();
+    let tx = tx.send(Ok("aa".to_owned())).wait().ok().expect("aa");
+    let tx = tx.send(Ok("bb".to_owned())).wait().ok().expect("bb");
+    let tx = tx.send(Ok("cc".to_owned())).wait().ok().expect("cc");
+    drop(tx);
+
+    assert_eq!("aabbcc", result.wait().unwrap());
 }
