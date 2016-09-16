@@ -304,11 +304,6 @@ impl<F : HttpService> HttpReadLoop for ServerReadLoop<F> {
 }
 
 impl<F : HttpService> ServerReadLoop<F> {
-    fn read_process_frame(self) -> HttpFuture<Self> {
-        Box::new(self.recv_raw_frame()
-            .and_then(move |(rl, frame)| rl.process_raw_frame(frame)))
-    }
-
     fn run(self) -> HttpFuture<()> {
         let stream = stream_repeat(());
 

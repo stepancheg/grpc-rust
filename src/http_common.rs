@@ -1,4 +1,5 @@
 use futures::stream::Stream;
+use futures::Future;
 use futures;
 
 use solicit::http::StaticHeader;
@@ -75,6 +76,12 @@ pub trait HttpReadLoop
 
     /// Send a frame back to the network
     fn send_frame<R : FrameIR>(self, frame: R) -> HttpFuture<Self>;
+
+    fn read_process_frame(self) -> HttpFuture<Self> {
+        Box::new(self.recv_raw_frame()
+            .and_then(move |(lp, frame)| lp.process_raw_frame(frame)))
+    }
+
 
     fn process_stream_frame(self, frame: HttpFrameStream) -> HttpFuture<Self> {
         match frame {
