@@ -391,12 +391,13 @@ impl<F : HttpService> ServerWriteLoop<F> {
 
 
 
-pub struct HttpServerConnectionAsync<F : HttpService> {
-    _marker: marker::PhantomData<F>,
+pub struct HttpServerConnectionAsync {
 }
 
-impl<F : HttpService> HttpServerConnectionAsync<F> {
-    pub fn new(lh: &reactor::Handle, socket: TcpStream, factory : F) -> HttpFuture<()> {
+impl HttpServerConnectionAsync {
+    pub fn new<F>(lh: &reactor::Handle, socket: TcpStream, factory : F) -> HttpFuture<()>
+        where F : HttpService
+    {
         let lh = lh.clone();
 
         let (to_write_tx, to_write_rx) = tokio_core::channel::channel::<ServerToWriteMessage<F>>(&lh).unwrap();
@@ -424,5 +425,21 @@ impl<F : HttpService> HttpServerConnectionAsync<F> {
         });
 
         Box::new(run.then(|x| { println!("server: end: {:?}", x); x }))
+    }
+
+    pub fn new_fn<F>(lh: &reactor::Handle, socket: TcpStream, f: F) -> HttpFuture<()>
+        where F : Fn(Vec<StaticHeader>, HttpStreamStreamSend) -> HttpStreamStreamSend + Send + 'static
+    {
+        struct HttpServiceFn<F>(F);
+
+        impl<F> HttpService for HttpServiceFn<F>
+            where F : Fn(Vec<StaticHeader>, HttpStreamStreamSend) -> HttpStreamStreamSend + Send + 'static
+        {
+            fn new_request(&mut self, headers: Vec<StaticHeader>, req: HttpStreamStreamSend) -> HttpStreamStreamSend {
+                (self.0)(headers, req)
+            }
+        }
+
+        HttpServerConnectionAsync::new(lh, socket, HttpServiceFn(f))
     }
 }

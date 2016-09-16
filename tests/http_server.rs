@@ -3,6 +3,8 @@ extern crate futures;
 extern crate tokio_core;
 extern crate grpc;
 
+mod test_misc;
+
 use std::sync::mpsc;
 use std::net::ToSocketAddrs;
 use std::thread;
@@ -11,61 +13,40 @@ use futures::Future;
 use futures::stream;
 use futures::stream::Stream;
 use tokio_core::reactor;
-use tokio_core::net::*;
 
-use solicit::http::StaticHeader;
 use solicit::http::Header;
 use solicit::http::HttpError;
 
 use grpc::for_test::*;
 
+use test_misc::*;
+
 
 #[test]
 fn test() {
-    let (port_tx, port_rx) = mpsc::channel();
+    let server = HttpServerOneConn::new_fn(0, |_headers, req| {
+        Box::new(future_flatten_to_stream(req
+            .fold(Vec::new(), |mut v, message| {
+                match message.content {
+                    HttpStreamPartContent::Headers(..) => (),
+                    HttpStreamPartContent::Data(d) => v.extend(d),
+                }
 
-    thread::spawn(move || {
-        let mut lp = reactor::Core::new().unwrap();
-
-        let listener = TcpListener::bind(&("::1", 0).to_socket_addrs().unwrap().next().unwrap(), &lp.handle()).unwrap();
-
-        port_tx.send(listener.local_addr().unwrap().port()).unwrap();
-
-        let server_conn = lp.run(listener.incoming().into_future()).ok().expect("accept").0.unwrap().0;
-
-        struct F {
-        }
-
-        impl HttpService for F {
-            fn new_request(&mut self, _headers: Vec<StaticHeader>, req: HttpStreamStreamSend) -> HttpStreamStreamSend {
-                Box::new(future_flatten_to_stream(req
-                    .fold(Vec::new(), |mut v, message| {
-                        match message.content {
-                            HttpStreamPartContent::Headers(..) => (),
-                            HttpStreamPartContent::Data(d) => v.extend(d),
-                        }
-
-                        futures::finished::<_, HttpError>(v)
-                    })
-                    .and_then(|v| {
-                        let mut r = Vec::new();
-                        r.push(HttpStreamPart::intermediate_headers(
-                            vec![
-                                Header::new(":status", "200"),
-                            ]
-                        ));
-                        r.push(HttpStreamPart::last_data(v));
-                        Ok(stream::iter(r.into_iter().map(Ok)))
-                    })))
-            }
-        }
-
-        let http_server_future = HttpServerConnectionAsync::new(&lp.handle(), server_conn, F {});
-
-        lp.run(http_server_future).expect("server run");
+                futures::finished::<_, HttpError>(v)
+            })
+            .and_then(|v| {
+                let mut r = Vec::new();
+                r.push(HttpStreamPart::intermediate_headers(
+                    vec![
+                        Header::new(":status", "200"),
+                    ]
+                ));
+                r.push(HttpStreamPart::last_data(v));
+                Ok(stream::iter(r.into_iter().map(Ok)))
+            })))
     });
 
-    let port = port_rx.recv().expect("recv port");
+    let port = server.port();
 
     let (client_complete_tx, client_complete_rx) = mpsc::channel();
 

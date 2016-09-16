@@ -1,5 +1,7 @@
-extern crate grpc;
+extern crate solicit_fork as solicit;
 extern crate futures;
+extern crate tokio_core;
+extern crate grpc;
 
 mod test_misc;
 
@@ -15,7 +17,7 @@ use grpc::marshall::*;
 use grpc::error::*;
 use grpc::futures_grpc::*;
 
-use test_misc::TestSync;
+use test_misc::*;
 
 
 fn string_string_method(name: &str, streaming: GrpcStreaming)
