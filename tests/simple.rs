@@ -32,12 +32,14 @@ fn string_string_method(name: &str, streaming: GrpcStreaming)
 }
 
 /// Single method server on random port
-fn new_server<H>(name: &str, streaming: GrpcStreaming, handler: H) -> GrpcServer
-    where H : MethodHandler<String, String> + 'static + Sync + Send
+fn new_server<H>(name: &str, handler: H) -> GrpcServer
+    where
+        H : MethodHandler<String, String> + 'static + Sync + Send,
+        H : GrpcStreamingFlavor,
 {
     let mut methods = Vec::new();
     methods.push(ServerMethod::new(
-        string_string_method(name, streaming),
+        string_string_method(name, <H as GrpcStreamingFlavor>::streaming()),
         handler,
     ));
     GrpcServer::new(0, ServerServiceDefinition::new(methods))
@@ -47,21 +49,21 @@ fn new_server<H>(name: &str, streaming: GrpcStreaming, handler: H) -> GrpcServer
 fn new_server_unary<H>(name: &str, handler: H) -> GrpcServer
     where H : Fn(String) -> GrpcFutureSend<String> + Sync + Send + 'static
 {
-    new_server(name, GrpcStreaming::Unary, MethodHandlerUnary::new(handler))
+    new_server(name, MethodHandlerUnary::new(handler))
 }
 
 /// Single server streaming method server
 fn new_server_server_streaming<H>(name: &str, handler: H) -> GrpcServer
     where H : Fn(String) -> GrpcStreamSend<String> + Sync + Send + 'static
 {
-    new_server(name, GrpcStreaming::ServerStreaming, MethodHandlerServerStreaming::new(handler))
+    new_server(name, MethodHandlerServerStreaming::new(handler))
 }
 
 /// Single server streaming method server
 fn new_server_client_streaming<H>(name: &str, handler: H) -> GrpcServer
     where H : Fn(GrpcStreamSend<String>) -> GrpcFutureSend<String> + Sync + Send + 'static
 {
-    new_server(name, GrpcStreaming::ClientStreaming, MethodHandlerClientStreaming::new(handler))
+    new_server(name, MethodHandlerClientStreaming::new(handler))
 }
 
 

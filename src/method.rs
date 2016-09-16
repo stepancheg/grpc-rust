@@ -8,6 +8,17 @@ pub enum GrpcStreaming {
     Bidi,
 }
 
+pub trait GrpcStreamingFlavor {
+    type Flavor;
+
+    fn streaming() -> GrpcStreaming;
+}
+
+pub struct GrpcStreamingUnary;
+pub struct GrpcStreamingClientStreaming;
+pub struct GrpcStreamingServerStreaming;
+pub struct GrpcStreamingBidi;
+
 
 pub struct MethodDescriptor<Req, Resp> {
     pub name: String,

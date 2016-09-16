@@ -50,6 +50,39 @@ pub struct MethodHandlerBidi<F> {
     f: Arc<F>
 }
 
+impl<F> GrpcStreamingFlavor for MethodHandlerUnary<F> {
+    type Flavor = GrpcStreamingUnary;
+
+    fn streaming() -> GrpcStreaming {
+        GrpcStreaming::Unary
+    }
+}
+
+impl<F> GrpcStreamingFlavor for MethodHandlerClientStreaming<F> {
+    type Flavor = GrpcStreamingClientStreaming;
+
+    fn streaming() -> GrpcStreaming {
+        GrpcStreaming::ClientStreaming
+    }
+}
+
+impl<F> GrpcStreamingFlavor for MethodHandlerServerStreaming<F> {
+    type Flavor = GrpcStreamingServerStreaming;
+
+    fn streaming() -> GrpcStreaming {
+        GrpcStreaming::ServerStreaming
+    }
+}
+
+impl<F> GrpcStreamingFlavor for MethodHandlerBidi<F> {
+    type Flavor = GrpcStreamingBidi;
+
+    fn streaming() -> GrpcStreaming {
+        GrpcStreaming::Bidi
+    }
+}
+
+
 impl<F> MethodHandlerUnary<F> {
     pub fn new<Req, Resp>(f: F) -> Self
         where F : Fn(Req) -> GrpcFutureSend<Resp> + Send + Sync,
@@ -141,7 +174,7 @@ trait MethodHandlerDispatch {
     fn start_request(&self, req: GrpcStreamSend<Vec<u8>>) -> GrpcStreamSend<Vec<u8>>;
 }
 
-struct MethodHandlerDispatchAsyncImpl<Req, Resp> {
+struct MethodHandlerDispatchImpl<Req, Resp> {
     desc: Arc<MethodDescriptor<Req, Resp>>,
     method_handler: Box<MethodHandler<Req, Resp> + Sync + Send>,
 }
@@ -156,7 +189,7 @@ fn any_to_string(any: Box<Any + Send + 'static>) -> String {
     }
 }
 
-impl<Req, Resp> MethodHandlerDispatch for MethodHandlerDispatchAsyncImpl<Req, Resp>
+impl<Req, Resp> MethodHandlerDispatch for MethodHandlerDispatchImpl<Req, Resp>
     where
         Req : Send + 'static,
         Resp : Send + 'static,
@@ -194,7 +227,7 @@ impl ServerMethod {
     {
         ServerMethod {
             name: method.name.clone(),
-            dispatch: Box::new(MethodHandlerDispatchAsyncImpl {
+            dispatch: Box::new(MethodHandlerDispatchImpl {
                 desc: method,
                 method_handler: Box::new(handler),
             }),
@@ -220,7 +253,6 @@ impl ServerServiceDefinition {
             .expect(&format!("unknown method: {}", name))
     }
 
-    // TODO: stream
     pub fn handle_method(&self, name: &str, message: GrpcStreamSend<Vec<u8>>) -> GrpcStreamSend<Vec<u8>> {
         self.find_method(name).dispatch.start_request(message)
     }
