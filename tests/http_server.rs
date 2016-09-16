@@ -76,7 +76,7 @@ fn test() {
 
         let resp = client.start_request(
             Vec::new(),
-            stream_once_send((&b"abcd"[..]).to_owned()));
+            Box::new(stream_once((&b"abcd"[..]).to_owned())));
 
         let request_future = resp.fold(Vec::new(), move |mut v, part| {
             match part.content {
