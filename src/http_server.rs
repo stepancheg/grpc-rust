@@ -303,18 +303,6 @@ impl<F : HttpService> HttpReadLoop for ServerReadLoop<F> {
 
 }
 
-impl<F : HttpService> ServerReadLoop<F> {
-    fn run(self) -> HttpFuture<()> {
-        let stream = stream_repeat(());
-
-        let future = stream.fold(self, |rl, _| {
-            rl.read_process_frame()
-        });
-
-        Box::new(future.map(|_| ()))
-    }
-}
-
 struct ServerWriteLoop<F>
     where F : HttpService
 {

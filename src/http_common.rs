@@ -6,6 +6,8 @@ use solicit::http::StaticHeader;
 use solicit::http::HttpError;
 use solicit::http::frame::*;
 
+use futures_misc::*;
+
 use solicit_misc::*;
 use solicit_async::*;
 
@@ -82,6 +84,15 @@ pub trait HttpReadLoop
             .and_then(move |(lp, frame)| lp.process_raw_frame(frame)))
     }
 
+    fn run(self) -> HttpFuture<()> {
+        let stream = stream_repeat(());
+
+        let future = stream.fold(self, |lp, _| {
+            lp.read_process_frame()
+        });
+
+        Box::new(future.map(|_| ()))
+    }
 
     fn process_stream_frame(self, frame: HttpFrameStream) -> HttpFuture<Self> {
         match frame {

@@ -371,18 +371,6 @@ impl HttpReadLoop for ClientReadLoop {
     }
 }
 
-impl ClientReadLoop {
-    fn run(self) -> HttpFuture<()> {
-        let stream = stream_repeat(());
-
-        let future = stream.fold(self, |rl, _| {
-            rl.read_process_frame()
-        });
-
-        Box::new(future.map(|_| ()))
-    }
-}
-
 impl HttpClientConnectionAsync {
     pub fn new(lh: reactor::Handle, addr: &SocketAddr) -> (Self, HttpFuture<()>) {
         let (to_write_tx, to_write_rx) = tokio_core::channel::channel(&lh).unwrap();
