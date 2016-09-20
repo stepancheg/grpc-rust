@@ -123,9 +123,9 @@ impl<'a> MethodGen<'a> {
     }
 
     fn write_descriptor(&self, w: &mut CodeWriter, before: &str, after: &str) {
-        w.block(format!("{}{}", before, "::grpc::method::MethodDescriptor {"), format!("{}{}", "}", after), |w| {
-            w.field_entry("name", format!("\"{}/{}\".to_string()", self.service_path, self.proto.get_name()));
-            w.field_entry("streaming", format!("::grpc::method::GrpcStreaming::{}", self.streaming_upper()));
+        w.block(&format!("{}{}", before, "::grpc::method::MethodDescriptor {"), &format!("{}{}", "}", after), |w| {
+            w.field_entry("name", &format!("\"{}/{}\".to_string()", self.service_path, self.proto.get_name()));
+            w.field_entry("streaming", &format!("::grpc::method::GrpcStreaming::{}", self.streaming_upper()));
             w.field_entry("req_marshaller", "Box::new(::grpc::grpc_protobuf::MarshallerProtobuf)");
             w.field_entry("resp_marshaller", "Box::new(::grpc::grpc_protobuf::MarshallerProtobuf)");
         });
@@ -326,8 +326,8 @@ impl<'a> ServiceGen<'a> {
                     w.field_entry("handler", "::std::sync::Arc::new(h)");
                 });
 
-                w.expr_block(self.sync_server_name(), |w| {
-                    w.field_entry("async_server", format!("{}::new(port, h)", self.async_server_name()));
+                w.expr_block(&self.sync_server_name(), |w| {
+                    w.field_entry("async_server", &format!("{}::new(port, h)", self.async_server_name()));
                 });
             });
         });
@@ -359,7 +359,7 @@ impl<'a> ServiceGen<'a> {
                     });
                 });
 
-                w.expr_block(self.async_server_name(), |w| {
+                w.expr_block(&self.async_server_name(), |w| {
                     w.field_entry("grpc_server", "::grpc::server::GrpcServer::new(port, service_definition)");
                 });
             });
