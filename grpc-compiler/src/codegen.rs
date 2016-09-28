@@ -320,7 +320,7 @@ impl<'a> ServiceGen<'a> {
         w.write_line("");
 
         w.impl_self_block(&self.sync_server_name(), |w| {
-            w.pub_fn(format!("new<H : {} + Send + Sync + 'static>(port: u16, h: H) -> Self", self.sync_intf_name()), |w| {
+            w.pub_fn(&format!("new<H : {} + Send + Sync + 'static>(port: u16, h: H) -> Self", self.sync_intf_name()), |w| {
                 w.stmt_block(&format!("let h = {}", self.sync_handler_to_async_name()), |w| {
                     w.field_entry("cpupool", "::futures_cpupool::CpuPool::new_num_cpus()");
                     w.field_entry("handler", "::std::sync::Arc::new(h)");
@@ -341,7 +341,7 @@ impl<'a> ServiceGen<'a> {
         w.write_line("");
 
         w.impl_self_block(&self.async_server_name(), |w| {
-            w.pub_fn(format!("new<H : {} + 'static + Sync + Send + 'static>(port: u16, h: H) -> Self", self.async_intf_name()), |w| {
+            w.pub_fn(&format!("new<H : {} + 'static + Sync + Send + 'static>(port: u16, h: H) -> Self", self.async_intf_name()), |w| {
                 w.write_line("let handler_arc = ::std::sync::Arc::new(h);");
                 w.block("let service_definition = ::grpc::server::ServerServiceDefinition::new(", ");", |w| {
                     w.block("vec![", "],", |w| {
