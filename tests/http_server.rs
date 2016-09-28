@@ -53,7 +53,7 @@ fn test() {
     thread::spawn(move || {
         let mut client_lp = reactor::Core::new().expect("core");
 
-        let (client, future) = HttpClientConnectionAsync::new(client_lp.handle(), &("::1", port).to_socket_addrs().unwrap().next().unwrap());
+        let (client, future) = HttpClientConnectionAsync::new_plain(client_lp.handle(), &("::1", port).to_socket_addrs().unwrap().next().unwrap());
 
         let resp = client.start_request(
             Vec::new(),

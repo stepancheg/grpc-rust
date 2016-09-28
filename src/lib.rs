@@ -6,6 +6,7 @@ extern crate hpack;
 extern crate futures;
 extern crate futures_cpupool;
 extern crate tokio_core;
+extern crate tokio_tls;
 
 pub mod client;
 pub mod server;

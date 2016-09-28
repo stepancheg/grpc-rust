@@ -56,7 +56,7 @@ pub struct GrpcClient {
 
 impl GrpcClient {
     /// Create a client connected to specified host and port.
-    pub fn new(host: &str, port: u16) -> GrpcResult<GrpcClient> {
+    pub fn new(host: &str, port: u16, tls: bool) -> GrpcResult<GrpcClient> {
 
         // TODO: sync
         // TODO: try connect to all addrs
@@ -68,7 +68,7 @@ impl GrpcClient {
 
         // Start event loop.
         let join_handle = thread::spawn(move || {
-            run_client_event_loop(socket_addr, get_from_loop_tx);
+            run_client_event_loop(socket_addr, tls, get_from_loop_tx);
         });
 
         // Get back call channel and shutdown channel.
@@ -79,7 +79,7 @@ impl GrpcClient {
             loop_to_client: loop_to_client,
             thread_join_handle: Some(join_handle),
             host: host.to_owned(),
-            http_scheme: HttpScheme::Http,
+            http_scheme: if tls { HttpScheme::Https } else { HttpScheme::Http },
         })
     }
 
@@ -179,6 +179,7 @@ impl Drop for GrpcClient {
 // Event loop entry point
 fn run_client_event_loop(
     socket_addr: SocketAddr,
+    tls: bool,
     send_to_back: mpsc::Sender<LoopToClient>)
 {
     // Create an event loop.
@@ -187,7 +188,12 @@ fn run_client_event_loop(
     // Create a channel to receive shutdown signal.
     let (shutdown_tx, shutdown_rx) = tokio_core::channel::channel(&lp.handle()).unwrap();
 
-    let (http_conn, http_conn_future) = HttpClientConnectionAsync::new(lp.handle(), &socket_addr);
+    let (http_conn, http_conn_future) =
+        if tls {
+            HttpClientConnectionAsync::new_tls(lp.handle(), &socket_addr)
+        } else {
+            HttpClientConnectionAsync::new_plain(lp.handle(), &socket_addr)
+        };
     let http_conn_future: GrpcFuture<_> = Box::new(http_conn_future.map_err(GrpcError::from));
 
     // Send channels back to GrpcClient

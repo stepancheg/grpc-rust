@@ -9,6 +9,7 @@ use futures::stream::Stream;
 
 use tokio_core::io::read_exact;
 use tokio_core::io::write_all;
+use tokio_core::io::Io;
 use tokio_core::net::TcpStream;
 use tokio_core::reactor;
 
@@ -102,7 +103,7 @@ pub fn send_frame<W : Write + Send + 'static, F : FrameIR>(write: W, frame: F) -
 
 static PREFACE: &'static [u8] = b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
 
-pub fn client_handshake(conn: TcpStream) -> HttpFuture<TcpStream> {
+pub fn client_handshake<I : Io + Send + 'static>(conn: I) -> HttpFuture<I> {
     let send_preface = write_all(conn, PREFACE)
         .map(|(conn, _)| conn)
         .map_err(|e| e.into());
@@ -125,7 +126,7 @@ pub fn client_handshake(conn: TcpStream) -> HttpFuture<TcpStream> {
     Box::new(done)
 }
 
-pub fn server_handshake(conn: TcpStream) -> HttpFuture<TcpStream> {
+pub fn server_handshake<I : Io + Send + 'static>(conn: I) -> HttpFuture<I> {
     let mut preface_buf = Vec::with_capacity(PREFACE.len());
     preface_buf.resize(PREFACE.len(), 0);
     let recv_preface = read_exact(conn, preface_buf)

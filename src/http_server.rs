@@ -17,12 +17,14 @@ use futures::Future;
 use futures::stream::Stream;
 
 use tokio_core;
-use tokio_core::net::TcpStream;
 use tokio_core::io as tokio_io;
 use tokio_core::io::Io;
 use tokio_core::io::ReadHalf;
 use tokio_core::io::WriteHalf;
+use tokio_core::net::TcpStream;
 use tokio_core::reactor;
+
+use tokio_tls;
 
 use futures_misc::*;
 
@@ -200,10 +202,12 @@ struct ServerInner<F : HttpService> {
     session_state: GrpcHttpServerSessionState<F>,
 }
 
-struct ServerReadLoop<F>
-    where F : HttpService
+struct ServerReadLoop<F, I>
+    where
+        F : HttpService,
+        I : Io + Send + 'static,
 {
-    read: ReadHalf<TcpStream>,
+    read: ReadHalf<I>,
     inner: TaskRcMut<ServerInner<F>>,
 }
 
@@ -219,7 +223,7 @@ enum ServerToWriteMessage<F : HttpService> {
     ResponseStreamEnd(StreamId),
 }
 
-impl<F : HttpService> HttpReadLoop for ServerReadLoop<F> {
+impl<F : HttpService, I : Io + Send + 'static> HttpReadLoop for ServerReadLoop<F, I> {
     fn recv_raw_frame(self) -> HttpFuture<(Self, RawFrame<'static>)> {
         let ServerReadLoop { read, inner } = self;
         Box::new(recv_raw_frame(read)
@@ -303,14 +307,16 @@ impl<F : HttpService> HttpReadLoop for ServerReadLoop<F> {
 
 }
 
-struct ServerWriteLoop<F>
-    where F : HttpService
+struct ServerWriteLoop<F, I>
+    where
+        F : HttpService,
+        I : Io + 'static,
 {
-    write: WriteHalf<TcpStream>,
+    write: WriteHalf<I>,
     inner: TaskRcMut<ServerInner<F>>,
 }
 
-impl<F : HttpService> ServerWriteLoop<F> {
+impl<F : HttpService, I : Io> ServerWriteLoop<F, I> {
     fn _loop_handle(&self) -> reactor::Handle {
         self.inner.with(move |inner: &mut ServerInner<F>| inner.session_state.loop_handle.clone())
     }
@@ -395,14 +401,16 @@ pub struct HttpServerConnectionAsync {
 }
 
 impl HttpServerConnectionAsync {
-    pub fn new<F>(lh: &reactor::Handle, socket: TcpStream, factory : F) -> HttpFuture<()>
-        where F : HttpService
+    fn connected<F, I>(lh: &reactor::Handle, socket: HttpFutureSend<I>, factory : F) -> HttpFuture<()>
+        where
+            F : HttpService,
+            I : Io + Send + 'static,
     {
         let lh = lh.clone();
 
         let (to_write_tx, to_write_rx) = tokio_core::channel::channel::<ServerToWriteMessage<F>>(&lh).unwrap();
 
-        let handshake = server_handshake(socket);
+        let handshake = socket.and_then(server_handshake);
 
         let run = handshake.and_then(move |socket| {
             let (read, write) = socket.split();
@@ -427,8 +435,23 @@ impl HttpServerConnectionAsync {
         Box::new(run.then(|x| { println!("server: end: {:?}", x); x }))
     }
 
-    pub fn new_fn<F>(lh: &reactor::Handle, socket: TcpStream, f: F) -> HttpFuture<()>
-        where F : Fn(Vec<StaticHeader>, HttpStreamStreamSend) -> HttpStreamStreamSend + Send + 'static
+    pub fn new_plain<F>(lh: &reactor::Handle, socket: TcpStream, factory: F) -> HttpFuture<()>
+        where
+            F : HttpService,
+    {
+        HttpServerConnectionAsync::connected(lh, Box::new(futures::finished(socket)), factory)
+    }
+
+    pub fn new_tls<F>(_lh: &reactor::Handle, _socket: TcpStream, _factory: F) -> HttpFuture<()>
+        where
+            F : HttpService,
+    {
+        unimplemented!()
+    }
+
+    pub fn new_plain_fn<F>(lh: &reactor::Handle, socket: TcpStream, f: F) -> HttpFuture<()>
+        where
+            F : Fn(Vec<StaticHeader>, HttpStreamStreamSend) -> HttpStreamStreamSend + Send + 'static,
     {
         struct HttpServiceFn<F>(F);
 
@@ -440,6 +463,23 @@ impl HttpServerConnectionAsync {
             }
         }
 
-        HttpServerConnectionAsync::new(lh, socket, HttpServiceFn(f))
+        HttpServerConnectionAsync::new_plain(lh, socket, HttpServiceFn(f))
+    }
+
+    pub fn new_tls_fn<F>(lh: &reactor::Handle, socket: TcpStream, f: F) -> HttpFuture<()>
+        where
+            F : Fn(Vec<StaticHeader>, HttpStreamStreamSend) -> HttpStreamStreamSend + Send + 'static,
+    {
+        struct HttpServiceFn<F>(F);
+
+        impl<F> HttpService for HttpServiceFn<F>
+            where F : Fn(Vec<StaticHeader>, HttpStreamStreamSend) -> HttpStreamStreamSend + Send + 'static
+        {
+            fn new_request(&mut self, headers: Vec<StaticHeader>, req: HttpStreamStreamSend) -> HttpStreamStreamSend {
+                (self.0)(headers, req)
+            }
+        }
+
+        HttpServerConnectionAsync::new_tls(lh, socket, HttpServiceFn(f))
     }
 }

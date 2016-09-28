@@ -382,7 +382,7 @@ fn run_server_event_loop(
         .expect("send back");
 
     let loop_run = listen.incoming().map_err(GrpcError::from).zip(stuff).for_each(move |((socket, _peer_addr), loop_handle)| {
-        loop_handle.spawn(HttpServerConnectionAsync::new(&loop_handle, socket, GrpcHttpServerHandlerFactory {
+        loop_handle.spawn(HttpServerConnectionAsync::new_plain(&loop_handle, socket, GrpcHttpServerHandlerFactory {
             service_definition: service_definition.clone(),
         }).map_err(|e| { println!("{:?}", e); () }));
         Ok(())

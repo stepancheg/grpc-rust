@@ -55,7 +55,7 @@ impl HttpServerOneConn {
                     // close listening port
                     drop(listener);
 
-                    HttpServerConnectionAsync::new_fn(&handle, conn, service)
+                    HttpServerConnectionAsync::new_plain_fn(&handle, conn, service)
                 });
 
             //let shutdown_rx = shutdown_rx.then(|x| { println!("shutdown_rx"); x });

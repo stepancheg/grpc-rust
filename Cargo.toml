@@ -19,7 +19,8 @@ protobuf        = { git = "http://github.com/stepancheg/rust-protobuf" }
 futures         = "0.1"
 #futures-cpupool = { git = "https://github.com/alexcrichton/futures-rs" }
 futures-cpupool = "0.1"
-tokio-core      = { git = "https://github.com/tokio-rs/tokio-core" }
+tokio-core      = "0.1"
+tokio-tls       = { git = "https://github.com/tokio-rs/tokio-tls/" }
 
 [lib]
 doctest = false

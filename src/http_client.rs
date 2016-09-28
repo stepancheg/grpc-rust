@@ -25,6 +25,8 @@ use tokio_core::io::ReadHalf;
 use tokio_core::io::WriteHalf;
 use tokio_core::reactor;
 
+use tokio_tls;
+
 use futures_misc::*;
 
 use solicit_async::*;
@@ -157,12 +159,12 @@ enum ClientToWriteMessage {
     FromRead(ClientReadToWriteMessage),
 }
 
-struct ClientWriteLoop {
-    write: WriteHalf<TcpStream>,
+struct ClientWriteLoop<I : Io + Send + 'static> {
+    write: WriteHalf<I>,
     inner: TaskRcMut<ClientInner>,
 }
 
-impl ClientWriteLoop {
+impl<I : Io + Send + 'static> ClientWriteLoop<I> {
     fn write_all(self, buf: Vec<u8>) -> HttpFuture<Self> {
         let ClientWriteLoop { write, inner } = self;
 
@@ -191,8 +193,8 @@ impl ClientWriteLoop {
         });
 
         Box::new(self.write_all(buf)
-            .and_then(move |wl: ClientWriteLoop| {
-                body.fold(wl, move |wl: ClientWriteLoop, chunk| {
+            .and_then(move |wl: ClientWriteLoop<_>| {
+                body.fold(wl, move |wl: ClientWriteLoop<_>, chunk| {
                     wl.inner.with(|inner: &mut ClientInner| {
                         inner.to_write_tx.send(ClientToWriteMessage::BodyChunk(BodyChunkMessage {
                             stream_id: stream_id,
@@ -202,7 +204,7 @@ impl ClientWriteLoop {
                     futures::finished::<_, HttpError>(wl)
                 })
             })
-            .and_then(move |wl: ClientWriteLoop| {
+            .and_then(move |wl: ClientWriteLoop<_>| {
                 wl.inner.with(|inner: &mut ClientInner| {
                     inner.to_write_tx.send(ClientToWriteMessage::End(EndRequestMessage {
                         stream_id: stream_id,
@@ -259,12 +261,12 @@ impl ClientWriteLoop {
     }
 }
 
-struct ClientReadLoop {
-    read: ReadHalf<TcpStream>,
+struct ClientReadLoop<I : Io + Send + 'static> {
+    read: ReadHalf<I>,
     inner: TaskRcMut<ClientInner>,
 }
 
-impl HttpReadLoop for ClientReadLoop {
+impl<I : Io + Send + 'static> HttpReadLoop for ClientReadLoop<I> {
     fn recv_raw_frame(self) -> HttpFuture<(Self, RawFrame<'static>)> {
         let ClientReadLoop { read, inner } = self;
         Box::new(recv_raw_frame(read)
@@ -372,7 +374,7 @@ impl HttpReadLoop for ClientReadLoop {
 }
 
 impl HttpClientConnectionAsync {
-    pub fn new(lh: reactor::Handle, addr: &SocketAddr) -> (Self, HttpFuture<()>) {
+    fn connected<I : Io + Send + 'static>(lh: reactor::Handle, connect: HttpFutureSend<I>) -> (Self, HttpFuture<()>) {
         let (to_write_tx, to_write_rx) = tokio_core::channel::channel(&lh).unwrap();
 
         let to_write_rx = Box::new(to_write_rx.map_err(HttpError::from));
@@ -382,7 +384,8 @@ impl HttpClientConnectionAsync {
             call_tx: to_write_tx.clone(),
         };
 
-        let handshake = connect_and_handshake(&lh, addr);
+        let handshake = connect.and_then(client_handshake);
+
         let future = handshake.and_then(move |conn| {
             println!("client: handshake done");
             let (read, write) = conn.split();
@@ -405,6 +408,28 @@ impl HttpClientConnectionAsync {
         });
 
         (c, Box::new(future))
+    }
+
+    pub fn new_plain(lh: reactor::Handle, addr: &SocketAddr) -> (Self, HttpFuture<()>) {
+        let connect = TcpStream::connect(&addr, &lh)
+            .map_err(|e| e.into());
+
+        HttpClientConnectionAsync::connected(lh, Box::new(connect))
+    }
+
+    pub fn new_tls(lh: reactor::Handle, addr: &SocketAddr) -> (Self, HttpFuture<()>) {
+        let connect = TcpStream::connect(&addr, &lh)
+            .map_err(|e| e.into());
+
+        let tls_conn = connect.and_then(|conn| {
+            tokio_tls::ClientContext::new()
+                .unwrap()
+                .handshake("localhost", conn)
+        });
+
+        let tls_conn = tls_conn.map_err(HttpError::from);
+
+        HttpClientConnectionAsync::connected(lh, Box::new(tls_conn))
     }
 
     pub fn start_request(

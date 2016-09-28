@@ -84,7 +84,7 @@ impl TesterUnary {
         TesterUnary {
             name: name.to_owned(),
             _server: server,
-            client: GrpcClient::new("::1", port).unwrap()
+            client: GrpcClient::new("::1", port, false).unwrap()
         }
     }
 
@@ -131,7 +131,7 @@ impl TesterServerStreaming {
         TesterServerStreaming {
             name: name.to_owned(),
             _server: server,
-            client: GrpcClient::new("::1", port).unwrap()
+            client: GrpcClient::new("::1", port, false).unwrap()
         }
     }
 
@@ -157,7 +157,7 @@ impl TesterClientStreaming {
         TesterClientStreaming {
             name: name.to_owned(),
             _server: server,
-            client: GrpcClient::new("::1", port).unwrap()
+            client: GrpcClient::new("::1", port, false).unwrap()
         }
     }
 
@@ -177,7 +177,7 @@ fn unary() {
 
 #[test]
 fn server_is_not_running() {
-    let client = GrpcClient::new("::1", 2).unwrap();
+    let client = GrpcClient::new("::1", 2, false).unwrap();
 
     // TODO: https://github.com/tokio-rs/tokio-core/issues/12
     if false {
