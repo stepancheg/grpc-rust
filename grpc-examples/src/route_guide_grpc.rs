@@ -47,8 +47,8 @@ pub struct RouteGuideClient {
 }
 
 impl RouteGuideClient {
-    pub fn new(host: &str, port: u16) -> ::grpc::result::GrpcResult<Self> {
-        RouteGuideAsyncClient::new(host, port).map(|c| {
+    pub fn new(host: &str, port: u16, tls: bool) -> ::grpc::result::GrpcResult<Self> {
+        RouteGuideAsyncClient::new(host, port, tls).map(|c| {
             RouteGuideClient {
                 async_client: c,
             }
@@ -87,8 +87,8 @@ pub struct RouteGuideAsyncClient {
 }
 
 impl RouteGuideAsyncClient {
-    pub fn new(host: &str, port: u16) -> ::grpc::result::GrpcResult<Self> {
-        ::grpc::client::GrpcClient::new(host, port).map(|c| {
+    pub fn new(host: &str, port: u16, tls: bool) -> ::grpc::result::GrpcResult<Self> {
+        ::grpc::client::GrpcClient::new(host, port, tls).map(|c| {
             RouteGuideAsyncClient {
                 grpc_client: c,
                 method_GetFeature: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {

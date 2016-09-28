@@ -23,8 +23,8 @@ use protobuf::ProtobufEnum as ProtobufEnum_imported_for_functions;
 #[derive(Clone,Default)]
 pub struct Point {
     // message fields
-    latitude: ::std::option::Option<i32>,
-    longitude: ::std::option::Option<i32>,
+    pub latitude: i32,
+    pub longitude: i32,
     // special fields
     unknown_fields: ::protobuf::UnknownFields,
     cached_size: ::std::cell::Cell<u32>,
@@ -44,53 +44,54 @@ impl Point {
             ptr: 0 as *const Point,
         };
         unsafe {
-            instance.get(|| {
-                Point {
-                    latitude: ::std::option::Option::None,
-                    longitude: ::std::option::Option::None,
-                    unknown_fields: ::protobuf::UnknownFields::new(),
-                    cached_size: ::std::cell::Cell::new(0),
-                }
-            })
+            instance.get(Point::new)
         }
     }
 
-    // optional int32 latitude = 1;
+    // int32 latitude = 1;
 
     pub fn clear_latitude(&mut self) {
-        self.latitude = ::std::option::Option::None;
-    }
-
-    pub fn has_latitude(&self) -> bool {
-        self.latitude.is_some()
+        self.latitude = 0;
     }
 
     // Param is passed by value, moved
     pub fn set_latitude(&mut self, v: i32) {
-        self.latitude = ::std::option::Option::Some(v);
+        self.latitude = v;
     }
 
     pub fn get_latitude(&self) -> i32 {
-        self.latitude.unwrap_or(0)
+        self.latitude
     }
 
-    // optional int32 longitude = 2;
+    fn get_latitude_for_reflect(&self) -> &i32 {
+        &self.latitude
+    }
+
+    fn mut_latitude_for_reflect(&mut self) -> &mut i32 {
+        &mut self.latitude
+    }
+
+    // int32 longitude = 2;
 
     pub fn clear_longitude(&mut self) {
-        self.longitude = ::std::option::Option::None;
-    }
-
-    pub fn has_longitude(&self) -> bool {
-        self.longitude.is_some()
+        self.longitude = 0;
     }
 
     // Param is passed by value, moved
     pub fn set_longitude(&mut self, v: i32) {
-        self.longitude = ::std::option::Option::Some(v);
+        self.longitude = v;
     }
 
     pub fn get_longitude(&self) -> i32 {
-        self.longitude.unwrap_or(0)
+        self.longitude
+    }
+
+    fn get_longitude_for_reflect(&self) -> &i32 {
+        &self.longitude
+    }
+
+    fn mut_longitude_for_reflect(&mut self) -> &mut i32 {
+        &mut self.longitude
     }
 }
 
@@ -108,14 +109,14 @@ impl ::protobuf::Message for Point {
                         return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
                     };
                     let tmp = try!(is.read_int32());
-                    self.latitude = ::std::option::Option::Some(tmp);
+                    self.latitude = tmp;
                 },
                 2 => {
                     if wire_type != ::protobuf::wire_format::WireTypeVarint {
                         return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
                     };
                     let tmp = try!(is.read_int32());
-                    self.longitude = ::std::option::Option::Some(tmp);
+                    self.longitude = tmp;
                 },
                 _ => {
                     try!(::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields()));
@@ -129,11 +130,11 @@ impl ::protobuf::Message for Point {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u32 {
         let mut my_size = 0;
-        for value in &self.latitude {
-            my_size += ::protobuf::rt::value_size(1, *value, ::protobuf::wire_format::WireTypeVarint);
+        if self.latitude != 0 {
+            my_size += ::protobuf::rt::value_size(1, self.latitude, ::protobuf::wire_format::WireTypeVarint);
         };
-        for value in &self.longitude {
-            my_size += ::protobuf::rt::value_size(2, *value, ::protobuf::wire_format::WireTypeVarint);
+        if self.longitude != 0 {
+            my_size += ::protobuf::rt::value_size(2, self.longitude, ::protobuf::wire_format::WireTypeVarint);
         };
         my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
         self.cached_size.set(my_size);
@@ -141,11 +142,11 @@ impl ::protobuf::Message for Point {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
-        if let Some(v) = self.latitude {
-            try!(os.write_int32(1, v));
+        if self.latitude != 0 {
+            try!(os.write_int32(1, self.latitude));
         };
-        if let Some(v) = self.longitude {
-            try!(os.write_int32(2, v));
+        if self.longitude != 0 {
+            try!(os.write_int32(2, self.longitude));
         };
         try!(os.write_unknown_fields(self.get_unknown_fields()));
         ::std::result::Result::Ok(())
@@ -189,15 +190,15 @@ impl ::protobuf::MessageStatic for Point {
         unsafe {
             descriptor.get(|| {
                 let mut fields = ::std::vec::Vec::new();
-                fields.push(::protobuf::reflect::accessor::make_singular_i32_accessor(
+                fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeInt32>(
                     "latitude",
-                    Point::has_latitude,
-                    Point::get_latitude,
+                    Point::get_latitude_for_reflect,
+                    Point::mut_latitude_for_reflect,
                 ));
-                fields.push(::protobuf::reflect::accessor::make_singular_i32_accessor(
+                fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeInt32>(
                     "longitude",
-                    Point::has_longitude,
-                    Point::get_longitude,
+                    Point::get_longitude_for_reflect,
+                    Point::mut_longitude_for_reflect,
                 ));
                 ::protobuf::reflect::MessageDescriptor::new::<Point>(
                     "Point",
@@ -231,6 +232,12 @@ impl ::std::fmt::Debug for Point {
     }
 }
 
+impl ::protobuf::reflect::ProtobufValue for Point {
+    fn as_ref(&self) -> ::protobuf::reflect::ProtobufValueRef {
+        ::protobuf::reflect::ProtobufValueRef::Message(self)
+    }
+}
+
 #[derive(Clone,Default)]
 pub struct Rectangle {
     // message fields
@@ -255,18 +262,11 @@ impl Rectangle {
             ptr: 0 as *const Rectangle,
         };
         unsafe {
-            instance.get(|| {
-                Rectangle {
-                    lo: ::protobuf::SingularPtrField::none(),
-                    hi: ::protobuf::SingularPtrField::none(),
-                    unknown_fields: ::protobuf::UnknownFields::new(),
-                    cached_size: ::std::cell::Cell::new(0),
-                }
-            })
+            instance.get(Rectangle::new)
         }
     }
 
-    // optional .proto.Point lo = 1;
+    // .proto.Point lo = 1;
 
     pub fn clear_lo(&mut self) {
         self.lo.clear();
@@ -299,7 +299,15 @@ impl Rectangle {
         self.lo.as_ref().unwrap_or_else(|| Point::default_instance())
     }
 
-    // optional .proto.Point hi = 2;
+    fn get_lo_for_reflect(&self) -> &::protobuf::SingularPtrField<Point> {
+        &self.lo
+    }
+
+    fn mut_lo_for_reflect(&mut self) -> &mut ::protobuf::SingularPtrField<Point> {
+        &mut self.lo
+    }
+
+    // .proto.Point hi = 2;
 
     pub fn clear_hi(&mut self) {
         self.hi.clear();
@@ -331,6 +339,14 @@ impl Rectangle {
     pub fn get_hi(&self) -> &Point {
         self.hi.as_ref().unwrap_or_else(|| Point::default_instance())
     }
+
+    fn get_hi_for_reflect(&self) -> &::protobuf::SingularPtrField<Point> {
+        &self.hi
+    }
+
+    fn mut_hi_for_reflect(&mut self) -> &mut ::protobuf::SingularPtrField<Point> {
+        &mut self.hi
+    }
 }
 
 impl ::protobuf::Message for Rectangle {
@@ -360,12 +376,12 @@ impl ::protobuf::Message for Rectangle {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u32 {
         let mut my_size = 0;
-        for value in &self.lo {
-            let len = value.compute_size();
+        if let Some(v) = self.lo.as_ref() {
+            let len = v.compute_size();
             my_size += 1 + ::protobuf::rt::compute_raw_varint32_size(len) + len;
         };
-        for value in &self.hi {
-            let len = value.compute_size();
+        if let Some(v) = self.hi.as_ref() {
+            let len = v.compute_size();
             my_size += 1 + ::protobuf::rt::compute_raw_varint32_size(len) + len;
         };
         my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
@@ -426,15 +442,15 @@ impl ::protobuf::MessageStatic for Rectangle {
         unsafe {
             descriptor.get(|| {
                 let mut fields = ::std::vec::Vec::new();
-                fields.push(::protobuf::reflect::accessor::make_singular_message_accessor(
+                fields.push(::protobuf::reflect::accessor::make_singular_ptr_field_accessor::<_, ::protobuf::types::ProtobufTypeMessage<Point>>(
                     "lo",
-                    Rectangle::has_lo,
-                    Rectangle::get_lo,
+                    Rectangle::get_lo_for_reflect,
+                    Rectangle::mut_lo_for_reflect,
                 ));
-                fields.push(::protobuf::reflect::accessor::make_singular_message_accessor(
+                fields.push(::protobuf::reflect::accessor::make_singular_ptr_field_accessor::<_, ::protobuf::types::ProtobufTypeMessage<Point>>(
                     "hi",
-                    Rectangle::has_hi,
-                    Rectangle::get_hi,
+                    Rectangle::get_hi_for_reflect,
+                    Rectangle::mut_hi_for_reflect,
                 ));
                 ::protobuf::reflect::MessageDescriptor::new::<Rectangle>(
                     "Rectangle",
@@ -468,10 +484,16 @@ impl ::std::fmt::Debug for Rectangle {
     }
 }
 
+impl ::protobuf::reflect::ProtobufValue for Rectangle {
+    fn as_ref(&self) -> ::protobuf::reflect::ProtobufValueRef {
+        ::protobuf::reflect::ProtobufValueRef::Message(self)
+    }
+}
+
 #[derive(Clone,Default)]
 pub struct Feature {
     // message fields
-    name: ::protobuf::SingularField<::std::string::String>,
+    pub name: ::std::string::String,
     location: ::protobuf::SingularPtrField<Point>,
     // special fields
     unknown_fields: ::protobuf::UnknownFields,
@@ -492,54 +514,45 @@ impl Feature {
             ptr: 0 as *const Feature,
         };
         unsafe {
-            instance.get(|| {
-                Feature {
-                    name: ::protobuf::SingularField::none(),
-                    location: ::protobuf::SingularPtrField::none(),
-                    unknown_fields: ::protobuf::UnknownFields::new(),
-                    cached_size: ::std::cell::Cell::new(0),
-                }
-            })
+            instance.get(Feature::new)
         }
     }
 
-    // optional string name = 1;
+    // string name = 1;
 
     pub fn clear_name(&mut self) {
         self.name.clear();
     }
 
-    pub fn has_name(&self) -> bool {
-        self.name.is_some()
-    }
-
     // Param is passed by value, moved
     pub fn set_name(&mut self, v: ::std::string::String) {
-        self.name = ::protobuf::SingularField::some(v);
+        self.name = v;
     }
 
     // Mutable pointer to the field.
     // If field is not initialized, it is initialized with default value first.
     pub fn mut_name(&mut self) -> &mut ::std::string::String {
-        if self.name.is_none() {
-            self.name.set_default();
-        };
-        self.name.as_mut().unwrap()
+        &mut self.name
     }
 
     // Take field
     pub fn take_name(&mut self) -> ::std::string::String {
-        self.name.take().unwrap_or_else(|| ::std::string::String::new())
+        ::std::mem::replace(&mut self.name, ::std::string::String::new())
     }
 
     pub fn get_name(&self) -> &str {
-        match self.name.as_ref() {
-            Some(v) => &v,
-            None => "",
-        }
+        &self.name
     }
 
-    // optional .proto.Point location = 2;
+    fn get_name_for_reflect(&self) -> &::std::string::String {
+        &self.name
+    }
+
+    fn mut_name_for_reflect(&mut self) -> &mut ::std::string::String {
+        &mut self.name
+    }
+
+    // .proto.Point location = 2;
 
     pub fn clear_location(&mut self) {
         self.location.clear();
@@ -571,6 +584,14 @@ impl Feature {
     pub fn get_location(&self) -> &Point {
         self.location.as_ref().unwrap_or_else(|| Point::default_instance())
     }
+
+    fn get_location_for_reflect(&self) -> &::protobuf::SingularPtrField<Point> {
+        &self.location
+    }
+
+    fn mut_location_for_reflect(&mut self) -> &mut ::protobuf::SingularPtrField<Point> {
+        &mut self.location
+    }
 }
 
 impl ::protobuf::Message for Feature {
@@ -583,7 +604,7 @@ impl ::protobuf::Message for Feature {
             let (field_number, wire_type) = try!(is.read_tag_unpack());
             match field_number {
                 1 => {
-                    try!(::protobuf::rt::read_singular_string_into(wire_type, is, &mut self.name));
+                    try!(::protobuf::rt::read_singular_proto3_string_into(wire_type, is, &mut self.name));
                 },
                 2 => {
                     try!(::protobuf::rt::read_singular_message_into(wire_type, is, &mut self.location));
@@ -600,11 +621,11 @@ impl ::protobuf::Message for Feature {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u32 {
         let mut my_size = 0;
-        for value in &self.name {
-            my_size += ::protobuf::rt::string_size(1, &value);
+        if self.name != ::std::string::String::new() {
+            my_size += ::protobuf::rt::string_size(1, &self.name);
         };
-        for value in &self.location {
-            let len = value.compute_size();
+        if let Some(v) = self.location.as_ref() {
+            let len = v.compute_size();
             my_size += 1 + ::protobuf::rt::compute_raw_varint32_size(len) + len;
         };
         my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
@@ -613,8 +634,8 @@ impl ::protobuf::Message for Feature {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
-        if let Some(v) = self.name.as_ref() {
-            try!(os.write_string(1, &v));
+        if self.name != ::std::string::String::new() {
+            try!(os.write_string(1, &self.name));
         };
         if let Some(v) = self.location.as_ref() {
             try!(os.write_tag(2, ::protobuf::wire_format::WireTypeLengthDelimited));
@@ -663,15 +684,15 @@ impl ::protobuf::MessageStatic for Feature {
         unsafe {
             descriptor.get(|| {
                 let mut fields = ::std::vec::Vec::new();
-                fields.push(::protobuf::reflect::accessor::make_singular_string_accessor(
+                fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeString>(
                     "name",
-                    Feature::has_name,
-                    Feature::get_name,
+                    Feature::get_name_for_reflect,
+                    Feature::mut_name_for_reflect,
                 ));
-                fields.push(::protobuf::reflect::accessor::make_singular_message_accessor(
+                fields.push(::protobuf::reflect::accessor::make_singular_ptr_field_accessor::<_, ::protobuf::types::ProtobufTypeMessage<Point>>(
                     "location",
-                    Feature::has_location,
-                    Feature::get_location,
+                    Feature::get_location_for_reflect,
+                    Feature::mut_location_for_reflect,
                 ));
                 ::protobuf::reflect::MessageDescriptor::new::<Feature>(
                     "Feature",
@@ -705,11 +726,17 @@ impl ::std::fmt::Debug for Feature {
     }
 }
 
+impl ::protobuf::reflect::ProtobufValue for Feature {
+    fn as_ref(&self) -> ::protobuf::reflect::ProtobufValueRef {
+        ::protobuf::reflect::ProtobufValueRef::Message(self)
+    }
+}
+
 #[derive(Clone,Default)]
 pub struct RouteNote {
     // message fields
     location: ::protobuf::SingularPtrField<Point>,
-    message: ::protobuf::SingularField<::std::string::String>,
+    pub message: ::std::string::String,
     // special fields
     unknown_fields: ::protobuf::UnknownFields,
     cached_size: ::std::cell::Cell<u32>,
@@ -729,18 +756,11 @@ impl RouteNote {
             ptr: 0 as *const RouteNote,
         };
         unsafe {
-            instance.get(|| {
-                RouteNote {
-                    location: ::protobuf::SingularPtrField::none(),
-                    message: ::protobuf::SingularField::none(),
-                    unknown_fields: ::protobuf::UnknownFields::new(),
-                    cached_size: ::std::cell::Cell::new(0),
-                }
-            })
+            instance.get(RouteNote::new)
         }
     }
 
-    // optional .proto.Point location = 1;
+    // .proto.Point location = 1;
 
     pub fn clear_location(&mut self) {
         self.location.clear();
@@ -773,40 +793,46 @@ impl RouteNote {
         self.location.as_ref().unwrap_or_else(|| Point::default_instance())
     }
 
-    // optional string message = 2;
+    fn get_location_for_reflect(&self) -> &::protobuf::SingularPtrField<Point> {
+        &self.location
+    }
+
+    fn mut_location_for_reflect(&mut self) -> &mut ::protobuf::SingularPtrField<Point> {
+        &mut self.location
+    }
+
+    // string message = 2;
 
     pub fn clear_message(&mut self) {
         self.message.clear();
     }
 
-    pub fn has_message(&self) -> bool {
-        self.message.is_some()
-    }
-
     // Param is passed by value, moved
     pub fn set_message(&mut self, v: ::std::string::String) {
-        self.message = ::protobuf::SingularField::some(v);
+        self.message = v;
     }
 
     // Mutable pointer to the field.
     // If field is not initialized, it is initialized with default value first.
     pub fn mut_message(&mut self) -> &mut ::std::string::String {
-        if self.message.is_none() {
-            self.message.set_default();
-        };
-        self.message.as_mut().unwrap()
+        &mut self.message
     }
 
     // Take field
     pub fn take_message(&mut self) -> ::std::string::String {
-        self.message.take().unwrap_or_else(|| ::std::string::String::new())
+        ::std::mem::replace(&mut self.message, ::std::string::String::new())
     }
 
     pub fn get_message(&self) -> &str {
-        match self.message.as_ref() {
-            Some(v) => &v,
-            None => "",
-        }
+        &self.message
+    }
+
+    fn get_message_for_reflect(&self) -> &::std::string::String {
+        &self.message
+    }
+
+    fn mut_message_for_reflect(&mut self) -> &mut ::std::string::String {
+        &mut self.message
     }
 }
 
@@ -823,7 +849,7 @@ impl ::protobuf::Message for RouteNote {
                     try!(::protobuf::rt::read_singular_message_into(wire_type, is, &mut self.location));
                 },
                 2 => {
-                    try!(::protobuf::rt::read_singular_string_into(wire_type, is, &mut self.message));
+                    try!(::protobuf::rt::read_singular_proto3_string_into(wire_type, is, &mut self.message));
                 },
                 _ => {
                     try!(::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields()));
@@ -837,12 +863,12 @@ impl ::protobuf::Message for RouteNote {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u32 {
         let mut my_size = 0;
-        for value in &self.location {
-            let len = value.compute_size();
+        if let Some(v) = self.location.as_ref() {
+            let len = v.compute_size();
             my_size += 1 + ::protobuf::rt::compute_raw_varint32_size(len) + len;
         };
-        for value in &self.message {
-            my_size += ::protobuf::rt::string_size(2, &value);
+        if self.message != ::std::string::String::new() {
+            my_size += ::protobuf::rt::string_size(2, &self.message);
         };
         my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
         self.cached_size.set(my_size);
@@ -855,8 +881,8 @@ impl ::protobuf::Message for RouteNote {
             try!(os.write_raw_varint32(v.get_cached_size()));
             try!(v.write_to_with_cached_sizes(os));
         };
-        if let Some(v) = self.message.as_ref() {
-            try!(os.write_string(2, &v));
+        if self.message != ::std::string::String::new() {
+            try!(os.write_string(2, &self.message));
         };
         try!(os.write_unknown_fields(self.get_unknown_fields()));
         ::std::result::Result::Ok(())
@@ -900,15 +926,15 @@ impl ::protobuf::MessageStatic for RouteNote {
         unsafe {
             descriptor.get(|| {
                 let mut fields = ::std::vec::Vec::new();
-                fields.push(::protobuf::reflect::accessor::make_singular_message_accessor(
+                fields.push(::protobuf::reflect::accessor::make_singular_ptr_field_accessor::<_, ::protobuf::types::ProtobufTypeMessage<Point>>(
                     "location",
-                    RouteNote::has_location,
-                    RouteNote::get_location,
+                    RouteNote::get_location_for_reflect,
+                    RouteNote::mut_location_for_reflect,
                 ));
-                fields.push(::protobuf::reflect::accessor::make_singular_string_accessor(
+                fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeString>(
                     "message",
-                    RouteNote::has_message,
-                    RouteNote::get_message,
+                    RouteNote::get_message_for_reflect,
+                    RouteNote::mut_message_for_reflect,
                 ));
                 ::protobuf::reflect::MessageDescriptor::new::<RouteNote>(
                     "RouteNote",
@@ -942,13 +968,19 @@ impl ::std::fmt::Debug for RouteNote {
     }
 }
 
+impl ::protobuf::reflect::ProtobufValue for RouteNote {
+    fn as_ref(&self) -> ::protobuf::reflect::ProtobufValueRef {
+        ::protobuf::reflect::ProtobufValueRef::Message(self)
+    }
+}
+
 #[derive(Clone,Default)]
 pub struct RouteSummary {
     // message fields
-    point_count: ::std::option::Option<i32>,
-    feature_count: ::std::option::Option<i32>,
-    distance: ::std::option::Option<i32>,
-    elapsed_time: ::std::option::Option<i32>,
+    pub point_count: i32,
+    pub feature_count: i32,
+    pub distance: i32,
+    pub elapsed_time: i32,
     // special fields
     unknown_fields: ::protobuf::UnknownFields,
     cached_size: ::std::cell::Cell<u32>,
@@ -968,93 +1000,100 @@ impl RouteSummary {
             ptr: 0 as *const RouteSummary,
         };
         unsafe {
-            instance.get(|| {
-                RouteSummary {
-                    point_count: ::std::option::Option::None,
-                    feature_count: ::std::option::Option::None,
-                    distance: ::std::option::Option::None,
-                    elapsed_time: ::std::option::Option::None,
-                    unknown_fields: ::protobuf::UnknownFields::new(),
-                    cached_size: ::std::cell::Cell::new(0),
-                }
-            })
+            instance.get(RouteSummary::new)
         }
     }
 
-    // optional int32 point_count = 1;
+    // int32 point_count = 1;
 
     pub fn clear_point_count(&mut self) {
-        self.point_count = ::std::option::Option::None;
-    }
-
-    pub fn has_point_count(&self) -> bool {
-        self.point_count.is_some()
+        self.point_count = 0;
     }
 
     // Param is passed by value, moved
     pub fn set_point_count(&mut self, v: i32) {
-        self.point_count = ::std::option::Option::Some(v);
+        self.point_count = v;
     }
 
     pub fn get_point_count(&self) -> i32 {
-        self.point_count.unwrap_or(0)
+        self.point_count
     }
 
-    // optional int32 feature_count = 2;
+    fn get_point_count_for_reflect(&self) -> &i32 {
+        &self.point_count
+    }
+
+    fn mut_point_count_for_reflect(&mut self) -> &mut i32 {
+        &mut self.point_count
+    }
+
+    // int32 feature_count = 2;
 
     pub fn clear_feature_count(&mut self) {
-        self.feature_count = ::std::option::Option::None;
-    }
-
-    pub fn has_feature_count(&self) -> bool {
-        self.feature_count.is_some()
+        self.feature_count = 0;
     }
 
     // Param is passed by value, moved
     pub fn set_feature_count(&mut self, v: i32) {
-        self.feature_count = ::std::option::Option::Some(v);
+        self.feature_count = v;
     }
 
     pub fn get_feature_count(&self) -> i32 {
-        self.feature_count.unwrap_or(0)
+        self.feature_count
     }
 
-    // optional int32 distance = 3;
+    fn get_feature_count_for_reflect(&self) -> &i32 {
+        &self.feature_count
+    }
+
+    fn mut_feature_count_for_reflect(&mut self) -> &mut i32 {
+        &mut self.feature_count
+    }
+
+    // int32 distance = 3;
 
     pub fn clear_distance(&mut self) {
-        self.distance = ::std::option::Option::None;
-    }
-
-    pub fn has_distance(&self) -> bool {
-        self.distance.is_some()
+        self.distance = 0;
     }
 
     // Param is passed by value, moved
     pub fn set_distance(&mut self, v: i32) {
-        self.distance = ::std::option::Option::Some(v);
+        self.distance = v;
     }
 
     pub fn get_distance(&self) -> i32 {
-        self.distance.unwrap_or(0)
+        self.distance
     }
 
-    // optional int32 elapsed_time = 4;
+    fn get_distance_for_reflect(&self) -> &i32 {
+        &self.distance
+    }
+
+    fn mut_distance_for_reflect(&mut self) -> &mut i32 {
+        &mut self.distance
+    }
+
+    // int32 elapsed_time = 4;
 
     pub fn clear_elapsed_time(&mut self) {
-        self.elapsed_time = ::std::option::Option::None;
-    }
-
-    pub fn has_elapsed_time(&self) -> bool {
-        self.elapsed_time.is_some()
+        self.elapsed_time = 0;
     }
 
     // Param is passed by value, moved
     pub fn set_elapsed_time(&mut self, v: i32) {
-        self.elapsed_time = ::std::option::Option::Some(v);
+        self.elapsed_time = v;
     }
 
     pub fn get_elapsed_time(&self) -> i32 {
-        self.elapsed_time.unwrap_or(0)
+        self.elapsed_time
+    }
+
+    fn get_elapsed_time_for_reflect(&self) -> &i32 {
+        &self.elapsed_time
+    }
+
+    fn mut_elapsed_time_for_reflect(&mut self) -> &mut i32 {
+        &mut self.elapsed_time
     }
 }
 
@@ -1072,28 +1111,28 @@ impl ::protobuf::Message for RouteSummary {
                         return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
                     };
                     let tmp = try!(is.read_int32());
-                    self.point_count = ::std::option::Option::Some(tmp);
+                    self.point_count = tmp;
                 },
                 2 => {
                     if wire_type != ::protobuf::wire_format::WireTypeVarint {
                         return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
                     };
                     let tmp = try!(is.read_int32());
-                    self.feature_count = ::std::option::Option::Some(tmp);
+                    self.feature_count = tmp;
                 },
                 3 => {
                     if wire_type != ::protobuf::wire_format::WireTypeVarint {
                         return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
                     };
                     let tmp = try!(is.read_int32());
-                    self.distance = ::std::option::Option::Some(tmp);
+                    self.distance = tmp;
                 },
                 4 => {
                     if wire_type != ::protobuf::wire_format::WireTypeVarint {
                         return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
                     };
                     let tmp = try!(is.read_int32());
-                    self.elapsed_time = ::std::option::Option::Some(tmp);
+                    self.elapsed_time = tmp;
                 },
                 _ => {
                     try!(::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields()));
@@ -1107,17 +1146,17 @@ impl ::protobuf::Message for RouteSummary {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u32 {
         let mut my_size = 0;
-        for value in &self.point_count {
-            my_size += ::protobuf::rt::value_size(1, *value, ::protobuf::wire_format::WireTypeVarint);
+        if self.point_count != 0 {
+            my_size += ::protobuf::rt::value_size(1, self.point_count, ::protobuf::wire_format::WireTypeVarint);
         };
-        for value in &self.feature_count {
-            my_size += ::protobuf::rt::value_size(2, *value, ::protobuf::wire_format::WireTypeVarint);
+        if self.feature_count != 0 {
+            my_size += ::protobuf::rt::value_size(2, self.feature_count, ::protobuf::wire_format::WireTypeVarint);
         };
-        for value in &self.distance {
-            my_size += ::protobuf::rt::value_size(3, *value, ::protobuf::wire_format::WireTypeVarint);
+        if self.distance != 0 {
+            my_size += ::protobuf::rt::value_size(3, self.distance, ::protobuf::wire_format::WireTypeVarint);
         };
-        for value in &self.elapsed_time {
-            my_size += ::protobuf::rt::value_size(4, *value, ::protobuf::wire_format::WireTypeVarint);
+        if self.elapsed_time != 0 {
+            my_size += ::protobuf::rt::value_size(4, self.elapsed_time, ::protobuf::wire_format::WireTypeVarint);
         };
         my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
         self.cached_size.set(my_size);
@@ -1125,17 +1164,17 @@ impl ::protobuf::Message for RouteSummary {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
-        if let Some(v) = self.point_count {
-            try!(os.write_int32(1, v));
+        if self.point_count != 0 {
+            try!(os.write_int32(1, self.point_count));
         };
-        if let Some(v) = self.feature_count {
-            try!(os.write_int32(2, v));
+        if self.feature_count != 0 {
+            try!(os.write_int32(2, self.feature_count));
         };
-        if let Some(v) = self.distance {
-            try!(os.write_int32(3, v));
+        if self.distance != 0 {
+            try!(os.write_int32(3, self.distance));
         };
-        if let Some(v) = self.elapsed_time {
-            try!(os.write_int32(4, v));
+        if self.elapsed_time != 0 {
+            try!(os.write_int32(4, self.elapsed_time));
         };
         try!(os.write_unknown_fields(self.get_unknown_fields()));
         ::std::result::Result::Ok(())
@@ -1179,25 +1218,25 @@ impl ::protobuf::MessageStatic for RouteSummary {
         unsafe {
             descriptor.get(|| {
                 let mut fields = ::std::vec::Vec::new();
-                fields.push(::protobuf::reflect::accessor::make_singular_i32_accessor(
+                fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeInt32>(
                     "point_count",
-                    RouteSummary::has_point_count,
-                    RouteSummary::get_point_count,
+                    RouteSummary::get_point_count_for_reflect,
+                    RouteSummary::mut_point_count_for_reflect,
                 ));
-                fields.push(::protobuf::reflect::accessor::make_singular_i32_accessor(
+                fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeInt32>(
                     "feature_count",
-                    RouteSummary::has_feature_count,
-                    RouteSummary::get_feature_count,
+                    RouteSummary::get_feature_count_for_reflect,
+                    RouteSummary::mut_feature_count_for_reflect,
                 ));
-                fields.push(::protobuf::reflect::accessor::make_singular_i32_accessor(
+                fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeInt32>(
                     "distance",
-                    RouteSummary::has_distance,
-                    RouteSummary::get_distance,
+                    RouteSummary::get_distance_for_reflect,
+                    RouteSummary::mut_distance_for_reflect,
                 ));
-                fields.push(::protobuf::reflect::accessor::make_singular_i32_accessor(
+                fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeInt32>(
                     "elapsed_time",
-                    RouteSummary::has_elapsed_time,
-                    RouteSummary::get_elapsed_time,
+                    RouteSummary::get_elapsed_time_for_reflect,
+                    RouteSummary::mut_elapsed_time_for_reflect,
                 ));
                 ::protobuf::reflect::MessageDescriptor::new::<RouteSummary>(
                     "RouteSummary",
@@ -1232,6 +1271,12 @@ impl ::std::cmp::PartialEq for RouteSummary {
 impl ::std::fmt::Debug for RouteSummary {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         ::protobuf::text_format::fmt(self, f)
+    }
+}
+
+impl ::protobuf::reflect::ProtobufValue for RouteSummary {
+    fn as_ref(&self) -> ::protobuf::reflect::ProtobufValueRef {
+        ::protobuf::reflect::ProtobufValueRef::Message(self)
     }
 }
 

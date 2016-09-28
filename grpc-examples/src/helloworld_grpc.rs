@@ -35,8 +35,8 @@ pub struct GreeterClient {
 }
 
 impl GreeterClient {
-    pub fn new(host: &str, port: u16) -> ::grpc::result::GrpcResult<Self> {
-        GreeterAsyncClient::new(host, port).map(|c| {
+    pub fn new(host: &str, port: u16, tls: bool) -> ::grpc::result::GrpcResult<Self> {
+        GreeterAsyncClient::new(host, port, tls).map(|c| {
             GreeterClient {
                 async_client: c,
             }
@@ -58,8 +58,8 @@ pub struct GreeterAsyncClient {
 }
 
 impl GreeterAsyncClient {
-    pub fn new(host: &str, port: u16) -> ::grpc::result::GrpcResult<Self> {
-        ::grpc::client::GrpcClient::new(host, port).map(|c| {
+    pub fn new(host: &str, port: u16, tls: bool) -> ::grpc::result::GrpcResult<Self> {
+        ::grpc::client::GrpcClient::new(host, port, tls).map(|c| {
             GreeterAsyncClient {
                 grpc_client: c,
                 method_SayHello: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
