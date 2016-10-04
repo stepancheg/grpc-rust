@@ -9,12 +9,16 @@ use futures::stream::Stream;
 use tokio_core;
 use tokio_core::reactor;
 
+use tokio_tls;
+
 use solicit::http::StaticHeader;
 use solicit::http::HttpError;
 
 use grpc::for_test::*;
 
 
+/// Single connection HTTP/server.
+/// Accepts only one connection.
 #[allow(dead_code)]
 pub struct HttpServerOneConn {
     from_loop: FromLoop,
@@ -27,8 +31,20 @@ struct FromLoop {
 }
 
 impl HttpServerOneConn {
-    #[allow(dead_code)]
     pub fn new_fn<S>(port: u16, service: S) -> Self
+        where S : Fn(Vec<StaticHeader>, HttpStreamStreamSend) -> HttpStreamStreamSend + Send + 'static
+    {
+        HttpServerOneConn::new_fn_impl(port, None, service)
+    }
+
+    pub fn new_tls_fn<S>(port: u16, server_context: tokio_tls::ServerContext, service: S) -> Self
+        where S : Fn(Vec<StaticHeader>, HttpStreamStreamSend) -> HttpStreamStreamSend + Send + 'static
+    {
+        HttpServerOneConn::new_fn_impl(port, Some(server_context), service)
+    }
+
+    #[allow(dead_code)]
+    fn new_fn_impl<S>(port: u16, server_context: Option<tokio_tls::ServerContext>, service: S) -> Self
         where S : Fn(Vec<StaticHeader>, HttpStreamStreamSend) -> HttpStreamStreamSend + Send + 'static
     {
         let (from_loop_tx, from_loop_rx) = futures::oneshot();
@@ -48,14 +64,18 @@ impl HttpServerOneConn {
 
             let future = listener.incoming().into_future()
                 .map_err(|_| HttpError::from(io::Error::new(io::ErrorKind::Other, "something")))
-                .and_then(|(conn, listener)| {
+                .and_then(move |(conn, listener)| {
                     // incoming stream is endless
                     let (conn, _) = conn.unwrap();
 
                     // close listening port
                     drop(listener);
 
-                    HttpServerConnectionAsync::new_plain_fn(&handle, conn, service)
+                    if let Some(server_context) = server_context {
+                        HttpServerConnectionAsync::new_tls_fn(&handle, conn, server_context, service)
+                    } else {
+                        HttpServerConnectionAsync::new_plain_fn(&handle, conn, service)
+                    }
                 });
 
             //let shutdown_rx = shutdown_rx.then(|x| { println!("shutdown_rx"); x });

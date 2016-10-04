@@ -1,6 +1,7 @@
 extern crate solicit_fork as solicit;
 extern crate futures;
 extern crate tokio_core;
+extern crate tokio_tls;
 extern crate grpc;
 
 mod test_misc;

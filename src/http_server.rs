@@ -442,11 +442,13 @@ impl HttpServerConnectionAsync {
         HttpServerConnectionAsync::connected(lh, Box::new(futures::finished(socket)), factory)
     }
 
-    pub fn new_tls<F>(_lh: &reactor::Handle, _socket: TcpStream, _factory: F) -> HttpFuture<()>
+    pub fn new_tls<F>(lh: &reactor::Handle, socket: TcpStream, server_context: tokio_tls::ServerContext, factory: F) -> HttpFuture<()>
         where
             F : HttpService,
     {
-        unimplemented!()
+        let stream = server_context.handshake(socket).map_err(HttpError::from);
+
+        HttpServerConnectionAsync::connected(lh, Box::new(stream), factory)
     }
 
     pub fn new_plain_fn<F>(lh: &reactor::Handle, socket: TcpStream, f: F) -> HttpFuture<()>
@@ -466,7 +468,7 @@ impl HttpServerConnectionAsync {
         HttpServerConnectionAsync::new_plain(lh, socket, HttpServiceFn(f))
     }
 
-    pub fn new_tls_fn<F>(lh: &reactor::Handle, socket: TcpStream, f: F) -> HttpFuture<()>
+    pub fn new_tls_fn<F>(lh: &reactor::Handle, socket: TcpStream, server_context: tokio_tls::ServerContext, f: F) -> HttpFuture<()>
         where
             F : Fn(Vec<StaticHeader>, HttpStreamStreamSend) -> HttpStreamStreamSend + Send + 'static,
     {
@@ -480,6 +482,6 @@ impl HttpServerConnectionAsync {
             }
         }
 
-        HttpServerConnectionAsync::new_tls(lh, socket, HttpServiceFn(f))
+        HttpServerConnectionAsync::new_tls(lh, socket, server_context, HttpServiceFn(f))
     }
 }

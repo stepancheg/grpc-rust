@@ -20,7 +20,9 @@ futures         = "0.1"
 #futures-cpupool = { git = "https://github.com/alexcrichton/futures-rs" }
 futures-cpupool = "0.1"
 tokio-core      = "0.1"
-tokio-tls       = { git = "https://github.com/tokio-rs/tokio-tls/" }
+tokio-tls       = { git = "https://github.com/tokio-rs/tokio-tls/", features = ["force-openssl"] }
+
+openssl = { version = "0.8", optional = true }
 
 [lib]
 doctest = false
@@ -30,3 +32,4 @@ members = [
     "grpc-examples",
     "grpc-compiler",
 ]
+
