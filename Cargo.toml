@@ -16,9 +16,9 @@ hpack          = "0.3"
 #protobuf       = { path = "../rust-protobuf" }
 protobuf        = { git = "http://github.com/stepancheg/rust-protobuf" }
 #futures         = { git = "https://github.com/alexcrichton/futures-rs" }
-futures         = "0.1"
+futures         = "0.1.2"
 #futures-cpupool = { git = "https://github.com/alexcrichton/futures-rs" }
-futures-cpupool = "0.1"
+futures-cpupool = "0.1.2"
 tokio-core      = "0.1"
 tokio-tls       = { git = "https://github.com/tokio-rs/tokio-tls/", features = ["force-openssl"] }
 
