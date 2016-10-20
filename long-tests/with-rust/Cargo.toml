@@ -1,0 +1,15 @@
+[package]
+name = "long_tests"
+version = "0.1.0"
+authors = ["Stepan Koltsov <stepan.koltsov@gmail.com>"]
+
+[lib]
+doctest = false
+
+[dependencies.grpc]
+path = "../.."
+
+[dependencies]
+protobuf        = { git = "http://github.com/stepancheg/rust-protobuf" }
+futures         = "0.1.2"
+futures-cpupool = "0.1.2"

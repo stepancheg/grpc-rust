@@ -3,3 +3,4 @@ target
 *.iml
 .idea
 .project
+long-tests/with-go/long_tests_client/long_tests_client

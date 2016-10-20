@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+message EchoRequest {
+    string payload = 1;
+}
+
+message EchoResponse {
+    string payload = 2;
+}
+
+service LongTests {
+    rpc echo (EchoRequest) returns (EchoResponse) {}
+}

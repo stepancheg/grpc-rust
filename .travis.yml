@@ -15,5 +15,4 @@ script:
   - rustc --version
   - cargo build
   - cargo test
-  - cargo build --manifest-path=grpc-compiler/Cargo.toml
-  - cargo build --manifest-path=grpc-examples/Cargo.toml
+  - ./build-all.sh
