@@ -150,7 +150,8 @@ impl<F : HttpService> GrpcHttpServerSessionState<F> {
     fn new_request(&mut self, stream_id: StreamId, headers: Vec<StaticHeader>)
         -> tokio_core::channel::Sender<ResultOrEof<HttpStreamPart, HttpError>>
     {
-        let (req_tx, req_rx) = tokio_core::channel::channel(&self.loop_handle).unwrap();
+        let (req_tx, req_rx) = tokio_core::channel::channel(&self.loop_handle)
+            .expect("failed to create a channel");
 
         let req_rx = req_rx.map_err(HttpError::from);
         let req_rx = stream_with_eof_and_error(req_rx, || HttpError::from(io::Error::new(io::ErrorKind::Other, "unexpected eof")));
@@ -162,10 +163,16 @@ impl<F : HttpService> GrpcHttpServerSessionState<F> {
             let to_write_tx2 = to_write_tx.clone();
 
             let process_response = response.for_each(move |part: HttpStreamPart| {
-                to_write_tx.send(ServerToWriteMessage::ResponsePart(stream_id, part)).unwrap();
+                // drop error if connection is closed
+                if let Err(e) = to_write_tx.send(ServerToWriteMessage::ResponsePart(stream_id, part)) {
+                    warn!("failed to write to channel, probably connection is closed: {}", e);
+                }
                 Ok(())
             }).and_then(move |()| {
-                to_write_tx2.send(ServerToWriteMessage::ResponseStreamEnd(stream_id)).unwrap();
+                // drop error if connection is closed
+                if let Err(e) = to_write_tx2.send(ServerToWriteMessage::ResponseStreamEnd(stream_id)) {
+                    warn!("failed to write to channel, probably connection is closed: {}", e);
+                }
                 Ok(())
             }).map_err(|e| panic!("{:?}", e)); // TODO: handle
 
