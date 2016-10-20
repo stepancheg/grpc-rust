@@ -369,17 +369,25 @@ impl<F : HttpService, I : Io> ServerWriteLoop<F, I> {
 
     fn process_response_end(self, stream_id: StreamId) -> HttpFuture<Self> {
         let send_buf = self.inner.with(move |inner: &mut ServerInner<F>| {
-            let stream = inner.session_state.get_stream_mut(stream_id);
-            if let Some(stream) = stream {
-                if !stream.is_closed_local() {
-                    stream.close_local();
-                    inner.conn.send_end_of_stream_to_vec(stream_id).unwrap()
+            let (buf, close) = {
+                let stream = inner.session_state.get_stream_mut(stream_id);
+                if let Some(stream) = stream {
+                    if !stream.is_closed_local() {
+                        stream.close_local();
+                        (inner.conn.send_end_of_stream_to_vec(stream_id).unwrap(), true)
+                    } else {
+                        (Vec::new(), false)
+                    }
                 } else {
-                    Vec::new()
+                    (Vec::new(), false)
                 }
-            } else {
-                Vec::new()
+            };
+
+            if close {
+                inner.session_state.remove_stream_if_closed(stream_id);
             }
+
+            buf
         });
         self.write_all(send_buf)
     }
