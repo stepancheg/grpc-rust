@@ -151,7 +151,12 @@ struct ServiceGen<'a> {
 
 impl<'a> ServiceGen<'a> {
     fn new(proto: &'a ServiceDescriptorProto, file: &FileDescriptorProto, root_scope: &'a RootScope) -> ServiceGen<'a> {
-        let service_path = format!("/{}.{}", file.get_package(), proto.get_name());
+        let service_path =
+            if file.get_package().is_empty() {
+                format!("/{}", proto.get_name())
+            } else {
+                format!("/{}.{}", file.get_package(), proto.get_name())
+            };
         let methods = proto.get_method().into_iter()
             .map(|m| MethodGen::new(m, service_path.clone(), root_scope))
             .collect();
