@@ -3,6 +3,7 @@ use futures::Future;
 use futures;
 
 use solicit::http::StaticHeader;
+use solicit::http::StreamId;
 use solicit::http::HttpError;
 use solicit::http::frame::*;
 
@@ -68,7 +69,11 @@ pub trait HttpReadLoop
 {
     fn process_data_frame(self, frame: DataFrame) -> HttpFuture<Self>;
     fn process_headers_frame(self, frame: HeadersFrame) -> HttpFuture<Self>;
-    fn process_rst_stream_frame(self, frame: RstStreamFrame) -> HttpFuture<Self>;
+
+    fn process_rst_stream_frame(self, _frame: RstStreamFrame) -> HttpFuture<Self> {
+        Box::new(futures::finished(self))
+    }
+
     fn process_window_update_frame(self, _frame: WindowUpdateFrame) -> HttpFuture<Self>;
     fn process_settings_global(self, _frame: SettingsFrame) -> HttpFuture<Self>;
     fn process_conn_window_update(self, _frame: WindowUpdateFrame) -> HttpFuture<Self>;
@@ -95,12 +100,27 @@ pub trait HttpReadLoop
     }
 
     fn process_stream_frame(self, frame: HttpFrameStream) -> HttpFuture<Self> {
-        match frame {
-            HttpFrameStream::Data(data) => self.process_data_frame(data),
-            HttpFrameStream::Headers(headers) => self.process_headers_frame(headers),
-            HttpFrameStream::RstStream(rst) => self.process_rst_stream_frame(rst),
-            HttpFrameStream::WindowUpdate(window_update) => self.process_window_update_frame(window_update),
-        }
+        let stream_id = frame.get_stream_id();
+        let end_of_stream = frame.is_end_of_stream();
+        let f =
+            (match frame {
+                HttpFrameStream::Data(data) => self.process_data_frame(data),
+                HttpFrameStream::Headers(headers) => self.process_headers_frame(headers),
+                HttpFrameStream::RstStream(rst) => self.process_rst_stream_frame(rst),
+                HttpFrameStream::WindowUpdate(window_update) => self.process_window_update_frame(window_update),
+            })
+                .and_then(move |lp| {
+                    if end_of_stream {
+                        lp.close_remote(stream_id)
+                    } else {
+                        Box::new(futures::finished(lp))
+                    }
+                });
+        Box::new(f)
+    }
+
+    fn close_remote(self, _stream_id: StreamId) -> HttpFuture<Self> {
+        Box::new(futures::finished(self))
     }
 
     fn process_ping(self, frame: PingFrame) -> HttpFuture<Self> {

@@ -10,6 +10,7 @@ readme = "README.md"
 keywords = ["grpc"]
 
 [dependencies]
+log             = "0.3"
 #solicit         = { git = "http://github.com/mlalic/solicit.git" }
 solicit-fork   = { git = "http://github.com/stepancheg/solicit.git" }
 hpack          = "0.3"

@@ -60,7 +60,7 @@ impl<F : HttpService> GrpcHttpServerStream<F> {
         self.set_state(next);
     }
 
-    fn _is_closed(&self) -> bool {
+    fn is_closed(&self) -> bool {
         self.state() == StreamState::Closed
     }
 
@@ -126,11 +126,6 @@ struct GrpcHttpServerSessionState<F : HttpService> {
 }
 
 impl<F : HttpService> GrpcHttpServerSessionState<F> {
-    fn insert_stream(&mut self, stream_id: StreamId, stream: GrpcHttpServerStream<F>) -> &mut GrpcHttpServerStream<F> {
-        self.streams.insert(stream_id, stream);
-        self.streams.get_mut(&stream_id).unwrap()
-    }
-
     fn _get_stream_ref(&self, stream_id: StreamId) -> Option<&GrpcHttpServerStream<F>> {
         self.streams.get(&stream_id)
     }
@@ -140,6 +135,8 @@ impl<F : HttpService> GrpcHttpServerSessionState<F> {
     }
 
     fn remove_stream(&mut self, stream_id: StreamId) -> Option<GrpcHttpServerStream<F>> {
+        debug!("remove stream: {}", stream_id);
+
         self.streams.remove(&stream_id)
     }
 
@@ -172,6 +169,8 @@ impl<F : HttpService> GrpcHttpServerSessionState<F> {
     }
 
     fn new_stream(&mut self, stream_id: StreamId, headers: Vec<StaticHeader>) -> &mut GrpcHttpServerStream<F> {
+        debug!("new stream: {}", stream_id);
+
         let req_tx = self.new_request(stream_id, headers);
 
         // New stream initiated by the client
@@ -180,7 +179,8 @@ impl<F : HttpService> GrpcHttpServerSessionState<F> {
             request_handler: Some(req_tx),
             _marker: marker::PhantomData,
         };
-        self.insert_stream(stream_id, stream)
+        self.streams.insert(stream_id, stream);
+        self.streams.get_mut(&stream_id).unwrap()
     }
 
     fn get_or_create_stream(&mut self, stream_id: StreamId, headers: Vec<StaticHeader>, last: bool) -> &mut GrpcHttpServerStream<F> {
@@ -239,10 +239,6 @@ impl<F : HttpService, I : Io + Send + 'static> HttpReadLoop for ServerReadLoop<F
 
             stream.new_data_chunk(&frame.data.as_ref(), frame.is_end_of_stream());
 
-            if frame.is_set(DataFlag::EndStream) {
-                stream.close_remote()
-            }
-
             // TODO: drop stream if closed on both ends
         });
 
@@ -256,12 +252,8 @@ impl<F : HttpService, I : Io + Send + 'static> HttpReadLoop for ServerReadLoop<F
                                    .map_err(HttpError::CompressionError).unwrap();
             let headers = headers.into_iter().map(|h| h.into()).collect();
 
-            let stream = inner.session_state
+            let _stream = inner.session_state
                 .get_or_create_stream(frame.get_stream_id(), headers, frame.is_end_of_stream());
-
-            if frame.is_end_of_stream() {
-                stream.close_remote();
-            }
 
             // TODO: drop stream if closed on both ends
         });
@@ -269,10 +261,18 @@ impl<F : HttpService, I : Io + Send + 'static> HttpReadLoop for ServerReadLoop<F
         Box::new(futures::finished(self))
     }
 
-    fn process_rst_stream_frame(self, frame: RstStreamFrame) -> HttpFuture<Self> {
+    fn close_remote(self, stream_id: StreamId) -> HttpFuture<Self> {
+        debug!("close remote: {}", stream_id);
+
         self.inner.with(move |inner: &mut ServerInner<F>| {
-            // TODO: check actually removed
-            inner.session_state.remove_stream(frame.get_stream_id());
+            let closed = {
+                let mut stream = inner.session_state.get_stream_mut(stream_id).expect("stream not found");
+                stream.close_remote();
+                stream.is_closed()
+            };
+            if closed {
+                inner.session_state.remove_stream(stream_id);
+            }
         });
 
         Box::new(futures::finished(self))
@@ -358,7 +358,6 @@ impl<F : HttpService, I : Io> ServerWriteLoop<F, I> {
     }
 
     fn process_response_end(self, stream_id: StreamId) -> HttpFuture<Self> {
-        println!("http server: process_response_end");
         let send_buf = self.inner.with(move |inner: &mut ServerInner<F>| {
             let stream = inner.session_state.get_stream_mut(stream_id);
             if let Some(stream) = stream {
@@ -432,7 +431,7 @@ impl HttpServerConnectionAsync {
             run_write.join(run_read).map(|_| ())
         });
 
-        Box::new(run.then(|x| { println!("server: end: {:?}", x); x }))
+        Box::new(run.then(|x| { info!("connection end: {:?}", x); x }))
     }
 
     pub fn new_plain<F>(lh: &reactor::Handle, socket: TcpStream, factory: F) -> HttpFuture<()>

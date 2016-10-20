@@ -1,3 +1,5 @@
+#[macro_use]
+extern crate log;
 extern crate protobuf;
 //extern crate solicit;
 extern crate solicit_fork as solicit;

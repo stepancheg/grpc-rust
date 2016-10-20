@@ -25,9 +25,7 @@ impl TestSync {
         let mut guard = self.mutex.lock().expect("mutex poisoned");
         loop {
             if *guard == wait_for {
-                if false {
-                    println!("take {} from thread {}", wait_for, thread::current().name().unwrap_or("?"));
-                }
+                trace!("take {} from thread {}", wait_for, thread::current().name().unwrap_or("?"));
                 *guard += 1;
                 self.condvar.notify_all();
                 return;

@@ -78,9 +78,6 @@ impl HttpServerOneConn {
                     }
                 });
 
-            //let shutdown_rx = shutdown_rx.then(|x| { println!("shutdown_rx"); x });
-            //let future = future.then(|x| { println!("future: {:?}", x); x });
-
             let shutdown_rx = shutdown_rx.then(|_| futures::finished::<_, ()>(()));
             let future = future.then(|_| futures::finished::<_, ()>(()));
 

@@ -10,6 +10,8 @@ doctest = false
 path = "../.."
 
 [dependencies]
+log             = "0.3"
+env_logger      = "0.3"
 protobuf        = { git = "http://github.com/stepancheg/rust-protobuf" }
 futures         = "0.1.2"
 futures-cpupool = "0.1.2"

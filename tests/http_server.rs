@@ -3,6 +3,8 @@ extern crate futures;
 extern crate tokio_core;
 extern crate tokio_tls;
 extern crate grpc;
+#[macro_use]
+extern crate log;
 
 mod test_misc;
 

@@ -1,5 +1,7 @@
 use std::thread;
 
+extern crate env_logger;
+
 extern crate grpc;
 extern crate long_tests;
 extern crate futures;
@@ -19,6 +21,8 @@ impl LongTestsAsync for LongTestsServerImpl {
 }
 
 fn main() {
+    env_logger::init().unwrap();
+
     let _server = LongTestsAsyncServer::new(long_tests::TEST_PORT, LongTestsServerImpl {});
 
     loop {

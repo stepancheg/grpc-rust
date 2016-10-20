@@ -215,8 +215,6 @@ impl<I : Io + Send + 'static> ClientWriteLoop<I> {
     }
 
     fn process_body_chunk(self, body_chunk: BodyChunkMessage) -> HttpFuture<Self> {
-        println!("client: process request body chunk");
-
         let BodyChunkMessage { stream_id, chunk } = body_chunk;
 
         let buf = self.inner.with(move |inner: &mut ClientInner| {
@@ -232,7 +230,6 @@ impl<I : Io + Send + 'static> ClientWriteLoop<I> {
     }
 
     fn process_end(self, end: EndRequestMessage) -> HttpFuture<Self> {
-        println!("client: process request end");
         let EndRequestMessage { stream_id } = end;
 
         let buf = self.inner.with(move |inner: &mut ClientInner| {
@@ -387,7 +384,7 @@ impl HttpClientConnectionAsync {
         let handshake = connect.and_then(client_handshake);
 
         let future = handshake.and_then(move |conn| {
-            println!("client: handshake done");
+            trace!("handshake done");
             let (read, write) = conn.split();
 
             let inner = TaskRcMut::new(ClientInner {

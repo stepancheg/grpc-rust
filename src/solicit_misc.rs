@@ -230,6 +230,17 @@ impl<'a> HttpFrameStream<'a> {
             &HttpFrameStream::RstStream(ref f) => f.get_stream_id(),
         }
     }
+
+    #[allow(dead_code)]
+    pub fn is_end_of_stream(&self) -> bool {
+        match self {
+            &HttpFrameStream::WindowUpdate(..) => false,
+            &HttpFrameStream::Data(ref f) => f.is_end_of_stream(),
+            &HttpFrameStream::Headers(ref f) => f.is_end_of_stream(),
+            &HttpFrameStream::RstStream(..) => true,
+        }
+    }
+
 }
 
 /// Frames without stream (zero stream id)

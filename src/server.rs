@@ -381,10 +381,11 @@ fn run_server_event_loop(
         .send(LoopToServer { shutdown_tx: shutdown_tx, local_addr: local_addr })
         .expect("send back");
 
-    let loop_run = listen.incoming().map_err(GrpcError::from).zip(stuff).for_each(move |((socket, _peer_addr), loop_handle)| {
+    let loop_run = listen.incoming().map_err(GrpcError::from).zip(stuff).for_each(move |((socket, peer_addr), loop_handle)| {
+        info!("accepted connection from {}", peer_addr);
         loop_handle.spawn(HttpServerConnectionAsync::new_plain(&loop_handle, socket, GrpcHttpServerHandlerFactory {
             service_definition: service_definition.clone(),
-        }).map_err(|e| { println!("{:?}", e); () }));
+        }).map_err(|e| { warn!("connection end: {:?}", e); () }));
         Ok(())
     });
 
