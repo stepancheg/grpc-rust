@@ -140,6 +140,12 @@ impl<F : HttpService> GrpcHttpServerSessionState<F> {
         self.streams.remove(&stream_id)
     }
 
+    fn remove_stream_if_closed(&mut self, stream_id: StreamId) {
+        if self.get_stream_mut(stream_id).expect("unknown stream").is_closed() {
+            self.remove_stream(stream_id);
+        }
+    }
+
     fn new_request(&mut self, stream_id: StreamId, headers: Vec<StaticHeader>)
         -> tokio_core::channel::Sender<ResultOrEof<HttpStreamPart, HttpError>>
     {
@@ -265,14 +271,11 @@ impl<F : HttpService, I : Io + Send + 'static> HttpReadLoop for ServerReadLoop<F
         debug!("close remote: {}", stream_id);
 
         self.inner.with(move |inner: &mut ServerInner<F>| {
-            let closed = {
+            {
                 let mut stream = inner.session_state.get_stream_mut(stream_id).expect("stream not found");
                 stream.close_remote();
-                stream.is_closed()
             };
-            if closed {
-                inner.session_state.remove_stream(stream_id);
-            }
+            inner.session_state.remove_stream_if_closed(stream_id);
         });
 
         Box::new(futures::finished(self))
@@ -339,20 +342,27 @@ impl<F : HttpService, I : Io> ServerWriteLoop<F, I> {
 
     fn process_response_part(self, stream_id: StreamId, part: HttpStreamPart) -> HttpFuture<Self> {
         let send_buf = self.inner.with(move |inner: &mut ServerInner<F>| {
-            let stream = inner.session_state.get_stream_mut(stream_id);
-            if let Some(stream) = stream {
-                if !stream.is_closed_local() {
-                    if part.last {
-                        stream.close_local();
-                        // TODO: GC stream
+            let (buf, close) = {
+                let stream = inner.session_state.get_stream_mut(stream_id);
+                if let Some(stream) = stream {
+                    if !stream.is_closed_local() {
+                        if part.last {
+                            stream.close_local();
+                        }
+                        (inner.conn.send_part_to_vec(stream_id, &part).unwrap(), part.last)
+                    } else {
+                        (Vec::new(), false)
                     }
-                    inner.conn.send_part_to_vec(stream_id, &part).unwrap()
                 } else {
-                    Vec::new()
+                    (Vec::new(), false)
                 }
-            } else {
-                Vec::new()
+            };
+
+            if close {
+                inner.session_state.remove_stream_if_closed(stream_id);
             }
+
+            buf
         });
         self.write_all(send_buf)
     }
