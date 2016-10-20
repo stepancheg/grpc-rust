@@ -450,7 +450,7 @@ impl HttpClientConnectionAsync {
 
             let req_rx = req_rx.map_err(HttpError::from);
 
-            tx.complete(stream_with_eof_and_error(req_rx));
+            tx.complete(stream_with_eof_and_error(req_rx, || HttpError::from(io::Error::new(io::ErrorKind::Other, "unexpected eof"))));
 
             Ok(())
         });

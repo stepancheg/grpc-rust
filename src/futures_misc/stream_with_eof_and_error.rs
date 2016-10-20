@@ -33,22 +33,28 @@ impl<T, E> From<Result<T, E>> for ResultOrEof<T, E> {
 
 
 
-pub fn stream_with_eof_and_error<T, E, S>(s: S) -> StreamWithEofAndError<S>
-    where S : Stream<Item=ResultOrEof<T, E>, Error=E>
+pub fn stream_with_eof_and_error<T, E, S, F>(s: S, missed_eof: F) -> StreamWithEofAndError<S, F>
+    where
+        S : Stream<Item=ResultOrEof<T, E>, Error=E>,
+        F : FnOnce() -> E,
 {
     StreamWithEofAndError {
         stream: s,
         seen_eof: false,
+        missed_eof: Some(missed_eof),
     }
 }
 
-pub struct StreamWithEofAndError<S> {
+pub struct StreamWithEofAndError<S, F> {
     stream: S,
     seen_eof: bool,
+    missed_eof: Option<F>,
 }
 
-impl<T, E, S> Stream for StreamWithEofAndError<S>
-    where S : Stream<Item=ResultOrEof<T, E>, Error=E>
+impl<T, E, S, F> Stream for StreamWithEofAndError<S, F>
+    where
+        S : Stream<Item=ResultOrEof<T, E>, Error=E>,
+        F : FnOnce() -> E,
 {
     type Item = T;
     type Error = E;
@@ -64,7 +70,9 @@ impl<T, E, S> Stream for StreamWithEofAndError<S>
                 }
             } else {
                 match try_ready!(self.stream.poll()) {
-                    None => panic!("expecting explicit eof, got stream eof"),
+                    None => {
+                        return Err(self.missed_eof.take().expect("poll after eof")());
+                    },
                     Some(ResultOrEof::Eof) => {
                         self.seen_eof = true;
                         continue;

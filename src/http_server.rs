@@ -1,5 +1,6 @@
 use std::marker;
 use std::collections::HashMap;
+use std::io;
 
 use solicit::http::session::StreamState;
 use solicit::http::connection::HttpConnection;
@@ -152,7 +153,7 @@ impl<F : HttpService> GrpcHttpServerSessionState<F> {
         let (req_tx, req_rx) = tokio_core::channel::channel(&self.loop_handle).unwrap();
 
         let req_rx = req_rx.map_err(HttpError::from);
-        let req_rx = stream_with_eof_and_error(req_rx);
+        let req_rx = stream_with_eof_and_error(req_rx, || HttpError::from(io::Error::new(io::ErrorKind::Other, "unexpected eof")));
 
         let response = self.factory.new_request(headers, Box::new(req_rx));
 

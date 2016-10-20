@@ -92,7 +92,7 @@ impl GrpcClient {
             let (sender, receiver) = tokio_core::channel::channel(&handle).unwrap();
             let receiver: GrpcStreamSend<ResultOrEof<Resp, GrpcError>> = Box::new(receiver.map_err(GrpcError::from));
 
-            let receiver: GrpcStreamSend<Resp> = Box::new(stream_with_eof_and_error(receiver));
+            let receiver: GrpcStreamSend<Resp> = Box::new(stream_with_eof_and_error(receiver, || GrpcError::Other("unexpected EOF")));
 
             one_sender.complete((sender, receiver));
 
