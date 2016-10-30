@@ -11,7 +11,6 @@ use solicit::http::HttpScheme;
 use solicit::http::HttpError;
 use solicit::http::Header;
 use solicit::http::StaticHeader;
-use hpack;
 
 use futures;
 use futures::Future;
@@ -123,7 +122,6 @@ struct GrpcHttpServerSessionState<F : HttpService> {
     streams: HashMap<StreamId, GrpcHttpServerStream<F>>,
     to_write_tx: tokio_core::channel::Sender<ServerToWriteMessage<F>>,
     loop_handle: reactor::Handle,
-    decoder: hpack::Decoder<'static>,
 }
 
 impl<F : HttpService> GrpcHttpServerSessionState<F> {
@@ -261,7 +259,7 @@ impl<F : HttpService, I : Io + Send + 'static> HttpReadLoop for ServerReadLoop<F
 
     fn process_headers_frame(self, frame: HeadersFrame) -> HttpFuture<Self> {
         self.inner.with(move |inner: &mut ServerInner<F>| {
-            let headers = inner.session_state.decoder
+            let headers = inner.conn.decoder
                                    .decode(&frame.header_fragment())
                                    .map_err(HttpError::CompressionError).unwrap();
             let headers = headers.into_iter().map(|h| h.into()).collect();
@@ -447,7 +445,6 @@ impl HttpServerConnectionAsync {
                     factory: factory,
                     to_write_tx: to_write_tx.clone(),
                     loop_handle: lh,
-                    decoder : hpack::Decoder::new(),
                 },
             });
 

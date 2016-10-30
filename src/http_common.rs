@@ -67,6 +67,12 @@ pub trait HttpService: Send + 'static {
 pub trait HttpReadLoop
     where Self : Sized + 'static
 {
+    /// Recv a frame from the network
+    fn recv_raw_frame(self) -> HttpFuture<(Self, RawFrame<'static>)>;
+
+    /// Send a frame back to the network
+    fn send_frame<R : FrameIR>(self, frame: R) -> HttpFuture<Self>;
+
     fn process_data_frame(self, frame: DataFrame) -> HttpFuture<Self>;
     fn process_headers_frame(self, frame: HeadersFrame) -> HttpFuture<Self>;
 
@@ -77,12 +83,6 @@ pub trait HttpReadLoop
     fn process_window_update_frame(self, _frame: WindowUpdateFrame) -> HttpFuture<Self>;
     fn process_settings_global(self, _frame: SettingsFrame) -> HttpFuture<Self>;
     fn process_conn_window_update(self, _frame: WindowUpdateFrame) -> HttpFuture<Self>;
-
-    /// Recv a frame from the network
-    fn recv_raw_frame(self) -> HttpFuture<(Self, RawFrame<'static>)>;
-
-    /// Send a frame back to the network
-    fn send_frame<R : FrameIR>(self, frame: R) -> HttpFuture<Self>;
 
     fn read_process_frame(self) -> HttpFuture<Self> {
         Box::new(self.recv_raw_frame()
@@ -142,6 +142,7 @@ pub trait HttpReadLoop
 
     fn process_raw_frame(self, raw_frame: RawFrame) -> HttpFuture<Self> {
         let frame = HttpFrameClassified::from_raw(&raw_frame).unwrap();
+        debug!("received frame: {:?}", frame);
         match frame {
             HttpFrameClassified::Conn(f) => self.process_conn_frame(f),
             HttpFrameClassified::Stream(f) => self.process_stream_frame(f),

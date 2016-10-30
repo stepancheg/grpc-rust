@@ -203,6 +203,7 @@ impl HttpConnectionEx for HttpConnection {
 }
 
 /// Frames with stream
+#[derive(Debug)]
 pub enum HttpFrameStream<'a> {
     Data(DataFrame<'a>),
     Headers(HeadersFrame<'a>),
@@ -244,6 +245,7 @@ impl<'a> HttpFrameStream<'a> {
 }
 
 /// Frames without stream (zero stream id)
+#[derive(Debug)]
 pub enum HttpFrameConn<'a> {
     Settings(SettingsFrame),
     Ping(PingFrame),
@@ -263,6 +265,7 @@ impl<'a> HttpFrameConn<'a> {
     }
 }
 
+#[derive(Debug)]
 pub enum HttpFrameClassified<'a> {
     Stream(HttpFrameStream<'a>),
     Conn(HttpFrameConn<'a>),
