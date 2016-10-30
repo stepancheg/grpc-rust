@@ -11,6 +11,7 @@ use solicit::http::HttpScheme;
 use solicit::http::HttpError;
 use solicit::http::Header;
 use solicit::http::StaticHeader;
+use solicit::http::INITIAL_CONNECTION_WINDOW_SIZE;
 
 use futures;
 use futures::Future;
@@ -244,17 +245,33 @@ impl<F : HttpService, I : Io + Send + 'static> HttpReadLoop for ServerReadLoop<F
     }
 
     fn process_data_frame(self, frame: DataFrame) -> HttpFuture<Self> {
-        self.inner.with(move |inner: &mut ServerInner<F>| {
+        let increment = self.inner.with(move |inner: &mut ServerInner<F>| {
             let stream = inner.session_state.get_stream_mut(frame.get_stream_id()).expect("stream not found");
 
-            // TODO: decrease window
+            inner.conn.decrease_in_window(frame.payload_len()).expect("failed to decrease in");
+            // TODO: decrease stream window
+
+            let increment =
+                if inner.conn.in_window_size() < INITIAL_CONNECTION_WINDOW_SIZE / 2 {
+                    let increment = INITIAL_CONNECTION_WINDOW_SIZE as u32;
+                    inner.conn.in_window_size.try_increase(increment).expect("failed to increase");
+
+                    Some(increment)
+                } else {
+                    None
+                };
 
             stream.new_data_chunk(&frame.data.as_ref(), frame.is_end_of_stream());
 
             // TODO: drop stream if closed on both ends
+            increment
         });
 
-        Box::new(futures::finished(self))
+        if let Some(increment) = increment {
+            self.send_frame(WindowUpdateFrame::for_connection(increment))
+        } else {
+            Box::new(futures::finished(self))
+        }
     }
 
     fn process_headers_frame(self, frame: HeadersFrame) -> HttpFuture<Self> {
