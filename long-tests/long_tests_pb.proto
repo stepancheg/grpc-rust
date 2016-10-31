@@ -8,6 +8,15 @@ message EchoResponse {
     string payload = 2;
 }
 
+message CharCountRequest {
+    string part = 1;
+}
+
+message CharCountResponse {
+    uint64 char_count = 1;
+}
+
 service LongTests {
     rpc echo (EchoRequest) returns (EchoResponse) {}
+    rpc char_count (stream CharCountRequest) returns (CharCountResponse) {}
 }

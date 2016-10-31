@@ -11,6 +11,8 @@ It is generated from these files:
 It has these top-level messages:
 	EchoRequest
 	EchoResponse
+	CharCountRequest
+	CharCountResponse
 */
 package long_tests_pb
 
@@ -52,9 +54,29 @@ func (m *EchoResponse) String() string            { return proto.CompactTextStri
 func (*EchoResponse) ProtoMessage()               {}
 func (*EchoResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{1} }
 
+type CharCountRequest struct {
+	Part string `protobuf:"bytes,1,opt,name=part" json:"part,omitempty"`
+}
+
+func (m *CharCountRequest) Reset()                    { *m = CharCountRequest{} }
+func (m *CharCountRequest) String() string            { return proto.CompactTextString(m) }
+func (*CharCountRequest) ProtoMessage()               {}
+func (*CharCountRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{2} }
+
+type CharCountResponse struct {
+	CharCount uint64 `protobuf:"varint,1,opt,name=char_count,json=charCount" json:"char_count,omitempty"`
+}
+
+func (m *CharCountResponse) Reset()                    { *m = CharCountResponse{} }
+func (m *CharCountResponse) String() string            { return proto.CompactTextString(m) }
+func (*CharCountResponse) ProtoMessage()               {}
+func (*CharCountResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{3} }
+
 func init() {
 	proto.RegisterType((*EchoRequest)(nil), "EchoRequest")
 	proto.RegisterType((*EchoResponse)(nil), "EchoResponse")
+	proto.RegisterType((*CharCountRequest)(nil), "CharCountRequest")
+	proto.RegisterType((*CharCountResponse)(nil), "CharCountResponse")
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -69,6 +91,7 @@ const _ = grpc.SupportPackageIsVersion3
 
 type LongTestsClient interface {
 	Echo(ctx context.Context, in *EchoRequest, opts ...grpc.CallOption) (*EchoResponse, error)
+	CharCount(ctx context.Context, opts ...grpc.CallOption) (LongTests_CharCountClient, error)
 }
 
 type longTestsClient struct {
@@ -88,10 +111,45 @@ func (c *longTestsClient) Echo(ctx context.Context, in *EchoRequest, opts ...grp
 	return out, nil
 }
 
+func (c *longTestsClient) CharCount(ctx context.Context, opts ...grpc.CallOption) (LongTests_CharCountClient, error) {
+	stream, err := grpc.NewClientStream(ctx, &_LongTests_serviceDesc.Streams[0], c.cc, "/LongTests/char_count", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &longTestsCharCountClient{stream}
+	return x, nil
+}
+
+type LongTests_CharCountClient interface {
+	Send(*CharCountRequest) error
+	CloseAndRecv() (*CharCountResponse, error)
+	grpc.ClientStream
+}
+
+type longTestsCharCountClient struct {
+	grpc.ClientStream
+}
+
+func (x *longTestsCharCountClient) Send(m *CharCountRequest) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *longTestsCharCountClient) CloseAndRecv() (*CharCountResponse, error) {
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	m := new(CharCountResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // Server API for LongTests service
 
 type LongTestsServer interface {
 	Echo(context.Context, *EchoRequest) (*EchoResponse, error)
+	CharCount(LongTests_CharCountServer) error
 }
 
 func RegisterLongTestsServer(s *grpc.Server, srv LongTestsServer) {
@@ -116,6 +174,32 @@ func _LongTests_Echo_Handler(srv interface{}, ctx context.Context, dec func(inte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _LongTests_CharCount_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(LongTestsServer).CharCount(&longTestsCharCountServer{stream})
+}
+
+type LongTests_CharCountServer interface {
+	SendAndClose(*CharCountResponse) error
+	Recv() (*CharCountRequest, error)
+	grpc.ServerStream
+}
+
+type longTestsCharCountServer struct {
+	grpc.ServerStream
+}
+
+func (x *longTestsCharCountServer) SendAndClose(m *CharCountResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *longTestsCharCountServer) Recv() (*CharCountRequest, error) {
+	m := new(CharCountRequest)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 var _LongTests_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "LongTests",
 	HandlerType: (*LongTestsServer)(nil),
@@ -125,21 +209,31 @@ var _LongTests_serviceDesc = grpc.ServiceDesc{
 			Handler:    _LongTests_Echo_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "char_count",
+			Handler:       _LongTests_CharCount_Handler,
+			ClientStreams: true,
+		},
+	},
 	Metadata: fileDescriptor0,
 }
 
 func init() { proto.RegisterFile("long_tests_pb.proto", fileDescriptor0) }
 
 var fileDescriptor0 = []byte{
-	// 134 bytes of a gzipped FileDescriptorProto
+	// 206 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0xe2, 0x12, 0xce, 0xc9, 0xcf, 0x4b,
 	0x8f, 0x2f, 0x49, 0x2d, 0x2e, 0x29, 0x8e, 0x2f, 0x48, 0xd2, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x57,
 	0x52, 0xe7, 0xe2, 0x76, 0x4d, 0xce, 0xc8, 0x0f, 0x4a, 0x2d, 0x2c, 0x4d, 0x2d, 0x2e, 0x11, 0x92,
 	0xe0, 0x62, 0x2f, 0x48, 0xac, 0xcc, 0xc9, 0x4f, 0x4c, 0x91, 0x60, 0x54, 0x60, 0xd4, 0xe0, 0x0c,
 	0x82, 0x71, 0x95, 0x34, 0xb8, 0x78, 0x20, 0x0a, 0x8b, 0x0b, 0xf2, 0xf3, 0x8a, 0x53, 0x91, 0x55,
-	0x32, 0xa1, 0xa8, 0x34, 0x32, 0xe2, 0xe2, 0xf4, 0xc9, 0xcf, 0x4b, 0x0f, 0x01, 0x59, 0x24, 0xa4,
-	0xca, 0xc5, 0x92, 0x9a, 0x9c, 0x91, 0x2f, 0xc4, 0xa3, 0x87, 0x64, 0x8d, 0x14, 0xaf, 0x1e, 0xb2,
-	0x59, 0x4a, 0x0c, 0x49, 0x6c, 0x60, 0xd7, 0x18, 0x03, 0x02, 0x00, 0x00, 0xff, 0xff, 0xe1, 0x68,
-	0x73, 0x5a, 0xa4, 0x00, 0x00, 0x00,
+	0x32, 0xa1, 0xaa, 0x54, 0xe3, 0x12, 0x70, 0xce, 0x48, 0x2c, 0x72, 0xce, 0x2f, 0xcd, 0x2b, 0x81,
+	0x99, 0x2b, 0xc4, 0xc5, 0x52, 0x90, 0x58, 0x54, 0x02, 0x35, 0x14, 0xcc, 0x56, 0x32, 0xe2, 0x12,
+	0x44, 0x52, 0x07, 0x35, 0x56, 0x96, 0x8b, 0x2b, 0x39, 0x23, 0xb1, 0x28, 0x3e, 0x19, 0x24, 0x0a,
+	0x56, 0xce, 0x12, 0xc4, 0x99, 0x0c, 0x53, 0x66, 0x94, 0xcd, 0xc5, 0xe9, 0x93, 0x9f, 0x97, 0x1e,
+	0x02, 0xf2, 0x84, 0x90, 0x2a, 0x17, 0x4b, 0x6a, 0x72, 0x46, 0xbe, 0x10, 0x8f, 0x1e, 0x92, 0x17,
+	0xa4, 0x78, 0xf5, 0x90, 0xdd, 0xa9, 0xc4, 0x20, 0x64, 0x8e, 0x6c, 0xa4, 0x90, 0xa0, 0x1e, 0xba,
+	0xe3, 0xa4, 0x84, 0xf4, 0x30, 0xdc, 0xa1, 0xc4, 0xa0, 0xc1, 0x98, 0xc4, 0x06, 0x0e, 0x22, 0x63,
+	0x40, 0x00, 0x00, 0x00, 0xff, 0xff, 0x7b, 0x92, 0x60, 0xcb, 0x39, 0x01, 0x00, 0x00,
 }

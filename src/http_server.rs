@@ -12,6 +12,7 @@ use solicit::http::HttpError;
 use solicit::http::Header;
 use solicit::http::StaticHeader;
 use solicit::http::INITIAL_CONNECTION_WINDOW_SIZE;
+use solicit::http::WindowSize;
 
 use futures;
 use futures::Future;
@@ -37,6 +38,8 @@ use http_common::*;
 struct GrpcHttpServerStream<F : HttpService> {
     state: StreamState,
     request_handler: Option<tokio_core::channel::Sender<ResultOrEof<HttpStreamPart, HttpError>>>,
+    out_window_size: WindowSize,
+    in_window_size: WindowSize,
     _marker: marker::PhantomData<F>,
 }
 
@@ -190,6 +193,8 @@ impl<F : HttpService> GrpcHttpServerSessionState<F> {
         let stream = GrpcHttpServerStream {
             state: StreamState::Open,
             request_handler: Some(req_tx),
+            in_window_size: WindowSize::new(INITIAL_CONNECTION_WINDOW_SIZE),
+            out_window_size: WindowSize::new(INITIAL_CONNECTION_WINDOW_SIZE),
             _marker: marker::PhantomData,
         };
         self.streams.insert(stream_id, stream);
@@ -245,13 +250,17 @@ impl<F : HttpService, I : Io + Send + 'static> HttpReadLoop for ServerReadLoop<F
     }
 
     fn process_data_frame(self, frame: DataFrame) -> HttpFuture<Self> {
-        let increment = self.inner.with(move |inner: &mut ServerInner<F>| {
+        let stream_id = frame.get_stream_id();
+
+        let (increment_conn, increment_stream) = self.inner.with(move |inner: &mut ServerInner<F>| {
             let stream = inner.session_state.get_stream_mut(frame.get_stream_id()).expect("stream not found");
 
-            inner.conn.decrease_in_window(frame.payload_len()).expect("failed to decrease in");
-            // TODO: decrease stream window
+            inner.conn.decrease_in_window(frame.payload_len())
+                .expect("failed to decrease conn win");
+            stream.in_window_size.try_decrease(frame.payload_len() as i32)
+                .expect("failed to decrease stream win");
 
-            let increment =
+            let increment_conn =
                 if inner.conn.in_window_size() < INITIAL_CONNECTION_WINDOW_SIZE / 2 {
                     let increment = INITIAL_CONNECTION_WINDOW_SIZE as u32;
                     inner.conn.in_window_size.try_increase(increment).expect("failed to increase");
@@ -261,17 +270,43 @@ impl<F : HttpService, I : Io + Send + 'static> HttpReadLoop for ServerReadLoop<F
                     None
                 };
 
+            let increment_stream =
+                if stream.in_window_size.size() < INITIAL_CONNECTION_WINDOW_SIZE / 2 {
+                    let increment = INITIAL_CONNECTION_WINDOW_SIZE as u32;
+                    stream.in_window_size.try_increase(increment).expect("failed to increase");
+
+                    Some(increment)
+                } else {
+                    None
+                };
+
             stream.new_data_chunk(&frame.data.as_ref(), frame.is_end_of_stream());
 
             // TODO: drop stream if closed on both ends
-            increment
+            (increment_conn, increment_stream)
         });
 
-        if let Some(increment) = increment {
-            self.send_frame(WindowUpdateFrame::for_connection(increment))
-        } else {
-            Box::new(futures::finished(self))
-        }
+        let future: HttpFuture<Self> = Box::new(futures::finished(self));
+
+        let future: HttpFuture<Self> =
+            if let Some(increment_conn) = increment_conn {
+                Box::new(future.and_then(move |s| {
+                    s.send_frame(WindowUpdateFrame::for_connection(increment_conn))
+                }))
+            } else {
+                future
+            };
+
+        let future: HttpFuture<Self> =
+            if let Some(increment_stream) = increment_stream {
+                Box::new(future.and_then(move |s| {
+                    s.send_frame(WindowUpdateFrame::for_stream(stream_id, increment_stream))
+                }))
+            } else {
+                future
+            };
+
+        future
     }
 
     fn process_headers_frame(self, frame: HeadersFrame) -> HttpFuture<Self> {

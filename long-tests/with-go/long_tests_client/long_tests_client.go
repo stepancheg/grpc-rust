@@ -49,6 +49,47 @@ func run_echo(c pb.LongTestsClient, cmd_args []string) {
     log.Printf("done")
 }
 
+func run_char_count(c pb.LongTestsClient, cmd_args []string) {
+    count := 0
+    if len(cmd_args) > 1 {
+        log.Fatalf("too many char_count params: %s", len(cmd_args));
+    } else if len(cmd_args) == 1 {
+        count_tmp, err := strconv.Atoi((cmd_args[0]));
+        if err != nil {
+            log.Fatalf("failed to parse int: %v", err);
+        }
+        count = count_tmp;
+    } else {
+        count = 10;
+    }
+
+    log.Printf("sending %d messages to count", count);
+
+    client, err := c.CharCount(context.Background());
+    if err != nil {
+        log.Fatalf("failed to start request: %v", err);
+    }
+
+    expected := uint64(0);
+    for i := 0; i < count; i += 1 {
+        part := "aabb";
+        client.Send(&pb.CharCountRequest{Part: part})
+        expected += uint64(len(part));
+    }
+
+    resp, err := client.CloseAndRecv();
+    if err != nil {
+        log.Fatalf("failed to get response: %v", err);
+    }
+
+    if expected != resp.CharCount {
+        log.Fatalf("expected: %s actual: %s", expected, resp.CharCount);
+    }
+
+    log.Printf("successfully got correct answer");
+}
+
+
 func main() {
     conn, err := grpc.Dial(address, grpc.WithInsecure())
    	if err != nil {
@@ -70,6 +111,9 @@ func main() {
     switch cmd {
     case "echo":
         run_echo(c, cmd_args)
+        return
+    case "char_count":
+        run_char_count(c, cmd_args)
         return
     default:
         log.Fatalf("unknown command: %s", cmd)

@@ -6,17 +6,40 @@ extern crate grpc;
 extern crate long_tests;
 extern crate futures;
 
+use futures::stream::Stream;
+use futures::Future;
+
 use long_tests::long_tests_pb::*;
 use long_tests::long_tests_pb_grpc::*;
+
+use grpc::futures_grpc::GrpcStreamSend;
+use grpc::futures_grpc::GrpcFutureSend;
+use grpc::error::GrpcError;
 
 struct LongTestsServerImpl {
 }
 
 impl LongTestsAsync for LongTestsServerImpl {
-    fn echo(&self, mut p: EchoRequest) -> ::grpc::futures_grpc::GrpcFutureSend<EchoResponse> {
+    fn echo(&self, mut p: EchoRequest)
+        -> GrpcFutureSend<EchoResponse>
+    {
         let mut resp = EchoResponse::new();
         resp.set_payload(p.take_payload());
         Box::new(futures::finished(resp))
+    }
+
+    fn char_count(&self, p: GrpcStreamSend<CharCountRequest>)
+        -> GrpcFutureSend<CharCountResponse>
+    {
+        let r = p
+            .map(|c| c.part.len() as u64)
+            .fold(0, |a, b| futures::finished::<_, GrpcError>(a + b))
+            .map(|s| {
+                let mut r = CharCountResponse::new();
+                r.char_count = s;
+                r
+            });
+        Box::new(r)
     }
 }
 
