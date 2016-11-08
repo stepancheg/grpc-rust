@@ -13,6 +13,7 @@ use solicit::http::StaticHeader;
 
 use futures;
 use futures::Future;
+use futures::stream;
 use futures::stream::Stream;
 use tokio_core;
 use tokio_core::reactor;
@@ -319,10 +320,10 @@ struct GrpcHttpServerHandlerFactory {
 
 
 fn stream_500(message: &str) -> HttpStreamStreamSend {
-    Box::new(stream_once(HttpStreamPart::last_headers(vec![
+    Box::new(stream::once(Ok(HttpStreamPart::last_headers(vec![
         Header::new(":status", "500"),
         Header::new(HEADER_GRPC_MESSAGE, message.to_owned()),
-    ])))
+    ]))))
 }
 
 impl HttpService for GrpcHttpServerHandlerFactory {
@@ -339,9 +340,9 @@ impl HttpService for GrpcHttpServerHandlerFactory {
         let grpc_frames = self.service_definition.handle_method(&path, Box::new(grpc_request));
 
         let http_parts = stream_concat3(
-            stream_once(HttpStreamPart::intermediate_headers(vec![
+            stream::once(Ok(HttpStreamPart::intermediate_headers(vec![
                 Header::new(":status", "200"),
-            ])),
+            ]))),
             grpc_frames
                 .map(|frame| HttpStreamPart::intermediate_data(write_grpc_frame_to_vec(&frame)))
                 .then(|result| {
@@ -354,9 +355,9 @@ impl HttpService for GrpcHttpServerHandlerFactory {
                             ]))
                     }
                 }),
-            stream_once(HttpStreamPart::last_headers(vec![
+            stream::once(Ok(HttpStreamPart::last_headers(vec![
                 Header::new(HEADER_GRPC_STATUS, "0"),
-            ])));
+            ]))));
 
 
         Box::new(http_parts)

@@ -1,7 +1,6 @@
 mod task_data;
 
 mod stream_single;
-mod stream_once;
 mod stream_repeat;
 mod stream_err;
 mod stream_merge2;
@@ -16,8 +15,6 @@ pub use self::task_data::TaskRcMut;
 pub use self::task_data::TaskRcMutex;
 
 pub use self::stream_single::stream_single;
-
-pub use self::stream_once::stream_once;
 
 pub use self::stream_repeat::stream_repeat;
 pub use self::stream_repeat::StreamRepeat;

@@ -140,7 +140,7 @@ mod test_with_openssl {
 
             let resp = client.start_request(
                 Vec::new(),
-                Box::new(stream_once((&b"abcd"[..]).to_owned())));
+                Box::new(stream::once(Ok((&b"abcd"[..]).to_owned()))));
 
             let request_future = resp.fold(Vec::new(), move |mut v, part| {
                 match part.content {

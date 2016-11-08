@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use futures;
 use futures::Future;
+use futures::stream;
 use futures::stream::Stream;
 
 use tokio_core;
@@ -141,13 +142,13 @@ impl GrpcClient {
     pub fn call_unary<Req : Send + 'static, Resp : Send + 'static>(&self, req: Req, method: Arc<MethodDescriptor<Req, Resp>>)
         -> GrpcFutureSend<Resp>
     {
-        Box::new(stream_single(self.call_impl(Box::new(stream_once(req)), method)))
+        Box::new(stream_single(self.call_impl(Box::new(stream::once(Ok(req))), method)))
     }
 
     pub fn call_server_streaming<Req : Send + 'static, Resp : Send + 'static>(&self, req: Req, method: Arc<MethodDescriptor<Req, Resp>>)
         -> GrpcStreamSend<Resp>
     {
-        self.call_impl(stream_once(req).boxed(), method)
+        self.call_impl(stream::once(Ok(req)).boxed(), method)
     }
 
     pub fn call_client_streaming<Req : Send + 'static, Resp : Send + 'static>(&self, req: GrpcStreamSend<Req>, method: Arc<MethodDescriptor<Req, Resp>>)
