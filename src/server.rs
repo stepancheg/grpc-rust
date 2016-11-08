@@ -131,7 +131,10 @@ impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerUnary<F>
 {
     fn handle(&self, req: GrpcStreamSend<Req>) -> GrpcStreamSend<Resp> {
         let f = self.f.clone();
-        Box::new(future_to_stream_once(stream_single(req).and_then(move |req| f(req))))
+        Box::new(
+            stream_single(req)
+                .and_then(move |req| f(req))
+                .into_stream())
     }
 }
 
@@ -141,7 +144,7 @@ impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerClientStreaming<F>
         F : Fn(GrpcStreamSend<Req>) -> GrpcFutureSend<Resp> + Send + Sync + 'static,
 {
     fn handle(&self, req: GrpcStreamSend<Req>) -> GrpcStreamSend<Resp> {
-        Box::new(future_to_stream_once((self.f)(req)))
+        Box::new(((self.f)(req)).into_stream())
     }
 }
 
@@ -208,7 +211,7 @@ impl<Req, Resp> MethodHandlerDispatch for MethodHandlerDispatchImpl<Req, Resp>
             }
             Err(e) => {
                 let message = any_to_string(e);
-                Box::new(future_to_stream_once(futures::failed(GrpcError::Panic(message))))
+                Box::new(futures::failed(GrpcError::Panic(message)).into_stream())
             }
         }
     }

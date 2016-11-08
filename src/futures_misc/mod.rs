@@ -1,7 +1,5 @@
 mod task_data;
 
-mod future_to_stream_once;
-
 mod stream_single;
 mod stream_once;
 mod stream_repeat;
@@ -26,9 +24,6 @@ pub use self::stream_repeat::StreamRepeat;
 
 pub use self::stream_err::stream_err;
 pub use self::stream_err::StreamErr;
-
-pub use self::future_to_stream_once::future_to_stream_once;
-pub use self::future_to_stream_once::FutureToStreamOnce;
 
 pub use self::stream_merge2::stream_merge2;
 pub use self::stream_merge2::StreamMerge2;
