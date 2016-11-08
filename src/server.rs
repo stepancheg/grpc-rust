@@ -154,8 +154,9 @@ impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerServerStreaming<F>
     fn handle(&self, req: GrpcStreamSend<Req>) -> GrpcStreamSend<Resp> {
         let f = self.f.clone();
         Box::new(
-            future_flatten_to_stream(
-                stream_single(req).map(move |req| f(req))))
+            stream_single(req)
+                .map(move |req| f(req))
+                .flatten_stream())
     }
 }
 

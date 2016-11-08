@@ -28,7 +28,7 @@ use test_misc::*;
 #[test]
 fn test() {
     let server = HttpServerOneConn::new_fn(0, |_headers, req| {
-        Box::new(future_flatten_to_stream(req
+        Box::new(req
             .fold(Vec::new(), |mut v, message| {
                 match message.content {
                     HttpStreamPartContent::Headers(..) => (),
@@ -46,7 +46,8 @@ fn test() {
                 ));
                 r.push(HttpStreamPart::last_data(v));
                 Ok(stream::iter(r.into_iter().map(Ok)))
-            })))
+            })
+            .flatten_stream())
     });
 
     let port = server.port();

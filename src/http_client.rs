@@ -457,6 +457,6 @@ impl HttpClientConnectionAsync {
 
         let rx = rx.map_err(|_| HttpError::from(io::Error::new(io::ErrorKind::Other, "oneshot canceled")));
 
-        Box::new(future_flatten_to_stream(rx))
+        Box::new(rx.flatten_stream())
     }
 }

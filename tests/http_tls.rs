@@ -107,7 +107,7 @@ mod test_with_openssl {
     fn test() {
         let server_cx = server_cx().unwrap();
         let server = HttpServerOneConn::new_tls_fn(0, server_cx, |_headers, req| {
-            Box::new(future_flatten_to_stream(req
+            Box::new(req
                 .fold(Vec::new(), |mut v, message| {
                     match message.content {
                         HttpStreamPartContent::Headers(..) => (),
@@ -125,7 +125,8 @@ mod test_with_openssl {
                     ));
                     r.push(HttpStreamPart::last_data(v));
                     Ok(stream::iter(r.into_iter().map(Ok)))
-                })))
+                })
+                .flatten_stream())
         });
 
         let port = server.port();

@@ -1,6 +1,5 @@
 mod task_data;
 
-mod future_flatten_to_stream;
 mod future_to_stream_once;
 
 mod stream_single;
@@ -17,9 +16,6 @@ pub mod stream_concat3;
 
 pub use self::task_data::TaskRcMut;
 pub use self::task_data::TaskRcMutex;
-
-pub use self::future_flatten_to_stream::future_flatten_to_stream;
-pub use self::future_flatten_to_stream::FutureFlattenToStream;
 
 pub use self::stream_single::stream_single;
 
