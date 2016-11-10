@@ -1,5 +1,6 @@
 syntax = "proto3";
 
+
 message EchoRequest {
     string payload = 1;
 }
@@ -16,7 +17,19 @@ message CharCountResponse {
     uint64 char_count = 1;
 }
 
+message RandomStringsRequest {
+    uint64 count = 1;
+}
+
+message RandomStringsResponse {
+    string s = 1;
+}
+
 service LongTests {
-    rpc echo (EchoRequest) returns (EchoResponse) {}
-    rpc char_count (stream CharCountRequest) returns (CharCountResponse) {}
+    // simple RPC
+    rpc echo (EchoRequest) returns (EchoResponse);
+    // client streaming
+    rpc char_count (stream CharCountRequest) returns (CharCountResponse);
+    // server streaming
+    rpc random_strings (RandomStringsRequest) returns (stream RandomStringsResponse);
 }

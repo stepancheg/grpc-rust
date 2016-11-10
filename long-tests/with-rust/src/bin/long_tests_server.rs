@@ -1,4 +1,5 @@
 use std::thread;
+use std::iter;
 
 extern crate env_logger;
 
@@ -7,6 +8,7 @@ extern crate long_tests;
 extern crate futures;
 
 use futures::stream::Stream;
+use futures::stream;
 use futures::Future;
 
 use long_tests::long_tests_pb::*;
@@ -40,6 +42,20 @@ impl LongTestsAsync for LongTestsServerImpl {
                 r
             });
         Box::new(r)
+    }
+
+    fn random_strings(&self, p: RandomStringsRequest)
+        -> GrpcStreamSend<RandomStringsResponse>
+    {
+        let iter = iter::repeat(())
+            .map(|_| {
+                let s = "aabb".to_owned();
+                let mut resp = RandomStringsResponse::new();
+                resp.set_s(s);
+                Ok(resp)
+            })
+            .take(p.count as usize);
+        Box::new(stream::iter(iter))
     }
 }
 
