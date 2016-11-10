@@ -20,8 +20,8 @@ impl<M : Message + MessageStatic> Marshaller<M> for MarshallerProtobuf {
         // TODO: make protobuf simple
         let mut is = CodedInputStream::from_bytes(buf);
         let mut r: M = M::new();
-        try!(r.merge_from(&mut is));
-        try!(r.check_initialized());
+        r.merge_from(&mut is)?;
+        r.check_initialized()?;
         Ok(r)
     }
 }

@@ -61,7 +61,7 @@ impl GrpcClient {
 
         // TODO: sync
         // TODO: try connect to all addrs
-        let socket_addr = try!((host, port).to_socket_addrs()).next().unwrap();
+        let socket_addr = (host, port).to_socket_addrs()?.next().unwrap();
 
         // We need some data back from event loop.
         // This channel is used to exchange that data
@@ -73,8 +73,8 @@ impl GrpcClient {
         });
 
         // Get back call channel and shutdown channel.
-        let loop_to_client = try!(get_from_loop_rx.recv()
-            .map_err(|_| GrpcError::Other("get response from loop")));
+        let loop_to_client = get_from_loop_rx.recv()
+            .map_err(|_| GrpcError::Other("get response from loop"))?;
 
         Ok(GrpcClient {
             loop_to_client: loop_to_client,
@@ -121,7 +121,7 @@ impl GrpcClient {
             let method = method.clone();
             req
                 .and_then(move |req| {
-                    let grpc_frame = try!(method.req_marshaller.write(&req));
+                    let grpc_frame = method.req_marshaller.write(&req)?;
                     Ok(write_grpc_frame_to_vec(&grpc_frame))
                 })
                 .map_err(|e| HttpError::Other(Box::new(e)))

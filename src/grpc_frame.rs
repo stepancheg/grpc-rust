@@ -57,7 +57,7 @@ pub fn parse_grpc_frames_completely(stream: &[u8]) -> GrpcResult<Vec<&[u8]>> {
     let mut r = Vec::new();
     let mut pos = 0;
     while pos < stream.len() {
-        let frame_opt = try!(parse_grpc_frame(&stream[pos..]));
+        let frame_opt = parse_grpc_frame(&stream[pos..])?;
         match frame_opt {
             None => return Err(GrpcError::Other("not complete frames")),
             Some((frame, len)) => {
@@ -71,7 +71,7 @@ pub fn parse_grpc_frames_completely(stream: &[u8]) -> GrpcResult<Vec<&[u8]>> {
 
 #[allow(dead_code)]
 pub fn parse_grpc_frame_completely(stream: &[u8]) -> GrpcResult<&[u8]> {
-    let frames = try!(parse_grpc_frames_completely(stream));
+    let frames = parse_grpc_frames_completely(stream)?;
     if frames.len() == 1 {
         Ok(frames[0])
     } else {
@@ -142,7 +142,7 @@ impl Stream for GrpcFrameFromHttpFramesStreamRequest {
                 return error.poll();
             }
 
-            if let Some((frame, len)) = try!(parse_grpc_frame(&self.buf)).map(|(frame, len)| (frame.to_owned(), len)) {
+            if let Some((frame, len)) = parse_grpc_frame(&self.buf)?.map(|(frame, len)| (frame.to_owned(), len)) {
                 self.buf.drain(..len);
                 return Ok(Async::Ready(Some(frame)));
             }
@@ -205,7 +205,7 @@ impl Stream for GrpcFrameFromHttpFramesStreamResponse {
                 self.seen_headers = true;
             }
 
-            if let Some((frame, len)) = try!(parse_grpc_frame(&self.buf)).map(|(frame, len)| (frame.to_owned(), len)) {
+            if let Some((frame, len)) = parse_grpc_frame(&self.buf)?.map(|(frame, len)| (frame.to_owned(), len)) {
                 self.buf.drain(..len);
                 return Ok(Async::Ready(Some(frame)));
             }

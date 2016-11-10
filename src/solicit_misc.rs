@@ -64,7 +64,7 @@ impl SendFrame for VecSendFrame {
         let pos = self.0.len();
         let mut cursor = io::Cursor::new(mem::replace(&mut self.0, Vec::new()));
         cursor.set_position(pos as u64);
-        try!(frame.serialize_into(&mut cursor));
+        frame.serialize_into(&mut cursor)?;
         self.0 = cursor.into_inner();
 
         Ok(())
@@ -93,7 +93,7 @@ pub trait HttpConnectionEx {
              -> HttpResult<Vec<u8>>
     {
         let mut send = VecSendFrame(Vec::new());
-        try!(self.send_headers(&mut send, stream_id, headers, end_stream));
+        self.send_headers(&mut send, stream_id, headers, end_stream)?;
         Ok(send.0)
     }
 
@@ -135,7 +135,7 @@ pub trait HttpConnectionEx {
                     EndStream::No
                 };
 
-            try!(self.send_data_frame(send, stream_id, &data[pos..end], end_stream));
+            self.send_data_frame(send, stream_id, &data[pos..end], end_stream)?;
 
             pos = end;
         }
@@ -151,7 +151,7 @@ pub trait HttpConnectionEx {
             -> HttpResult<Vec<u8>>
     {
         let mut send = VecSendFrame(Vec::new());
-        try!(self.send_data_frames(&mut send, stream_id, data, end_stream));
+        self.send_data_frames(&mut send, stream_id, data, end_stream)?;
         Ok(send.0)
     }
 
@@ -166,7 +166,7 @@ pub trait HttpConnectionEx {
 
     fn send_end_of_stream_to_vec(&mut self, stream_id: StreamId) -> HttpResult<Vec<u8>> {
         let mut send = VecSendFrame(Vec::new());
-        try!(self.send_end_of_stream(&mut send, stream_id));
+        self.send_end_of_stream(&mut send, stream_id)?;
         Ok(send.0)
     }
 
@@ -191,7 +191,7 @@ pub trait HttpConnectionEx {
             -> HttpResult<Vec<u8>>
     {
         let mut send = VecSendFrame(Vec::new());
-        try!(self.send_part(&mut send, stream_id, part));
+        self.send_part(&mut send, stream_id, part)?;
         Ok(send.0)
     }
 }
@@ -293,7 +293,7 @@ impl<'a> HttpFrameClassified<'a> {
     }
 
     pub fn from_raw(raw_frame: &'a RawFrame) -> HttpResult<HttpFrameClassified<'a>> {
-        Ok(HttpFrameClassified::from(try!(HttpFrame::from_raw(raw_frame))))
+        Ok(HttpFrameClassified::from(HttpFrame::from_raw(raw_frame)?))
     }
 }
 
