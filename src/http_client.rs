@@ -408,14 +408,20 @@ impl HttpClientConnectionAsync {
     }
 
     pub fn new_plain(lh: reactor::Handle, addr: &SocketAddr) -> (Self, HttpFuture<()>) {
+        let addr = addr.clone();
+
         let connect = TcpStream::connect(&addr, &lh)
+            .map(move |c| { info!("connected to {}", addr); c })
             .map_err(|e| e.into());
 
         HttpClientConnectionAsync::connected(lh, Box::new(connect))
     }
 
     pub fn new_tls(lh: reactor::Handle, addr: &SocketAddr) -> (Self, HttpFuture<()>) {
+        let addr = addr.clone();
+
         let connect = TcpStream::connect(&addr, &lh)
+            .map(move |c| { info!("connected to {}", addr); c })
             .map_err(|e| e.into());
 
         let tls_conn = connect.and_then(|conn| {
