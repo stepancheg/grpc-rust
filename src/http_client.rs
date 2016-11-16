@@ -167,6 +167,11 @@ impl HttpReadLoopInner for ClientInner {
             .expect("read to write");
     }
 
+    fn out_window_increased(&mut self, stream_id: Option<StreamId>) {
+        self.to_write_tx.send(ClientToWriteMessage::OutWindowIncreased(stream_id))
+            .expect("read to write");
+    }
+
     fn process_headers_frame(&mut self, frame: HeadersFrame) {
         let headers = self.session_state.decoder
                                .decode(&frame.header_fragment())
@@ -226,6 +231,7 @@ enum ClientToWriteMessage {
     BodyChunk(BodyChunkMessage),
     End(EndRequestMessage),
     FromRead(ClientReadToWriteMessage),
+    OutWindowIncreased(Option<StreamId>),
 }
 
 struct ClientWriteLoop<I : Io + Send + 'static> {
@@ -314,6 +320,7 @@ impl<I : Io + Send + 'static> ClientWriteLoop<I> {
             ClientToWriteMessage::BodyChunk(body_chunk) => self.process_body_chunk(body_chunk),
             ClientToWriteMessage::End(end) => self.process_end(end),
             ClientToWriteMessage::FromRead(from_read) => self.process_from_read(from_read),
+            ClientToWriteMessage::OutWindowIncreased(_stream_id) => { /* TODO */ Box::new(futures::finished(self)) },
         }
     }
 

@@ -245,6 +245,11 @@ impl<F : HttpService> HttpReadLoopInner for ServerInner<F> {
             .expect("read to write");
     }
 
+    fn out_window_increased(&mut self, stream_id: Option<StreamId>) {
+        self.session_state.to_write_tx.send(ServerToWriteMessage::OutWindowIncreased(stream_id))
+            .expect("read to write");
+    }
+
     fn process_headers_frame(&mut self, frame: HeadersFrame) {
         let headers = self.conn.decoder
                                .decode(&frame.header_fragment())
@@ -271,6 +276,7 @@ enum ServerToWriteMessage<F : HttpService> {
     FromRead(ServerReadToWriteMessage),
     ResponsePart(StreamId, HttpStreamPart),
     ResponseStreamEnd(StreamId),
+    OutWindowIncreased(Option<StreamId>),
 }
 
 struct ServerWriteLoop<F, I>
@@ -360,6 +366,7 @@ impl<F : HttpService, I : Io> ServerWriteLoop<F, I> {
             ServerToWriteMessage::FromRead(from_read) => self.process_from_read(from_read),
             ServerToWriteMessage::ResponsePart(stream_id, response) => self.process_response_part(stream_id, response),
             ServerToWriteMessage::ResponseStreamEnd(stream_id) => self.process_response_end(stream_id),
+            ServerToWriteMessage::OutWindowIncreased(_stream_id) => { /* TODO */ Box::new(futures::finished(self)) },
             ServerToWriteMessage::_Dummy(..) => panic!(),
         }
     }

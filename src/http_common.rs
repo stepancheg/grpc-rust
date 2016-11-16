@@ -105,23 +105,31 @@ pub trait HttpReadLoopInner : 'static {
 
     /// Send a frame back to the network
     fn send_frame<R : FrameIR>(&mut self, frame: R);
-    fn process_headers_frame(&mut self, frame: HeadersFrame);
+    fn out_window_increased(&mut self, stream_id: Option<StreamId>);
 
-    fn process_window_update_frame(&mut self, _frame: WindowUpdateFrame) {
-        // TODO
-    }
+    fn process_headers_frame(&mut self, frame: HeadersFrame);
 
     fn process_settings_global(&mut self, _frame: SettingsFrame) {
         // TODO: apply settings
         // TODO: send ack
     }
 
-    fn process_conn_window_update(&mut self, _frame: WindowUpdateFrame) {
-        // TODO
+    fn process_stream_window_update_frame(&mut self, frame: WindowUpdateFrame) {
+        {
+            let stream = self.get_stream_mut(frame.get_stream_id()).expect("stream not found");
+            stream.common_mut().out_window_size.try_increase(frame.increment())
+                .expect("failed to increment stream window");
+        }
+        self.out_window_increased(Some(frame.get_stream_id()));
+    }
+
+    fn process_conn_window_update(&mut self, frame: WindowUpdateFrame) {
+        self.conn().out_window_size.try_increase(frame.increment())
+            .expect("failed to increment conn window");
+        self.out_window_increased(None);
     }
 
     fn process_rst_stream_frame(&mut self, _frame: RstStreamFrame) {
-        // TODO
     }
 
     fn process_data_frame(&mut self, frame: DataFrame) {
@@ -201,7 +209,7 @@ pub trait HttpReadLoopInner : 'static {
             HttpFrameStream::Data(data) => self.process_data_frame(data),
             HttpFrameStream::Headers(headers) => self.process_headers_frame(headers),
             HttpFrameStream::RstStream(rst) => self.process_rst_stream_frame(rst),
-            HttpFrameStream::WindowUpdate(window_update) => self.process_window_update_frame(window_update),
+            HttpFrameStream::WindowUpdate(window_update) => self.process_stream_window_update_frame(window_update),
         };
         if end_of_stream {
             self.close_remote(stream_id);
