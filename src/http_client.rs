@@ -21,7 +21,6 @@ use tokio_core;
 use tokio_core::net::TcpStream;
 use tokio_core::io as tokio_io;
 use tokio_core::io::Io;
-use tokio_core::io::ReadHalf;
 use tokio_core::io::WriteHalf;
 use tokio_core::reactor;
 
@@ -36,8 +35,18 @@ use http_common::*;
 
 
 struct GrpcHttpClientStream {
-    state: StreamState,
+    common: GrpcHttpStreamCommon,
     response_handler: Option<tokio_core::channel::Sender<ResultOrEof<HttpStreamPart, HttpError>>>,
+}
+
+impl GrpcHttpStream for GrpcHttpClientStream {
+    fn common(&self) -> &GrpcHttpStreamCommon {
+        &self.common
+    }
+
+    fn common_mut(&mut self) -> &mut GrpcHttpStreamCommon {
+        &mut self.common
+    }
 }
 
 impl GrpcHttpClientStream {
@@ -84,11 +93,11 @@ impl GrpcHttpClientStream {
     }
 
     fn set_state(&mut self, state: StreamState) {
-        self.state = state;
+        self.common.state = state;
     }
 
     fn state(&self) -> StreamState {
-        self.state
+        self.common.state
     }
 }
 
@@ -124,6 +133,94 @@ struct ClientInner {
     conn: HttpConnection,
     to_write_tx: tokio_core::channel::Sender<ClientToWriteMessage>,
     session_state: GrpcHttpClientSessionState,
+}
+
+impl HttpReadLoopInner for ClientInner {
+    fn send_frame<R: FrameIR>(&mut self, frame: R) {
+        let mut send_buf = VecSendFrame(Vec::new());
+        send_buf.send_frame(frame).unwrap();
+        self.to_write_tx.send(ClientToWriteMessage::FromRead(ClientReadToWriteMessage { buf: send_buf.0 }))
+            .expect("read to write");
+    }
+
+    fn process_headers_frame(&mut self, frame: HeadersFrame) {
+        let headers = self.session_state.decoder
+                               .decode(&frame.header_fragment())
+                               .map_err(HttpError::CompressionError).unwrap();
+        let headers: Vec<StaticHeader> = headers.into_iter().map(|h| h.into()).collect();
+
+        let mut stream: &mut GrpcHttpClientStream = match self.session_state.get_stream_mut(frame.get_stream_id()) {
+            None => {
+                // TODO(mlalic): This means that the server's header is not associated to any
+                //               request made by the client nor any server-initiated stream (pushed)
+                return;
+            }
+            Some(stream) => stream,
+        };
+        // TODO: hack
+        if headers.len() != 0 {
+
+            if let Some(ref mut response_handler) = stream.response_handler {
+                response_handler.send(ResultOrEof::Item(HttpStreamPart {
+                    content: HttpStreamPartContent::Headers(headers),
+                    last: frame.is_end_of_stream(),
+                })).unwrap();
+            }
+        }
+
+        if frame.is_end_of_stream() {
+            stream.close_remote();
+            // TODO: GC streams
+        }
+    }
+
+    fn process_data_frame(&mut self, frame: DataFrame) {
+        let mut stream: &mut GrpcHttpClientStream = match self.session_state.get_stream_mut(frame.get_stream_id()) {
+            None => {
+                // TODO(mlalic): This can currently indicate two things:
+                //                 1) the stream was idle => PROTOCOL_ERROR
+                //                 2) the stream was closed => STREAM_CLOSED (stream error)
+                return;
+            }
+            Some(stream) => stream,
+        };
+
+        self.conn.decrease_in_window(frame.payload_len())
+            .expect("failed to decrease conn win");
+        stream.common.in_window_size.try_decrease(frame.payload_len() as i32)
+            .expect("failed to decrease stream win");
+
+        if let Some(ref mut response_handler) = stream.response_handler {
+            response_handler.send(ResultOrEof::Item(HttpStreamPart {
+                content: HttpStreamPartContent::Data(frame.data.clone().into_owned()),
+                last: frame.is_end_of_stream(),
+            })).unwrap();
+        }
+
+        if frame.is_end_of_stream() {
+            stream.close_remote();
+            // TODO: GC streams
+        }
+    }
+
+    fn process_window_update_frame(&mut self, _frame: WindowUpdateFrame) {
+        // TODO
+    }
+
+    fn process_settings_global(&mut self, _frame: SettingsFrame) {
+        // TODO: apply settings
+        // TODO: send ack
+    }
+
+    fn process_conn_window_update(&mut self, _frame: WindowUpdateFrame) {
+        // TODO
+    }
+
+    fn process_rst_stream_frame(&mut self, frame: RstStreamFrame) {
+        // TODO: check actually removed
+        self.session_state.remove_stream(frame.get_stream_id());
+    }
+
 }
 
 pub struct HttpClientConnectionAsync {
@@ -182,7 +279,7 @@ impl<I : Io + Send + 'static> ClientWriteLoop<I> {
         let (buf, stream_id) = self.inner.with(move |inner: &mut ClientInner| {
 
             let stream = GrpcHttpClientStream {
-                state: StreamState::Open,
+                common: GrpcHttpStreamCommon::new(),
                 response_handler: Some(response_handler),
             };
             let stream_id = inner.session_state.insert_stream(stream);
@@ -258,117 +355,7 @@ impl<I : Io + Send + 'static> ClientWriteLoop<I> {
     }
 }
 
-struct ClientReadLoop<I : Io + Send + 'static> {
-    read: ReadHalf<I>,
-    inner: TaskRcMut<ClientInner>,
-}
-
-impl<I : Io + Send + 'static> HttpReadLoop for ClientReadLoop<I> {
-    fn recv_raw_frame(self) -> HttpFuture<(Self, RawFrame<'static>)> {
-        let ClientReadLoop { read, inner } = self;
-        Box::new(recv_raw_frame(read)
-            .map(|(read, frame)| (ClientReadLoop { read: read, inner: inner}, frame))
-            .map_err(HttpError::from))
-    }
-
-
-    fn process_data_frame(self, frame: DataFrame) -> HttpFuture<Self> {
-        self.inner.with(|inner: &mut ClientInner| {
-            let mut stream: &mut GrpcHttpClientStream = match inner.session_state.get_stream_mut(frame.get_stream_id()) {
-                None => {
-                    // TODO(mlalic): This can currently indicate two things:
-                    //                 1) the stream was idle => PROTOCOL_ERROR
-                    //                 2) the stream was closed => STREAM_CLOSED (stream error)
-                    return;
-                }
-                Some(stream) => stream,
-            };
-
-            if let Some(ref mut response_handler) = stream.response_handler {
-                response_handler.send(ResultOrEof::Item(HttpStreamPart {
-                    content: HttpStreamPartContent::Data(frame.data.clone().into_owned()),
-                    last: frame.is_end_of_stream(),
-                })).unwrap();
-            }
-
-            if frame.is_end_of_stream() {
-                stream.close_remote();
-                // TODO: GC streams
-            }
-        });
-        Box::new(futures::finished(self))
-    }
-
-    fn process_headers_frame(self, frame: HeadersFrame) -> HttpFuture<Self> {
-        self.inner.with(|inner: &mut ClientInner| {
-            let headers = inner.session_state.decoder
-                                   .decode(&frame.header_fragment())
-                                   .map_err(HttpError::CompressionError).unwrap();
-            let headers: Vec<StaticHeader> = headers.into_iter().map(|h| h.into()).collect();
-
-            let mut stream: &mut GrpcHttpClientStream = match inner.session_state.get_stream_mut(frame.get_stream_id()) {
-                None => {
-                    // TODO(mlalic): This means that the server's header is not associated to any
-                    //               request made by the client nor any server-initiated stream (pushed)
-                    return;
-                }
-                Some(stream) => stream,
-            };
-            // TODO: hack
-            if headers.len() != 0 {
-
-                if let Some(ref mut response_handler) = stream.response_handler {
-                    response_handler.send(ResultOrEof::Item(HttpStreamPart {
-                        content: HttpStreamPartContent::Headers(headers),
-                        last: frame.is_end_of_stream(),
-                    })).unwrap();
-                }
-            }
-
-            if frame.is_end_of_stream() {
-                stream.close_remote();
-                // TODO: GC streams
-            }
-        });
-        Box::new(futures::finished(self))
-    }
-
-    fn process_rst_stream_frame(self, frame: RstStreamFrame) -> HttpFuture<Self> {
-        self.inner.with(move |inner: &mut ClientInner| {
-            // TODO: check actually removed
-            inner.session_state.remove_stream(frame.get_stream_id());
-        });
-
-        Box::new(futures::finished(self))
-    }
-
-    fn process_window_update_frame(self, _frame: WindowUpdateFrame) -> HttpFuture<Self> {
-        // TODO
-        Box::new(futures::finished(self))
-    }
-
-    fn process_settings_global(self, _frame: SettingsFrame) -> HttpFuture<Self> {
-        // TODO: apply settings
-        // TODO: send ack
-        Box::new(futures::finished(self))
-    }
-
-    fn send_frame<R : FrameIR>(self, frame: R) -> HttpFuture<Self> {
-        self.inner.with(|inner: &mut ClientInner| {
-            let mut send_buf = VecSendFrame(Vec::new());
-            send_buf.send_frame(frame).unwrap();
-            inner.to_write_tx.send(ClientToWriteMessage::FromRead(ClientReadToWriteMessage { buf: send_buf.0 }))
-                .expect("read to write");
-        });
-
-        Box::new(futures::finished(self))
-    }
-
-    fn process_conn_window_update(self, _frame: WindowUpdateFrame) -> HttpFuture<Self> {
-        // TODO
-        Box::new(futures::finished(self))
-    }
-}
+type ClientReadLoop<I> = HttpReadLoopData<I, ClientInner>;
 
 impl HttpClientConnectionAsync {
     fn connected<I : Io + Send + 'static>(lh: reactor::Handle, connect: HttpFutureSend<I>) -> (Self, HttpFuture<()>) {

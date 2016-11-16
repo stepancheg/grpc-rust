@@ -12,7 +12,6 @@ use solicit::http::HttpError;
 use solicit::http::Header;
 use solicit::http::StaticHeader;
 use solicit::http::INITIAL_CONNECTION_WINDOW_SIZE;
-use solicit::http::WindowSize;
 
 use futures;
 use futures::Future;
@@ -21,7 +20,6 @@ use futures::stream::Stream;
 use tokio_core;
 use tokio_core::io as tokio_io;
 use tokio_core::io::Io;
-use tokio_core::io::ReadHalf;
 use tokio_core::io::WriteHalf;
 use tokio_core::net::TcpStream;
 use tokio_core::reactor;
@@ -36,11 +34,19 @@ use http_common::*;
 
 
 struct GrpcHttpServerStream<F : HttpService> {
-    state: StreamState,
+    common: GrpcHttpStreamCommon,
     request_handler: Option<tokio_core::channel::Sender<ResultOrEof<HttpStreamPart, HttpError>>>,
-    out_window_size: WindowSize,
-    in_window_size: WindowSize,
     _marker: marker::PhantomData<F>,
+}
+
+impl<F : HttpService> GrpcHttpStream for GrpcHttpServerStream<F> {
+    fn common(&self) -> &GrpcHttpStreamCommon {
+        &self.common
+    }
+
+    fn common_mut(&mut self) -> &mut GrpcHttpStreamCommon {
+        &mut self.common
+    }
 }
 
 impl<F : HttpService> GrpcHttpServerStream<F> {
@@ -106,7 +112,7 @@ impl<F : HttpService> GrpcHttpServerStream<F> {
     }
 
     fn set_state(&mut self, state: StreamState) {
-        self.state = state;
+        self.common.state = state;
         if self.is_closed_remote() {
             if let Some(sender) = self.request_handler.take() {
                 // ignore error
@@ -116,7 +122,7 @@ impl<F : HttpService> GrpcHttpServerStream<F> {
     }
 
     fn state(&self) -> StreamState {
-        self.state
+        self.common.state
     }
 
 }
@@ -191,10 +197,8 @@ impl<F : HttpService> GrpcHttpServerSessionState<F> {
 
         // New stream initiated by the client
         let stream = GrpcHttpServerStream {
-            state: StreamState::Open,
+            common: GrpcHttpStreamCommon::new(),
             request_handler: Some(req_tx),
-            in_window_size: WindowSize::new(INITIAL_CONNECTION_WINDOW_SIZE),
-            out_window_size: WindowSize::new(INITIAL_CONNECTION_WINDOW_SIZE),
             _marker: marker::PhantomData,
         };
         self.streams.insert(stream_id, stream);
@@ -220,14 +224,98 @@ struct ServerInner<F : HttpService> {
     session_state: GrpcHttpServerSessionState<F>,
 }
 
-struct ServerReadLoop<F, I>
-    where
-        F : HttpService,
-        I : Io + Send + 'static,
-{
-    read: ReadHalf<I>,
-    inner: TaskRcMut<ServerInner<F>>,
+impl<F : HttpService> HttpReadLoopInner for ServerInner<F> {
+    fn send_frame<R : FrameIR>(&mut self, frame: R) {
+        let mut send_buf = VecSendFrame(Vec::new());
+        send_buf.send_frame(frame).unwrap();
+        self.session_state.to_write_tx.send(ServerToWriteMessage::FromRead(ServerReadToWriteMessage { buf: send_buf.0 }))
+            .expect("read to write");
+    }
+
+    fn process_headers_frame(&mut self, frame: HeadersFrame) {
+        let headers = self.conn.decoder
+                               .decode(&frame.header_fragment())
+                               .map_err(HttpError::CompressionError).unwrap();
+        let headers = headers.into_iter().map(|h| h.into()).collect();
+
+        let _stream = self.session_state
+            .get_or_create_stream(frame.get_stream_id(), headers, frame.is_end_of_stream());
+
+        // TODO: drop stream if closed on both ends
+    }
+
+    fn process_data_frame(&mut self, frame: DataFrame) {
+        let stream_id = frame.get_stream_id();
+
+        let (increment_conn, increment_stream) = {
+            let stream = self.session_state.get_stream_mut(frame.get_stream_id()).expect("stream not found");
+
+            self.conn.decrease_in_window(frame.payload_len())
+                .expect("failed to decrease conn win");
+            stream.common.in_window_size.try_decrease(frame.payload_len() as i32)
+                .expect("failed to decrease stream win");
+
+            let increment_conn =
+                if self.conn.in_window_size() < INITIAL_CONNECTION_WINDOW_SIZE / 2 {
+                    let increment = INITIAL_CONNECTION_WINDOW_SIZE as u32;
+                    self.conn.in_window_size.try_increase(increment).expect("failed to increase");
+
+                    Some(increment)
+                } else {
+                    None
+                };
+
+            let increment_stream =
+                if stream.common.in_window_size.size() < INITIAL_CONNECTION_WINDOW_SIZE / 2 {
+                    let increment = INITIAL_CONNECTION_WINDOW_SIZE as u32;
+                    stream.common.in_window_size.try_increase(increment).expect("failed to increase");
+
+                    Some(increment)
+                } else {
+                    None
+                };
+
+            stream.new_data_chunk(&frame.data.as_ref(), frame.is_end_of_stream());
+
+            // TODO: drop stream if closed on both ends
+
+            (increment_conn, increment_stream)
+        };
+
+        if let Some(increment_conn) = increment_conn {
+            self.send_frame(WindowUpdateFrame::for_connection(increment_conn));
+        }
+
+        if let Some(increment_stream) = increment_stream {
+            self.send_frame(WindowUpdateFrame::for_stream(stream_id, increment_stream));
+        }
+    }
+
+    fn process_window_update_frame(&mut self, _frame: WindowUpdateFrame) {
+        // TODO
+    }
+
+    fn process_settings_global(&mut self, _frame: SettingsFrame) {
+        // TODO: apply settings
+        // TODO: send ack
+    }
+
+    fn process_conn_window_update(&mut self, _frame: WindowUpdateFrame) {
+        // TODO
+    }
+
+    fn close_remote(&mut self, stream_id: StreamId) {
+        debug!("close remote: {}", stream_id);
+
+        {
+            let mut stream = self.session_state.get_stream_mut(stream_id).expect("stream not found");
+            stream.close_remote();
+        };
+        self.session_state.remove_stream_if_closed(stream_id);
+    }
 }
+
+type ServerReadLoop<F, I> = HttpReadLoopData<I, ServerInner<F>>;
 
 
 struct ServerReadToWriteMessage {
@@ -239,133 +327,6 @@ enum ServerToWriteMessage<F : HttpService> {
     FromRead(ServerReadToWriteMessage),
     ResponsePart(StreamId, HttpStreamPart),
     ResponseStreamEnd(StreamId),
-}
-
-impl<F : HttpService, I : Io + Send + 'static> HttpReadLoop for ServerReadLoop<F, I> {
-    fn recv_raw_frame(self) -> HttpFuture<(Self, RawFrame<'static>)> {
-        let ServerReadLoop { read, inner } = self;
-        Box::new(recv_raw_frame(read)
-            .map(|(read, frame)| (ServerReadLoop { read: read, inner: inner}, frame))
-            .map_err(HttpError::from))
-    }
-
-    fn process_data_frame(self, frame: DataFrame) -> HttpFuture<Self> {
-        let stream_id = frame.get_stream_id();
-
-        let (increment_conn, increment_stream) = self.inner.with(move |inner: &mut ServerInner<F>| {
-            let stream = inner.session_state.get_stream_mut(frame.get_stream_id()).expect("stream not found");
-
-            inner.conn.decrease_in_window(frame.payload_len())
-                .expect("failed to decrease conn win");
-            stream.in_window_size.try_decrease(frame.payload_len() as i32)
-                .expect("failed to decrease stream win");
-
-            let increment_conn =
-                if inner.conn.in_window_size() < INITIAL_CONNECTION_WINDOW_SIZE / 2 {
-                    let increment = INITIAL_CONNECTION_WINDOW_SIZE as u32;
-                    inner.conn.in_window_size.try_increase(increment).expect("failed to increase");
-
-                    Some(increment)
-                } else {
-                    None
-                };
-
-            let increment_stream =
-                if stream.in_window_size.size() < INITIAL_CONNECTION_WINDOW_SIZE / 2 {
-                    let increment = INITIAL_CONNECTION_WINDOW_SIZE as u32;
-                    stream.in_window_size.try_increase(increment).expect("failed to increase");
-
-                    Some(increment)
-                } else {
-                    None
-                };
-
-            stream.new_data_chunk(&frame.data.as_ref(), frame.is_end_of_stream());
-
-            // TODO: drop stream if closed on both ends
-            (increment_conn, increment_stream)
-        });
-
-        let future: HttpFuture<Self> = Box::new(futures::finished(self));
-
-        let future: HttpFuture<Self> =
-            if let Some(increment_conn) = increment_conn {
-                Box::new(future.and_then(move |s| {
-                    s.send_frame(WindowUpdateFrame::for_connection(increment_conn))
-                }))
-            } else {
-                future
-            };
-
-        let future: HttpFuture<Self> =
-            if let Some(increment_stream) = increment_stream {
-                Box::new(future.and_then(move |s| {
-                    s.send_frame(WindowUpdateFrame::for_stream(stream_id, increment_stream))
-                }))
-            } else {
-                future
-            };
-
-        future
-    }
-
-    fn process_headers_frame(self, frame: HeadersFrame) -> HttpFuture<Self> {
-        self.inner.with(move |inner: &mut ServerInner<F>| {
-            let headers = inner.conn.decoder
-                                   .decode(&frame.header_fragment())
-                                   .map_err(HttpError::CompressionError).unwrap();
-            let headers = headers.into_iter().map(|h| h.into()).collect();
-
-            let _stream = inner.session_state
-                .get_or_create_stream(frame.get_stream_id(), headers, frame.is_end_of_stream());
-
-            // TODO: drop stream if closed on both ends
-        });
-
-        Box::new(futures::finished(self))
-    }
-
-    fn close_remote(self, stream_id: StreamId) -> HttpFuture<Self> {
-        debug!("close remote: {}", stream_id);
-
-        self.inner.with(move |inner: &mut ServerInner<F>| {
-            {
-                let mut stream = inner.session_state.get_stream_mut(stream_id).expect("stream not found");
-                stream.close_remote();
-            };
-            inner.session_state.remove_stream_if_closed(stream_id);
-        });
-
-        Box::new(futures::finished(self))
-    }
-
-    fn process_window_update_frame(self, _frame: WindowUpdateFrame) -> HttpFuture<Self> {
-        // TODO
-        Box::new(futures::finished(self))
-    }
-
-    fn process_settings_global(self, _frame: SettingsFrame) -> HttpFuture<Self> {
-        // TODO: apply settings
-        // TODO: send ack
-        Box::new(futures::finished(self))
-    }
-
-    fn send_frame<R : FrameIR>(self, frame: R) -> HttpFuture<Self> {
-        self.inner.with(|inner: &mut ServerInner<F>| {
-            let mut send_buf = VecSendFrame(Vec::new());
-            send_buf.send_frame(frame).unwrap();
-            inner.session_state.to_write_tx.send(ServerToWriteMessage::FromRead(ServerReadToWriteMessage { buf: send_buf.0 }))
-                .expect("read to write");
-        });
-
-        Box::new(futures::finished(self))
-    }
-
-    fn process_conn_window_update(self, _frame: WindowUpdateFrame) -> HttpFuture<Self> {
-        // TODO
-        Box::new(futures::finished(self))
-    }
-
 }
 
 struct ServerWriteLoop<F, I>
