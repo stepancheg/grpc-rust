@@ -104,6 +104,7 @@ pub trait HttpReadLoopInner : 'static {
     fn remove_stream(&mut self, stream_id: StreamId);
 
     /// Send a frame back to the network
+    /// Must not be data frame
     fn send_frame<R : FrameIR>(&mut self, frame: R);
     fn out_window_increased(&mut self, stream_id: Option<StreamId>);
 
