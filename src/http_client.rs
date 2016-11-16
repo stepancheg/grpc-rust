@@ -152,6 +152,10 @@ impl HttpReadLoopInner for ClientInner {
         self.session_state.get_stream_mut(stream_id)
     }
 
+    fn remove_stream(&mut self, stream_id: StreamId) {
+        self.session_state.remove_stream(stream_id);
+    }
+
     fn conn(&mut self) -> &mut HttpConnection {
         &mut self.conn
     }
@@ -187,29 +191,6 @@ impl HttpReadLoopInner for ClientInner {
                 })).unwrap();
             }
         }
-
-        if frame.is_end_of_stream() {
-            stream.close_remote();
-            // TODO: GC streams
-        }
-    }
-
-    fn process_window_update_frame(&mut self, _frame: WindowUpdateFrame) {
-        // TODO
-    }
-
-    fn process_settings_global(&mut self, _frame: SettingsFrame) {
-        // TODO: apply settings
-        // TODO: send ack
-    }
-
-    fn process_conn_window_update(&mut self, _frame: WindowUpdateFrame) {
-        // TODO
-    }
-
-    fn process_rst_stream_frame(&mut self, frame: RstStreamFrame) {
-        // TODO: check actually removed
-        self.session_state.remove_stream(frame.get_stream_id());
     }
 
 }

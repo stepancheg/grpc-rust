@@ -101,13 +101,25 @@ pub trait HttpReadLoopInner : 'static {
 
     fn conn(&mut self) -> &mut HttpConnection;
     fn get_stream_mut(&mut self, stream_id: StreamId) -> Option<&mut Self::LoopHttpStream>;
+    fn remove_stream(&mut self, stream_id: StreamId);
 
     /// Send a frame back to the network
     fn send_frame<R : FrameIR>(&mut self, frame: R);
     fn process_headers_frame(&mut self, frame: HeadersFrame);
-    fn process_window_update_frame(&mut self, frame: WindowUpdateFrame);
-    fn process_settings_global(&mut self, frame: SettingsFrame);
-    fn process_conn_window_update(&mut self, frame: WindowUpdateFrame);
+
+    fn process_window_update_frame(&mut self, _frame: WindowUpdateFrame) {
+        // TODO
+    }
+
+    fn process_settings_global(&mut self, _frame: SettingsFrame) {
+        // TODO: apply settings
+        // TODO: send ack
+    }
+
+    fn process_conn_window_update(&mut self, _frame: WindowUpdateFrame) {
+        // TODO
+    }
+
     fn process_rst_stream_frame(&mut self, _frame: RstStreamFrame) {
         // TODO
     }
@@ -206,8 +218,17 @@ pub trait HttpReadLoopInner : 'static {
         }
     }
 
-    fn close_remote(&mut self, _stream_id: StreamId) {
-        // TODO
+    fn close_remote(&mut self, stream_id: StreamId) {
+        debug!("close remote: {}", stream_id);
+
+        let remove = {
+            let mut stream = self.get_stream_mut(stream_id).expect("stream not found");
+            stream.close_remote();
+            stream.common().state == StreamState::Closed
+        };
+        if remove {
+            self.remove_stream(stream_id);
+        }
     }
 }
 

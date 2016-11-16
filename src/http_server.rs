@@ -230,6 +230,10 @@ impl<F : HttpService> HttpReadLoopInner for ServerInner<F> {
         self.session_state.get_stream_mut(stream_id)
     }
 
+    fn remove_stream(&mut self, stream_id: StreamId) {
+        self.session_state.remove_stream(stream_id);
+    }
+
     fn conn(&mut self) -> &mut HttpConnection {
         &mut self.conn
     }
@@ -253,28 +257,6 @@ impl<F : HttpService> HttpReadLoopInner for ServerInner<F> {
         // TODO: drop stream if closed on both ends
     }
 
-    fn process_window_update_frame(&mut self, _frame: WindowUpdateFrame) {
-        // TODO
-    }
-
-    fn process_settings_global(&mut self, _frame: SettingsFrame) {
-        // TODO: apply settings
-        // TODO: send ack
-    }
-
-    fn process_conn_window_update(&mut self, _frame: WindowUpdateFrame) {
-        // TODO
-    }
-
-    fn close_remote(&mut self, stream_id: StreamId) {
-        debug!("close remote: {}", stream_id);
-
-        {
-            let mut stream = self.session_state.get_stream_mut(stream_id).expect("stream not found");
-            stream.close_remote();
-        };
-        self.session_state.remove_stream_if_closed(stream_id);
-    }
 }
 
 type ServerReadLoop<F, I> = HttpReadLoopData<I, ServerInner<F>>;
