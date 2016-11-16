@@ -12,6 +12,7 @@ use solicit::http::StreamId;
 use solicit::http::HttpError;
 use solicit::http::WindowSize;
 use solicit::http::INITIAL_CONNECTION_WINDOW_SIZE;
+use solicit::http::connection::HttpConnection;
 
 use futures_misc::*;
 
@@ -90,19 +91,78 @@ impl GrpcHttpStreamCommon {
 pub trait GrpcHttpStream {
     fn common(&self) -> &GrpcHttpStreamCommon;
     fn common_mut(&mut self) -> &mut GrpcHttpStreamCommon;
+    fn new_data_chunk(&mut self, data: &[u8], last: bool);
+    fn close_remote(&mut self);
 }
 
 
 pub trait HttpReadLoopInner : 'static {
+    type LoopHttpStream : GrpcHttpStream;
+
+    fn conn(&mut self) -> &mut HttpConnection;
+    fn get_stream_mut(&mut self, stream_id: StreamId) -> Option<&mut Self::LoopHttpStream>;
+
     /// Send a frame back to the network
     fn send_frame<R : FrameIR>(&mut self, frame: R);
     fn process_headers_frame(&mut self, frame: HeadersFrame);
-    fn process_data_frame(&mut self, frame: DataFrame);
     fn process_window_update_frame(&mut self, frame: WindowUpdateFrame);
     fn process_settings_global(&mut self, frame: SettingsFrame);
     fn process_conn_window_update(&mut self, frame: WindowUpdateFrame);
     fn process_rst_stream_frame(&mut self, _frame: RstStreamFrame) {
         // TODO
+    }
+
+    fn process_data_frame(&mut self, frame: DataFrame) {
+        let stream_id = frame.get_stream_id();
+
+        self.conn().decrease_in_window(frame.payload_len())
+            .expect("failed to decrease conn win");
+
+        let increment_conn =
+            if self.conn().in_window_size() < INITIAL_CONNECTION_WINDOW_SIZE / 2 {
+                let increment = INITIAL_CONNECTION_WINDOW_SIZE as u32;
+                self.conn().in_window_size.try_increase(increment).expect("failed to increase");
+
+                Some(increment)
+            } else {
+                None
+            };
+
+        let increment_stream = {
+            let stream = self.get_stream_mut(frame.get_stream_id()).expect("stream not found");
+
+            stream.common_mut().in_window_size.try_decrease(frame.payload_len() as i32)
+                .expect("failed to decrease stream win");
+
+            let increment_stream =
+                if stream.common_mut().in_window_size.size() < INITIAL_CONNECTION_WINDOW_SIZE / 2 {
+                    let increment = INITIAL_CONNECTION_WINDOW_SIZE as u32;
+                    stream.common_mut().in_window_size.try_increase(increment).expect("failed to increase");
+
+                    Some(increment)
+                } else {
+                    None
+                };
+
+            stream.new_data_chunk(&frame.data.as_ref(), frame.is_end_of_stream());
+
+            if frame.is_end_of_stream() {
+                stream.close_remote();
+                // TODO: GC streams
+            }
+
+            // TODO: drop stream if closed on both ends
+
+            increment_stream
+        };
+
+        if let Some(increment_conn) = increment_conn {
+            self.send_frame(WindowUpdateFrame::for_connection(increment_conn));
+        }
+
+        if let Some(increment_stream) = increment_stream {
+            self.send_frame(WindowUpdateFrame::for_stream(stream_id, increment_stream));
+        }
     }
 
     fn process_ping(&mut self, frame: PingFrame) {
@@ -195,4 +255,5 @@ impl<I, N> HttpReadLoopData<I, N>
         });
         Box::new(futures::finished(self))
     }
+
 }

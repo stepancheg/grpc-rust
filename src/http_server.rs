@@ -11,7 +11,6 @@ use solicit::http::HttpScheme;
 use solicit::http::HttpError;
 use solicit::http::Header;
 use solicit::http::StaticHeader;
-use solicit::http::INITIAL_CONNECTION_WINDOW_SIZE;
 
 use futures;
 use futures::Future;
@@ -47,6 +46,25 @@ impl<F : HttpService> GrpcHttpStream for GrpcHttpServerStream<F> {
     fn common_mut(&mut self) -> &mut GrpcHttpStreamCommon {
         &mut self.common
     }
+
+    fn new_data_chunk(&mut self, data: &[u8], last: bool) {
+        if let Some(ref mut sender) = self.request_handler {
+            let part = HttpStreamPart {
+                content: HttpStreamPartContent::Data(data.to_owned()),
+                last: last,
+            };
+            // ignore error
+            sender.send(ResultOrEof::Item(part)).ok();
+        }
+    }
+
+    fn close_remote(&mut self) {
+        let next = match self.state() {
+            StreamState::HalfClosedLocal => StreamState::Closed,
+            _ => StreamState::HalfClosedRemote,
+        };
+        self.set_state(next);
+    }
 }
 
 impl<F : HttpService> GrpcHttpServerStream<F> {
@@ -58,14 +76,6 @@ impl<F : HttpService> GrpcHttpServerStream<F> {
         let next = match self.state() {
             StreamState::HalfClosedRemote => StreamState::Closed,
             _ => StreamState::HalfClosedLocal,
-        };
-        self.set_state(next);
-    }
-
-    fn close_remote(&mut self) {
-        let next = match self.state() {
-            StreamState::HalfClosedLocal => StreamState::Closed,
-            _ => StreamState::HalfClosedRemote,
         };
         self.set_state(next);
     }
@@ -85,17 +95,6 @@ impl<F : HttpService> GrpcHttpServerStream<F> {
         match self.state() {
             StreamState::HalfClosedRemote | StreamState::Closed => true,
             _ => false,
-        }
-    }
-
-    fn new_data_chunk(&mut self, data: &[u8], last: bool) {
-        if let Some(ref mut sender) = self.request_handler {
-            let part = HttpStreamPart {
-                content: HttpStreamPartContent::Data(data.to_owned()),
-                last: last,
-            };
-            // ignore error
-            sender.send(ResultOrEof::Item(part)).ok();
         }
     }
 
@@ -225,6 +224,16 @@ struct ServerInner<F : HttpService> {
 }
 
 impl<F : HttpService> HttpReadLoopInner for ServerInner<F> {
+    type LoopHttpStream = GrpcHttpServerStream<F>;
+
+    fn get_stream_mut(&mut self, stream_id: StreamId) -> Option<&mut Self::LoopHttpStream> {
+        self.session_state.get_stream_mut(stream_id)
+    }
+
+    fn conn(&mut self) -> &mut HttpConnection {
+        &mut self.conn
+    }
+
     fn send_frame<R : FrameIR>(&mut self, frame: R) {
         let mut send_buf = VecSendFrame(Vec::new());
         send_buf.send_frame(frame).unwrap();
@@ -242,53 +251,6 @@ impl<F : HttpService> HttpReadLoopInner for ServerInner<F> {
             .get_or_create_stream(frame.get_stream_id(), headers, frame.is_end_of_stream());
 
         // TODO: drop stream if closed on both ends
-    }
-
-    fn process_data_frame(&mut self, frame: DataFrame) {
-        let stream_id = frame.get_stream_id();
-
-        let (increment_conn, increment_stream) = {
-            let stream = self.session_state.get_stream_mut(frame.get_stream_id()).expect("stream not found");
-
-            self.conn.decrease_in_window(frame.payload_len())
-                .expect("failed to decrease conn win");
-            stream.common.in_window_size.try_decrease(frame.payload_len() as i32)
-                .expect("failed to decrease stream win");
-
-            let increment_conn =
-                if self.conn.in_window_size() < INITIAL_CONNECTION_WINDOW_SIZE / 2 {
-                    let increment = INITIAL_CONNECTION_WINDOW_SIZE as u32;
-                    self.conn.in_window_size.try_increase(increment).expect("failed to increase");
-
-                    Some(increment)
-                } else {
-                    None
-                };
-
-            let increment_stream =
-                if stream.common.in_window_size.size() < INITIAL_CONNECTION_WINDOW_SIZE / 2 {
-                    let increment = INITIAL_CONNECTION_WINDOW_SIZE as u32;
-                    stream.common.in_window_size.try_increase(increment).expect("failed to increase");
-
-                    Some(increment)
-                } else {
-                    None
-                };
-
-            stream.new_data_chunk(&frame.data.as_ref(), frame.is_end_of_stream());
-
-            // TODO: drop stream if closed on both ends
-
-            (increment_conn, increment_stream)
-        };
-
-        if let Some(increment_conn) = increment_conn {
-            self.send_frame(WindowUpdateFrame::for_connection(increment_conn));
-        }
-
-        if let Some(increment_stream) = increment_stream {
-            self.send_frame(WindowUpdateFrame::for_stream(stream_id, increment_stream));
-        }
     }
 
     fn process_window_update_frame(&mut self, _frame: WindowUpdateFrame) {

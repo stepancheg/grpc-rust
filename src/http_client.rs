@@ -47,6 +47,27 @@ impl GrpcHttpStream for GrpcHttpClientStream {
     fn common_mut(&mut self) -> &mut GrpcHttpStreamCommon {
         &mut self.common
     }
+
+    fn new_data_chunk(&mut self, data: &[u8], last: bool) {
+        if let Some(ref mut response_handler) = self.response_handler {
+            response_handler.send(ResultOrEof::Item(HttpStreamPart {
+                content: HttpStreamPartContent::Data(data.to_owned()),
+                last: last,
+            })).unwrap();
+        }
+    }
+
+    fn close_remote(&mut self) {
+        let next = match self.state() {
+            StreamState::HalfClosedLocal => StreamState::Closed,
+            _ => StreamState::HalfClosedRemote,
+        };
+        self.set_state(next);
+        if let Some(response_handler) = self.response_handler.take() {
+            response_handler.send(ResultOrEof::Eof).unwrap();
+        }
+    }
+
 }
 
 impl GrpcHttpClientStream {
@@ -61,17 +82,6 @@ impl GrpcHttpClientStream {
             _ => StreamState::HalfClosedLocal,
         };
         self.set_state(next);
-    }
-
-    fn close_remote(&mut self) {
-        let next = match self.state() {
-            StreamState::HalfClosedLocal => StreamState::Closed,
-            _ => StreamState::HalfClosedRemote,
-        };
-        self.set_state(next);
-        if let Some(response_handler) = self.response_handler.take() {
-            response_handler.send(ResultOrEof::Eof).unwrap();
-        }
     }
 
     fn _is_closed(&self) -> bool {
@@ -136,6 +146,16 @@ struct ClientInner {
 }
 
 impl HttpReadLoopInner for ClientInner {
+    type LoopHttpStream = GrpcHttpClientStream;
+
+    fn get_stream_mut(&mut self, stream_id: StreamId) -> Option<&mut Self::LoopHttpStream> {
+        self.session_state.get_stream_mut(stream_id)
+    }
+
+    fn conn(&mut self) -> &mut HttpConnection {
+        &mut self.conn
+    }
+
     fn send_frame<R: FrameIR>(&mut self, frame: R) {
         let mut send_buf = VecSendFrame(Vec::new());
         send_buf.send_frame(frame).unwrap();
@@ -166,35 +186,6 @@ impl HttpReadLoopInner for ClientInner {
                     last: frame.is_end_of_stream(),
                 })).unwrap();
             }
-        }
-
-        if frame.is_end_of_stream() {
-            stream.close_remote();
-            // TODO: GC streams
-        }
-    }
-
-    fn process_data_frame(&mut self, frame: DataFrame) {
-        let mut stream: &mut GrpcHttpClientStream = match self.session_state.get_stream_mut(frame.get_stream_id()) {
-            None => {
-                // TODO(mlalic): This can currently indicate two things:
-                //                 1) the stream was idle => PROTOCOL_ERROR
-                //                 2) the stream was closed => STREAM_CLOSED (stream error)
-                return;
-            }
-            Some(stream) => stream,
-        };
-
-        self.conn.decrease_in_window(frame.payload_len())
-            .expect("failed to decrease conn win");
-        stream.common.in_window_size.try_decrease(frame.payload_len() as i32)
-            .expect("failed to decrease stream win");
-
-        if let Some(ref mut response_handler) = stream.response_handler {
-            response_handler.send(ResultOrEof::Item(HttpStreamPart {
-                content: HttpStreamPartContent::Data(frame.data.clone().into_owned()),
-                last: frame.is_end_of_stream(),
-            })).unwrap();
         }
 
         if frame.is_end_of_stream() {
