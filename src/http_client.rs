@@ -1,9 +1,7 @@
 use std::net::SocketAddr;
-use std::collections::HashMap;
 use std::io;
 
 use solicit::http::session::StreamState;
-use solicit::http::connection::HttpConnection;
 use solicit::http::connection::EndStream;
 use solicit::http::connection::SendFrame;
 use solicit::http::frame::*;
@@ -67,7 +65,6 @@ impl GrpcHttpStream for GrpcHttpClientStream {
             response_handler.send(ResultOrEof::Eof).unwrap();
         }
     }
-
 }
 
 impl GrpcHttpClientStream {
@@ -112,52 +109,34 @@ impl GrpcHttpClientStream {
 }
 
 struct GrpcHttpClientSessionState {
-    streams: HashMap<StreamId, GrpcHttpClientStream>,
     next_stream_id: StreamId,
     decoder: hpack::Decoder<'static>,
 }
 
-impl GrpcHttpClientSessionState {
+struct ClientInner {
+    common: LoopInnerCommon<GrpcHttpClientStream>,
+    to_write_tx: tokio_core::channel::Sender<ClientToWriteMessage>,
+    session_state: GrpcHttpClientSessionState,
+}
 
+impl ClientInner {
     fn insert_stream(&mut self, stream: GrpcHttpClientStream) -> StreamId {
-        let id = self.next_stream_id;
-        self.streams.insert(id, stream);
-        self.next_stream_id += 2;
+        let id = self.session_state.next_stream_id;
+        self.common.streams.insert(id, stream);
+        self.session_state.next_stream_id += 2;
         id
     }
 
     fn _get_stream_ref(&self, stream_id: StreamId) -> Option<&GrpcHttpClientStream> {
-        self.streams.get(&stream_id)
+        self.common.streams.get(&stream_id)
     }
-
-    fn get_stream_mut(&mut self, stream_id: StreamId) -> Option<&mut GrpcHttpClientStream> {
-        self.streams.get_mut(&stream_id)
-    }
-
-    fn remove_stream(&mut self, stream_id: StreamId) -> Option<GrpcHttpClientStream> {
-        self.streams.remove(&stream_id)
-    }
-}
-
-struct ClientInner {
-    conn: HttpConnection,
-    to_write_tx: tokio_core::channel::Sender<ClientToWriteMessage>,
-    session_state: GrpcHttpClientSessionState,
 }
 
 impl HttpReadLoopInner for ClientInner {
     type LoopHttpStream = GrpcHttpClientStream;
 
-    fn get_stream_mut(&mut self, stream_id: StreamId) -> Option<&mut Self::LoopHttpStream> {
-        self.session_state.get_stream_mut(stream_id)
-    }
-
-    fn remove_stream(&mut self, stream_id: StreamId) {
-        self.session_state.remove_stream(stream_id);
-    }
-
-    fn conn(&mut self) -> &mut HttpConnection {
-        &mut self.conn
+    fn common(&mut self) -> &mut LoopInnerCommon<GrpcHttpClientStream> {
+        &mut self.common
     }
 
     fn send_frame<R: FrameIR>(&mut self, frame: R) {
@@ -178,7 +157,7 @@ impl HttpReadLoopInner for ClientInner {
                                .map_err(HttpError::CompressionError).unwrap();
         let headers: Vec<StaticHeader> = headers.into_iter().map(|h| h.into()).collect();
 
-        let mut stream: &mut GrpcHttpClientStream = match self.session_state.get_stream_mut(frame.get_stream_id()) {
+        let mut stream: &mut GrpcHttpClientStream = match self.common.get_stream_mut(frame.get_stream_id()) {
             None => {
                 // TODO(mlalic): This means that the server's header is not associated to any
                 //               request made by the client nor any server-initiated stream (pushed)
@@ -260,9 +239,9 @@ impl<I : Io + Send + 'static> ClientWriteLoop<I> {
                 common: GrpcHttpStreamCommon::new(),
                 response_handler: Some(response_handler),
             };
-            let stream_id = inner.session_state.insert_stream(stream);
+            let stream_id = inner.insert_stream(stream);
 
-            let send_buf = inner.conn.send_headers_to_vec(stream_id, &headers, EndStream::No).unwrap();
+            let send_buf = inner.common.conn.send_headers_to_vec(stream_id, &headers, EndStream::No).unwrap();
 
             (send_buf, stream_id)
         });
@@ -294,11 +273,11 @@ impl<I : Io + Send + 'static> ClientWriteLoop<I> {
 
         let buf = self.inner.with(move |inner: &mut ClientInner| {
             {
-                let _stream = inner.session_state.get_stream_mut(stream_id);
+                let _stream = inner.common.get_stream_mut(stream_id);
                 // TODO: check stream state
             }
 
-            inner.conn.send_data_frames_to_vec(stream_id, &chunk, EndStream::No).unwrap()
+            inner.common.conn.send_data_frames_to_vec(stream_id, &chunk, EndStream::No).unwrap()
         });
 
         self.write_all(buf)
@@ -308,7 +287,7 @@ impl<I : Io + Send + 'static> ClientWriteLoop<I> {
         let EndRequestMessage { stream_id } = end;
 
         let buf = self.inner.with(move |inner: &mut ClientInner| {
-            inner.conn.send_end_of_stream_to_vec(stream_id).unwrap()
+            inner.common.conn.send_end_of_stream_to_vec(stream_id).unwrap()
         });
 
         self.write_all(buf)
@@ -354,11 +333,10 @@ impl HttpClientConnectionAsync {
             let (read, write) = conn.split();
 
             let inner = TaskRcMut::new(ClientInner {
-                conn: HttpConnection::new(HttpScheme::Http),
+                common: LoopInnerCommon::new(HttpScheme::Http),
                 to_write_tx: to_write_tx.clone(),
                 session_state: GrpcHttpClientSessionState {
                     next_stream_id: 1,
-                    streams: HashMap::new(),
                     decoder: hpack::Decoder::new(),
                 }
             });

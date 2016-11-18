@@ -1,9 +1,7 @@
 use std::marker;
-use std::collections::HashMap;
 use std::io;
 
 use solicit::http::session::StreamState;
-use solicit::http::connection::HttpConnection;
 use solicit::http::connection::SendFrame;
 use solicit::http::frame::*;
 use solicit::http::StreamId;
@@ -80,10 +78,6 @@ impl<F : HttpService> GrpcHttpServerStream<F> {
         self.set_state(next);
     }
 
-    fn is_closed(&self) -> bool {
-        self.state() == StreamState::Closed
-    }
-
     fn is_closed_local(&self) -> bool {
         match self.state() {
             StreamState::HalfClosedLocal | StreamState::Closed => true,
@@ -128,45 +122,30 @@ impl<F : HttpService> GrpcHttpServerStream<F> {
 
 struct GrpcHttpServerSessionState<F : HttpService> {
     factory: F,
-    streams: HashMap<StreamId, GrpcHttpServerStream<F>>,
     to_write_tx: tokio_core::channel::Sender<ServerToWriteMessage<F>>,
     loop_handle: reactor::Handle,
 }
 
-impl<F : HttpService> GrpcHttpServerSessionState<F> {
-    fn _get_stream_ref(&self, stream_id: StreamId) -> Option<&GrpcHttpServerStream<F>> {
-        self.streams.get(&stream_id)
-    }
 
-    fn get_stream_mut(&mut self, stream_id: StreamId) -> Option<&mut GrpcHttpServerStream<F>> {
-        self.streams.get_mut(&stream_id)
-    }
+struct ServerInner<F : HttpService> {
+    common: LoopInnerCommon<GrpcHttpServerStream<F>>,
+    session_state: GrpcHttpServerSessionState<F>,
+}
 
-    fn remove_stream(&mut self, stream_id: StreamId) -> Option<GrpcHttpServerStream<F>> {
-        debug!("remove stream: {}", stream_id);
-
-        self.streams.remove(&stream_id)
-    }
-
-    fn remove_stream_if_closed(&mut self, stream_id: StreamId) {
-        if self.get_stream_mut(stream_id).expect("unknown stream").is_closed() {
-            self.remove_stream(stream_id);
-        }
-    }
-
+impl<F : HttpService> ServerInner<F> {
     fn new_request(&mut self, stream_id: StreamId, headers: Vec<StaticHeader>)
         -> tokio_core::channel::Sender<ResultOrEof<HttpStreamPart, HttpError>>
     {
-        let (req_tx, req_rx) = tokio_core::channel::channel(&self.loop_handle)
+        let (req_tx, req_rx) = tokio_core::channel::channel(&self.session_state.loop_handle)
             .expect("failed to create a channel");
 
         let req_rx = req_rx.map_err(HttpError::from);
         let req_rx = stream_with_eof_and_error(req_rx, || HttpError::from(io::Error::new(io::ErrorKind::Other, "unexpected eof")));
 
-        let response = self.factory.new_request(headers, Box::new(req_rx));
+        let response = self.session_state.factory.new_request(headers, Box::new(req_rx));
 
         {
-            let to_write_tx = self.to_write_tx.clone();
+            let to_write_tx = self.session_state.to_write_tx.clone();
             let to_write_tx2 = to_write_tx.clone();
 
             let process_response = response.for_each(move |part: HttpStreamPart| {
@@ -183,7 +162,7 @@ impl<F : HttpService> GrpcHttpServerSessionState<F> {
                 Ok(())
             }).map_err(|e| panic!("{:?}", e)); // TODO: handle
 
-            self.loop_handle.spawn(process_response);
+            self.session_state.loop_handle.spawn(process_response);
         }
 
         req_tx
@@ -200,42 +179,27 @@ impl<F : HttpService> GrpcHttpServerSessionState<F> {
             request_handler: Some(req_tx),
             _marker: marker::PhantomData,
         };
-        self.streams.insert(stream_id, stream);
-        self.streams.get_mut(&stream_id).unwrap()
+        self.common.streams.insert(stream_id, stream);
+        self.common.streams.get_mut(&stream_id).unwrap()
     }
 
     fn get_or_create_stream(&mut self, stream_id: StreamId, headers: Vec<StaticHeader>, last: bool) -> &mut GrpcHttpServerStream<F> {
-        if self.get_stream_mut(stream_id).is_some() {
+        if self.common.get_stream_mut(stream_id).is_some() {
             // https://github.com/rust-lang/rust/issues/36403
-            let stream = self.get_stream_mut(stream_id).unwrap();
+            let stream = self.common.get_stream_mut(stream_id).unwrap();
             stream.set_headers(headers, last);
             stream
         } else {
             self.new_stream(stream_id, headers)
         }
     }
-
-}
-
-
-struct ServerInner<F : HttpService> {
-    conn: HttpConnection,
-    session_state: GrpcHttpServerSessionState<F>,
 }
 
 impl<F : HttpService> HttpReadLoopInner for ServerInner<F> {
     type LoopHttpStream = GrpcHttpServerStream<F>;
 
-    fn get_stream_mut(&mut self, stream_id: StreamId) -> Option<&mut Self::LoopHttpStream> {
-        self.session_state.get_stream_mut(stream_id)
-    }
-
-    fn remove_stream(&mut self, stream_id: StreamId) {
-        self.session_state.remove_stream(stream_id);
-    }
-
-    fn conn(&mut self) -> &mut HttpConnection {
-        &mut self.conn
+    fn common(&mut self) -> &mut LoopInnerCommon<GrpcHttpServerStream<F>> {
+        &mut self.common
     }
 
     fn send_frame<R : FrameIR>(&mut self, frame: R) {
@@ -251,13 +215,15 @@ impl<F : HttpService> HttpReadLoopInner for ServerInner<F> {
     }
 
     fn process_headers_frame(&mut self, frame: HeadersFrame) {
-        let headers = self.conn.decoder
+        let headers = self.common.conn.decoder
                                .decode(&frame.header_fragment())
                                .map_err(HttpError::CompressionError).unwrap();
         let headers = headers.into_iter().map(|h| h.into()).collect();
 
-        let _stream = self.session_state
-            .get_or_create_stream(frame.get_stream_id(), headers, frame.is_end_of_stream());
+        let _stream = self.get_or_create_stream(
+            frame.get_stream_id(),
+            headers,
+            frame.is_end_of_stream());
 
         // TODO: drop stream if closed on both ends
     }
@@ -311,52 +277,60 @@ impl<F : HttpService, I : Io> ServerWriteLoop<F, I> {
 
     fn process_response_part(self, stream_id: StreamId, part: HttpStreamPart) -> HttpFuture<Self> {
         let send_buf = self.inner.with(move |inner: &mut ServerInner<F>| {
-            let (buf, close) = {
-                let stream = inner.session_state.get_stream_mut(stream_id);
+            let (send, close) = {
+                let stream = inner.common.get_stream_mut(stream_id);
                 if let Some(stream) = stream {
                     if !stream.is_closed_local() {
                         if part.last {
                             stream.close_local();
                         }
-                        (inner.conn.send_part_to_vec(stream_id, &part).unwrap(), part.last)
+                        (true, part.last)
                     } else {
-                        (Vec::new(), false)
+                        (false, false)
                     }
                 } else {
-                    (Vec::new(), false)
+                    (false, false)
                 }
             };
 
             if close {
-                inner.session_state.remove_stream_if_closed(stream_id);
+                inner.common.remove_stream_if_closed(stream_id);
             }
 
-            buf
+            if send {
+                inner.common.conn.send_part_to_vec(stream_id, &part).unwrap()
+            } else {
+                Vec::new()
+            }
         });
         self.write_all(send_buf)
     }
 
     fn process_response_end(self, stream_id: StreamId) -> HttpFuture<Self> {
         let send_buf = self.inner.with(move |inner: &mut ServerInner<F>| {
-            let (buf, close) = {
-                let stream = inner.session_state.get_stream_mut(stream_id);
+            let (send, close) = {
+                let stream = inner.common.get_stream_mut(stream_id);
                 if let Some(stream) = stream {
                     if !stream.is_closed_local() {
                         stream.close_local();
-                        (inner.conn.send_end_of_stream_to_vec(stream_id).unwrap(), true)
+                        (true, true)
                     } else {
-                        (Vec::new(), false)
+                        (false, false)
                     }
                 } else {
-                    (Vec::new(), false)
+                    (false, false)
                 }
             };
 
             if close {
-                inner.session_state.remove_stream_if_closed(stream_id);
+                inner.common.remove_stream_if_closed(stream_id);
             }
 
-            buf
+            if send {
+                inner.common.conn.send_end_of_stream_to_vec(stream_id).unwrap()
+            } else {
+                Vec::new()
+            }
         });
         self.write_all(send_buf)
     }
@@ -403,9 +377,8 @@ impl HttpServerConnectionAsync {
             let (read, write) = socket.split();
 
             let inner = TaskRcMut::new(ServerInner {
-                conn: HttpConnection::new(HttpScheme::Http),
+                common: LoopInnerCommon::new(HttpScheme::Http),
                 session_state: GrpcHttpServerSessionState {
-                    streams: HashMap::new(),
                     factory: factory,
                     to_write_tx: to_write_tx.clone(),
                     loop_handle: lh,

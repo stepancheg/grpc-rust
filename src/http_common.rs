@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use futures::stream::Stream;
 use futures::Future;
 use futures;
@@ -11,6 +13,7 @@ use solicit::http::StaticHeader;
 use solicit::http::StreamId;
 use solicit::http::HttpError;
 use solicit::http::WindowSize;
+use solicit::http::HttpScheme;
 use solicit::http::INITIAL_CONNECTION_WINDOW_SIZE;
 use solicit::http::connection::HttpConnection;
 
@@ -96,12 +99,43 @@ pub trait GrpcHttpStream {
 }
 
 
+pub struct LoopInnerCommon<S>
+    where S : GrpcHttpStream,
+{
+    pub conn: HttpConnection,
+    pub streams: HashMap<StreamId, S>,
+}
+
+impl<S> LoopInnerCommon<S>
+    where S : GrpcHttpStream,
+{
+    pub fn new(scheme: HttpScheme) -> LoopInnerCommon<S> {
+        LoopInnerCommon {
+            conn: HttpConnection::new(scheme),
+            streams: HashMap::new(),
+        }
+    }
+
+    pub fn get_stream_mut(&mut self, stream_id: StreamId) -> Option<&mut S> {
+        self.streams.get_mut(&stream_id)
+    }
+
+    pub fn remove_stream(&mut self, stream_id: StreamId) -> Option<S> {
+        self.streams.remove(&stream_id)
+    }
+
+    pub fn remove_stream_if_closed(&mut self, stream_id: StreamId) {
+        if self.get_stream_mut(stream_id).expect("unknown stream").common().state == StreamState::Closed {
+            self.remove_stream(stream_id);
+        }
+    }
+}
+
+
 pub trait HttpReadLoopInner : 'static {
     type LoopHttpStream : GrpcHttpStream;
 
-    fn conn(&mut self) -> &mut HttpConnection;
-    fn get_stream_mut(&mut self, stream_id: StreamId) -> Option<&mut Self::LoopHttpStream>;
-    fn remove_stream(&mut self, stream_id: StreamId);
+    fn common(&mut self) -> &mut LoopInnerCommon<Self::LoopHttpStream>;
 
     /// Send a frame back to the network
     /// Must not be data frame
@@ -117,7 +151,7 @@ pub trait HttpReadLoopInner : 'static {
 
     fn process_stream_window_update_frame(&mut self, frame: WindowUpdateFrame) {
         {
-            let stream = self.get_stream_mut(frame.get_stream_id()).expect("stream not found");
+            let stream = self.common().get_stream_mut(frame.get_stream_id()).expect("stream not found");
             stream.common_mut().out_window_size.try_increase(frame.increment())
                 .expect("failed to increment stream window");
         }
@@ -125,7 +159,7 @@ pub trait HttpReadLoopInner : 'static {
     }
 
     fn process_conn_window_update(&mut self, frame: WindowUpdateFrame) {
-        self.conn().out_window_size.try_increase(frame.increment())
+        self.common().conn.out_window_size.try_increase(frame.increment())
             .expect("failed to increment conn window");
         self.out_window_increased(None);
     }
@@ -136,13 +170,13 @@ pub trait HttpReadLoopInner : 'static {
     fn process_data_frame(&mut self, frame: DataFrame) {
         let stream_id = frame.get_stream_id();
 
-        self.conn().decrease_in_window(frame.payload_len())
+        self.common().conn.decrease_in_window(frame.payload_len())
             .expect("failed to decrease conn win");
 
         let increment_conn =
-            if self.conn().in_window_size() < INITIAL_CONNECTION_WINDOW_SIZE / 2 {
+            if self.common().conn.in_window_size() < INITIAL_CONNECTION_WINDOW_SIZE / 2 {
                 let increment = INITIAL_CONNECTION_WINDOW_SIZE as u32;
-                self.conn().in_window_size.try_increase(increment).expect("failed to increase");
+                self.common().conn.in_window_size.try_increase(increment).expect("failed to increase");
 
                 Some(increment)
             } else {
@@ -150,7 +184,7 @@ pub trait HttpReadLoopInner : 'static {
             };
 
         let increment_stream = {
-            let stream = self.get_stream_mut(frame.get_stream_id()).expect("stream not found");
+            let stream = self.common().get_stream_mut(frame.get_stream_id()).expect("stream not found");
 
             stream.common_mut().in_window_size.try_decrease(frame.payload_len() as i32)
                 .expect("failed to decrease stream win");
@@ -231,12 +265,12 @@ pub trait HttpReadLoopInner : 'static {
         debug!("close remote: {}", stream_id);
 
         let remove = {
-            let mut stream = self.get_stream_mut(stream_id).expect("stream not found");
+            let mut stream = self.common().get_stream_mut(stream_id).expect("stream not found");
             stream.close_remote();
             stream.common().state == StreamState::Closed
         };
         if remove {
-            self.remove_stream(stream_id);
+            self.common().remove_stream(stream_id);
         }
     }
 }
