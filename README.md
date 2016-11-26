@@ -7,6 +7,8 @@ grpc-rust
 
 Rust implementation of [gRPC](http://www.grpc.io/) protocol, under development.
 
+Some development questions in [FAQ](/docs/FAQ.md).
+
 ## Current status
 
 Client and server without streaming can be done with rust-grpc,
