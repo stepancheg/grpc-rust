@@ -71,11 +71,17 @@ impl<T, E, S, F> Stream for StreamWithEofAndError<S, F>
             } else {
                 match try_ready!(self.stream.poll()) {
                     None => {
-                        return Err(self.missed_eof.take().expect("poll after eof")());
-                    },
+                        match self.missed_eof.take() {
+                            Some(f) => return Err(f()),
+                            None => {
+                                warn!("poll after eof seen but missed_eof not set, setting self.seen_eof = true");
+                                self.seen_eof = true;
+                            }
+                        }
+                    }
                     Some(ResultOrEof::Eof) => {
                         self.seen_eof = true;
-                        continue;
+                        return Ok(Async::Ready(None));
                     }
                     Some(ResultOrEof::Error(e)) => return Err(e),
                     Some(ResultOrEof::Item(item)) => return Ok(Async::Ready(Some(item))),

@@ -1,5 +1,5 @@
-use futures::*;
-use futures::stream::Stream;
+use futures::{Async, Poll};
+use futures::stream::{self, Stream};
 
 pub struct StreamMerge2<S1, S2: Stream> {
     stream1: stream::Fuse<S1>,
