@@ -1,5 +1,6 @@
 use std::marker;
 use std::io;
+use std::net::SocketAddr;
 
 use solicit::http::session::StreamState;
 use solicit::http::connection::SendFrame;
@@ -29,8 +30,10 @@ use solicit_async::*;
 use solicit_misc::*;
 use http_common::*;
 
+const DEFAULT_WINDOW_SIZE: u32 = 65535;
 
 struct GrpcHttpServerStream<F : HttpService> {
+    connection_window_remaining: u32,
     common: GrpcHttpStreamCommon,
     request_handler: Option<tokio_core::channel::Sender<ResultOrEof<HttpStreamPart, HttpError>>>,
     _marker: marker::PhantomData<F>,
@@ -123,12 +126,13 @@ impl<F : HttpService> GrpcHttpServerStream<F> {
 struct GrpcHttpServerSessionState<F : HttpService> {
     factory: F,
     to_write_tx: tokio_core::channel::Sender<ServerToWriteMessage<F>>,
+    stream_window_remaining: u32,
     loop_handle: reactor::Handle,
 }
 
 
 struct ServerInner<F : HttpService> {
-    common: LoopInnerCommon<GrpcHttpServerStream<F>>,
+    common: ConnectionMgr<GrpcHttpServerStream<F>>,
     session_state: GrpcHttpServerSessionState<F>,
 }
 
@@ -149,18 +153,20 @@ impl<F : HttpService> ServerInner<F> {
             let to_write_tx2 = to_write_tx.clone();
 
             let process_response = response.for_each(move |part: HttpStreamPart| {
-                // drop error if connection is closed
                 if let Err(e) = to_write_tx.send(ServerToWriteMessage::ResponsePart(stream_id, part)) {
-                    warn!("failed to write to channel, probably connection is closed: {}", e);
+                    warn!("failed to write Part to channel, probably connection is closed: {}", e);
+                    // failing to retun an Err when the other side is broken results in a never-ending
+                    // event loop.
+                    return Err(HttpError::from(io::Error::new(io::ErrorKind::Other, "unexpected eof when writing Part")));
                 }
                 Ok(())
             }).and_then(move |()| {
-                // drop error if connection is closed
                 if let Err(e) = to_write_tx2.send(ServerToWriteMessage::ResponseStreamEnd(stream_id)) {
-                    warn!("failed to write to channel, probably connection is closed: {}", e);
+                    warn!("failed to write Stream End to channel, probably connection is closed: {}", e);
+                    return Err(HttpError::from(io::Error::new(io::ErrorKind::Other, "unexpected eof when writing Stream End")));
                 }
                 Ok(())
-            }).map_err(|e| panic!("{:?}", e)); // TODO: handle
+            }).map_err(|e| warn!("map_err found an err {:?}", e));
 
             self.session_state.loop_handle.spawn(process_response);
         }
@@ -170,16 +176,21 @@ impl<F : HttpService> ServerInner<F> {
 
     fn new_stream(&mut self, stream_id: StreamId, headers: Vec<StaticHeader>) -> &mut GrpcHttpServerStream<F> {
         debug!("new stream: {}", stream_id);
-
-        let req_tx = self.new_request(stream_id, headers);
-
+        // FIXME: no need to clone a huge Vector when I just need to inspect a single field.
+        let req_tx = self.new_request(stream_id, headers.clone());
+        debug!("Connection sent HEADERS {:?}", headers);
+        // TODO: get initial window size.
         // New stream initiated by the client
+        debug!("SHOULD update stream window to be {:?}", self.common.conn.out_window_size);
         let stream = GrpcHttpServerStream {
+            connection_window_remaining: DEFAULT_WINDOW_SIZE,
             common: GrpcHttpStreamCommon::new(),
             request_handler: Some(req_tx),
             _marker: marker::PhantomData,
         };
-        self.common.streams.insert(stream_id, stream);
+        if self.common.streams.insert(stream_id, stream).is_some() {
+            panic!("inserted stream that already existed");
+        }
         self.common.streams.get_mut(&stream_id).unwrap()
     }
 
@@ -198,7 +209,7 @@ impl<F : HttpService> ServerInner<F> {
 impl<F : HttpService> HttpReadLoopInner for ServerInner<F> {
     type LoopHttpStream = GrpcHttpServerStream<F>;
 
-    fn common(&mut self) -> &mut LoopInnerCommon<GrpcHttpServerStream<F>> {
+    fn common(&mut self) -> &mut ConnectionMgr<GrpcHttpServerStream<F>> {
         &mut self.common
     }
 
@@ -207,6 +218,14 @@ impl<F : HttpService> HttpReadLoopInner for ServerInner<F> {
         send_buf.send_frame(frame).unwrap();
         self.session_state.to_write_tx.send(ServerToWriteMessage::FromRead(ServerReadToWriteMessage { buf: send_buf.0 }))
             .expect("read to write");
+    }
+
+    fn ack_settings(&mut self, stream_id: Option<StreamId>) {
+        self.send_frame(SettingsFrame::new_ack());
+    }
+
+    fn send_window_update(&mut self, stream_id: StreamId, increment: u32, flags: u8) {
+        self.send_frame(WindowUpdateFrame::for_stream(stream_id, increment));
     }
 
     fn out_window_increased(&mut self, stream_id: Option<StreamId>) {
@@ -293,6 +312,21 @@ impl<F : HttpService, I : Io> ServerWriteLoop<F, I> {
                 }
             };
 
+            match part.content {
+                HttpStreamPartContent::Data(ref bytes) => {
+                    // TODO: this needs to be accounted for against the connection window as well.
+                    debug!("Going to reduce session window by {} bytes", bytes.len());
+                    inner.session_state.stream_window_remaining -= bytes.len() as u32;
+                    // TODO: window size should not be fixed to initial size.
+                    if inner.session_state.stream_window_remaining < (65535 / 2) {
+                        debug!("{} Going to send a WINDOW_UPDATE to peer increasing window by 64k", inner.common.peer_addr);
+                        inner.session_state.stream_window_remaining += 65535;
+                        inner.send_window_update(stream_id, 65535, 0);
+                    }
+                },
+                HttpStreamPartContent::Headers(_) => {}
+            }
+
             if close {
                 inner.common.remove_stream_if_closed(stream_id);
             }
@@ -362,7 +396,7 @@ pub struct HttpServerConnectionAsync {
 }
 
 impl HttpServerConnectionAsync {
-    fn connected<F, I>(lh: &reactor::Handle, socket: HttpFutureSend<I>, factory : F) -> HttpFuture<()>
+    fn connected<F, I>(lh: &reactor::Handle, peer_addr: SocketAddr, socket: HttpFutureSend<I>, factory : F) -> HttpFuture<()>
         where
             F : HttpService,
             I : Io + Send + 'static,
@@ -377,8 +411,9 @@ impl HttpServerConnectionAsync {
             let (read, write) = socket.split();
 
             let inner = TaskRcMut::new(ServerInner {
-                common: LoopInnerCommon::new(HttpScheme::Http),
+                common: ConnectionMgr::new(HttpScheme::Http, peer_addr),
                 session_state: GrpcHttpServerSessionState {
+                    stream_window_remaining: DEFAULT_WINDOW_SIZE,
                     factory: factory,
                     to_write_tx: to_write_tx.clone(),
                     loop_handle: lh,
@@ -398,16 +433,17 @@ impl HttpServerConnectionAsync {
         where
             F : HttpService,
     {
-        HttpServerConnectionAsync::connected(lh, Box::new(futures::finished(socket)), factory)
+        HttpServerConnectionAsync::connected(lh, socket.peer_addr().unwrap(), Box::new(futures::finished(socket)), factory)
     }
 
     pub fn new_tls<F>(lh: &reactor::Handle, socket: TcpStream, server_context: tokio_tls::ServerContext, factory: F) -> HttpFuture<()>
         where
             F : HttpService,
     {
+        let peer_addr = socket.peer_addr().unwrap();
         let stream = server_context.handshake(socket).map_err(HttpError::from);
 
-        HttpServerConnectionAsync::connected(lh, Box::new(stream), factory)
+        HttpServerConnectionAsync::connected(lh, peer_addr, Box::new(stream), factory)
     }
 
     pub fn new_plain_fn<F>(lh: &reactor::Handle, socket: TcpStream, f: F) -> HttpFuture<()>

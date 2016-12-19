@@ -379,18 +379,21 @@ fn run_server_event_loop(
 
     let listen = TcpListener::bind(&listen_addr, &lp.handle()).unwrap();
 
-    let stuff = stream_repeat(lp.handle());
+    // This is a convenience for values that you want to have access
+    // to with each incoming request. Note: If you need to add more, you can
+    // change this to a tuple.
+    let per_request_values = stream_repeat(lp.handle());
 
     let local_addr = listen.local_addr().unwrap();
     send_to_back
         .send(LoopToServer { shutdown_tx: shutdown_tx, local_addr: local_addr })
         .expect("send back");
 
-    let loop_run = listen.incoming().map_err(GrpcError::from).zip(stuff).for_each(move |((socket, peer_addr), loop_handle)| {
+    let loop_run = listen.incoming().map_err(GrpcError::from).zip(per_request_values).for_each(move |((socket, peer_addr), loop_handle)| {
         info!("accepted connection from {}", peer_addr);
         loop_handle.spawn(HttpServerConnectionAsync::new_plain(&loop_handle, socket, GrpcHttpServerHandlerFactory {
             service_definition: service_definition.clone(),
-        }).map_err(|e| { warn!("connection end: {:?}", e); () }));
+        }).map_err(|e| { warn!("connection ended with error: {:?}", e); () }));
         Ok(())
     });
 
