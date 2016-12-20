@@ -142,11 +142,17 @@ pub trait HttpReadLoopInner : 'static {
     fn send_frame<R : FrameIR>(&mut self, frame: R);
     fn out_window_increased(&mut self, stream_id: Option<StreamId>);
 
+    /// Sends an SETTINGS Frame with ack set to acknowledge seeing a SETTINGS frame from the peer.
+    fn ack_settings(&mut self) {
+        self.send_frame(SettingsFrame::new_ack());
+    }
+
     fn process_headers_frame(&mut self, frame: HeadersFrame);
 
     fn process_settings_global(&mut self, _frame: SettingsFrame) {
         // TODO: apply settings
-        // TODO: send ack
+
+        self.ack_settings();
     }
 
     fn process_stream_window_update_frame(&mut self, frame: WindowUpdateFrame) {
