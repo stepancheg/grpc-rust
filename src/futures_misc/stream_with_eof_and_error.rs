@@ -75,7 +75,7 @@ impl<T, E, S, F> Stream for StreamWithEofAndError<S, F>
                     },
                     Some(ResultOrEof::Eof) => {
                         self.seen_eof = true;
-                        continue;
+                        return Ok(Async::Ready(None));
                     }
                     Some(ResultOrEof::Error(e)) => return Err(e),
                     Some(ResultOrEof::Item(item)) => return Ok(Async::Ready(Some(item))),
