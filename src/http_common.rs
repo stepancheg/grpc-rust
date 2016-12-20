@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::net::SocketAddr;
 
 use futures::stream::Stream;
 use futures::Future;
@@ -98,19 +99,21 @@ pub trait GrpcHttpStream {
     fn close_remote(&mut self);
 }
 
-
-pub struct LoopInnerCommon<S>
+/// ConnectionMgr holds Streams and the Connection they are associated with.
+pub struct ConnectionMgr<S>
     where S : GrpcHttpStream,
 {
+    pub peer_addr: SocketAddr,
     pub conn: HttpConnection,
     pub streams: HashMap<StreamId, S>,
 }
 
-impl<S> LoopInnerCommon<S>
+impl<S> ConnectionMgr<S>
     where S : GrpcHttpStream,
 {
-    pub fn new(scheme: HttpScheme) -> LoopInnerCommon<S> {
-        LoopInnerCommon {
+    pub fn new(scheme: HttpScheme, peer_addr: SocketAddr) -> ConnectionMgr<S> {
+        ConnectionMgr {
+            peer_addr: peer_addr,
             conn: HttpConnection::new(scheme),
             streams: HashMap::new(),
         }
@@ -121,6 +124,7 @@ impl<S> LoopInnerCommon<S>
     }
 
     pub fn remove_stream(&mut self, stream_id: StreamId) -> Option<S> {
+        debug!("{} removing stream {:?}", self.peer_addr, stream_id);
         self.streams.remove(&stream_id)
     }
 
@@ -135,36 +139,55 @@ impl<S> LoopInnerCommon<S>
 pub trait HttpReadLoopInner : 'static {
     type LoopHttpStream : GrpcHttpStream;
 
-    fn common(&mut self) -> &mut LoopInnerCommon<Self::LoopHttpStream>;
+    fn common(&mut self) -> &mut ConnectionMgr<Self::LoopHttpStream>;
 
     /// Send a frame back to the network
     /// Must not be data frame
     fn send_frame<R : FrameIR>(&mut self, frame: R);
     fn out_window_increased(&mut self, stream_id: Option<StreamId>);
 
+    /// Sends an SETTINGS Frame with ack set to acknowledge seeing a SETTINGS frame from the peer.
+    fn ack_settings(&mut self, stream_id: Option<StreamId>);
+
+    /// Sends a Window Update to peer to increase our window size by `increment`
+    fn send_window_update(&mut self, stream_id: StreamId, increment: u32, flags: u8);
+
     fn process_headers_frame(&mut self, frame: HeadersFrame);
 
     fn process_settings_global(&mut self, _frame: SettingsFrame) {
+        debug!("{} received SETTINGS {:?}", self.common().peer_addr, _frame);
         // TODO: apply settings
-        // TODO: send ack
+        self.ack_settings(None);
     }
 
     fn process_stream_window_update_frame(&mut self, frame: WindowUpdateFrame) {
         {
-            let stream = self.common().get_stream_mut(frame.get_stream_id()).expect("stream not found");
-            stream.common_mut().out_window_size.try_increase(frame.increment())
-                .expect("failed to increment stream window");
+            debug!("{}: WINDOW_UPDATE: Incrementing stream #{} by {} octets", self.common().peer_addr, frame.get_stream_id(), frame.increment());
+            match self.common().get_stream_mut(frame.get_stream_id()) {
+                Some(stream) =>  stream.common_mut()
+                    .out_window_size.try_increase(frame.increment())
+                    .expect("failed to increment stream window"),
+                None => warn!("Attempted to update window on a stream that has been closed {:?}", frame),
+            }
         }
         self.out_window_increased(Some(frame.get_stream_id()));
     }
 
+    /// Processing WINDOW_UPDATE sent from the peer for the entire connection
     fn process_conn_window_update(&mut self, frame: WindowUpdateFrame) {
+        debug!("{}, WINDOW_UPDATE: increasing connection window by {} octets", self.common().peer_addr, frame.increment());
         self.common().conn.out_window_size.try_increase(frame.increment())
             .expect("failed to increment conn window");
         self.out_window_increased(None);
     }
 
     fn process_rst_stream_frame(&mut self, _frame: RstStreamFrame) {
+        debug!("{}: RST_STREAM: received {:?}", self.common().peer_addr, _frame);
+        if _frame.raw_error_code() != 0x0 {
+            warn!("{} RST_STREAM received with problematic error code: {:?}",self.common().peer_addr,  _frame);
+        }
+        self.common().get_stream_mut(_frame.get_stream_id()).expect("cannot process RST_STREAM as stream no longer exists").close_remote();
+        self.common().remove_stream(_frame.get_stream_id());
     }
 
     fn process_data_frame(&mut self, frame: DataFrame) {
@@ -222,7 +245,7 @@ pub trait HttpReadLoopInner : 'static {
 
     fn process_ping(&mut self, frame: PingFrame) {
         if frame.is_ack() {
-
+            debug!("{}, PING ack seen", self.common().peer_addr);
         } else {
             self.send_frame(PingFrame::new_ack(frame.opaque_data()));
         }
@@ -253,7 +276,7 @@ pub trait HttpReadLoopInner : 'static {
 
     fn process_raw_frame(&mut self, raw_frame: RawFrame) {
         let frame = HttpFrameClassified::from_raw(&raw_frame).unwrap();
-        debug!("received frame: {:?}", frame);
+        debug!("{} received frame: {:?}", self.common().peer_addr, frame);
         match frame {
             HttpFrameClassified::Conn(f) => self.process_conn_frame(f),
             HttpFrameClassified::Stream(f) => self.process_stream_frame(f),
@@ -262,7 +285,7 @@ pub trait HttpReadLoopInner : 'static {
     }
 
     fn close_remote(&mut self, stream_id: StreamId) {
-        debug!("close remote: {}", stream_id);
+        debug!("{} closing remote: {}", self.common().peer_addr, stream_id);
 
         let remove = {
             let mut stream = self.common().get_stream_mut(stream_id).expect("stream not found");
