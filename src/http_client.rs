@@ -114,7 +114,7 @@ struct GrpcHttpClientSessionState {
 }
 
 struct ClientInner {
-    common: LoopInnerCommon<GrpcHttpClientStream>,
+    common: ConnectionMgr<GrpcHttpClientStream>,
     to_write_tx: tokio_core::channel::Sender<ClientToWriteMessage>,
     session_state: GrpcHttpClientSessionState,
 }
@@ -135,7 +135,7 @@ impl ClientInner {
 impl HttpReadLoopInner for ClientInner {
     type LoopHttpStream = GrpcHttpClientStream;
 
-    fn common(&mut self) -> &mut LoopInnerCommon<GrpcHttpClientStream> {
+    fn common(&mut self) -> &mut ConnectionMgr<GrpcHttpClientStream> {
         &mut self.common
     }
 
@@ -146,7 +146,16 @@ impl HttpReadLoopInner for ClientInner {
             .expect("read to write");
     }
 
+    fn ack_settings(&mut self, stream_id: Option<StreamId>) {
+        self.send_frame(SettingsFrame::new_ack());
+    }
+
+    fn send_window_update(&mut self, stream_id: StreamId, increment: u32, flags: u8) {
+        self.send_frame(WindowUpdateFrame::for_stream(stream_id, increment));
+    }
+
     fn out_window_increased(&mut self, stream_id: Option<StreamId>) {
+        debug!("{} increasing out_window in Client for {:?}", self.common().peer_addr, stream_id);
         self.to_write_tx.send(ClientToWriteMessage::OutWindowIncreased(stream_id))
             .expect("read to write");
     }
@@ -316,7 +325,7 @@ impl<I : Io + Send + 'static> ClientWriteLoop<I> {
 type ClientReadLoop<I> = HttpReadLoopData<I, ClientInner>;
 
 impl HttpClientConnectionAsync {
-    fn connected<I : Io + Send + 'static>(lh: reactor::Handle, connect: HttpFutureSend<I>) -> (Self, HttpFuture<()>) {
+    fn connected<I : Io + Send + 'static>(lh: reactor::Handle, peer_addr: SocketAddr, connect: HttpFutureSend<I>) -> (Self, HttpFuture<()>) {
         let (to_write_tx, to_write_rx) = tokio_core::channel::channel(&lh).unwrap();
 
         let to_write_rx = Box::new(to_write_rx.map_err(HttpError::from));
@@ -333,7 +342,7 @@ impl HttpClientConnectionAsync {
             let (read, write) = conn.split();
 
             let inner = TaskRcMut::new(ClientInner {
-                common: LoopInnerCommon::new(HttpScheme::Http),
+                common: ConnectionMgr::new(HttpScheme::Http, peer_addr),
                 to_write_tx: to_write_tx.clone(),
                 session_state: GrpcHttpClientSessionState {
                     next_stream_id: 1,
@@ -358,7 +367,7 @@ impl HttpClientConnectionAsync {
             .map(move |c| { info!("connected to {}", addr); c })
             .map_err(|e| e.into());
 
-        HttpClientConnectionAsync::connected(lh, Box::new(connect))
+        HttpClientConnectionAsync::connected(lh, addr, Box::new(connect))
     }
 
     pub fn new_tls(lh: reactor::Handle, addr: &SocketAddr) -> (Self, HttpFuture<()>) {
@@ -378,7 +387,7 @@ impl HttpClientConnectionAsync {
 
         let tls_conn = tls_conn.map_err(HttpError::from);
 
-        HttpClientConnectionAsync::connected(lh, Box::new(tls_conn))
+        HttpClientConnectionAsync::connected(lh, addr, Box::new(tls_conn))
         */
     }
 
