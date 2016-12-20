@@ -60,6 +60,11 @@ impl<T, E, S, F> Stream for StreamWithEofAndError<S, F>
     type Error = E;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+        // must return stream eof after missed eof error
+        if let None = self.missed_eof {
+            return Ok(Async::Ready(None));
+        }
+
         loop {
             if self.seen_eof {
                 match try_ready!(self.stream.poll()) {
@@ -71,7 +76,7 @@ impl<T, E, S, F> Stream for StreamWithEofAndError<S, F>
             } else {
                 match try_ready!(self.stream.poll()) {
                     None => {
-                        return Err(self.missed_eof.take().expect("poll after eof")());
+                        return Err(self.missed_eof.take().expect("unreachable")());
                     },
                     Some(ResultOrEof::Eof) => {
                         self.seen_eof = true;
