@@ -362,6 +362,8 @@ impl HttpClientConnectionAsync {
     }
 
     pub fn new_tls(lh: reactor::Handle, addr: &SocketAddr) -> (Self, HttpFuture<()>) {
+        unimplemented!()
+        /*
         let addr = addr.clone();
 
         let connect = TcpStream::connect(&addr, &lh)
@@ -377,6 +379,7 @@ impl HttpClientConnectionAsync {
         let tls_conn = tls_conn.map_err(HttpError::from);
 
         HttpClientConnectionAsync::connected(lh, Box::new(tls_conn))
+        */
     }
 
     pub fn start_request(

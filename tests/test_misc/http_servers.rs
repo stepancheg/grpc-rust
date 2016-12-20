@@ -37,14 +37,16 @@ impl HttpServerOneConn {
         HttpServerOneConn::new_fn_impl(port, None, service)
     }
 
+    /*
     pub fn new_tls_fn<S>(port: u16, server_context: tokio_tls::ServerContext, service: S) -> Self
         where S : Fn(Vec<StaticHeader>, HttpStreamStreamSend) -> HttpStreamStreamSend + Send + 'static
     {
         HttpServerOneConn::new_fn_impl(port, Some(server_context), service)
     }
+    */
 
     #[allow(dead_code)]
-    fn new_fn_impl<S>(port: u16, server_context: Option<tokio_tls::ServerContext>, service: S) -> Self
+    fn new_fn_impl<S>(port: u16, server_context: Option</* tokio_tls::ServerContext */ u32>, service: S) -> Self
         where S : Fn(Vec<StaticHeader>, HttpStreamStreamSend) -> HttpStreamStreamSend + Send + 'static
     {
         let (from_loop_tx, from_loop_rx) = futures::oneshot();
@@ -72,7 +74,8 @@ impl HttpServerOneConn {
                     drop(listener);
 
                     if let Some(server_context) = server_context {
-                        HttpServerConnectionAsync::new_tls_fn(&handle, conn, server_context, service)
+                        //HttpServerConnectionAsync::new_tls_fn(&handle, conn, server_context, service)
+                        unimplemented!()
                     } else {
                         HttpServerConnectionAsync::new_plain_fn(&handle, conn, service)
                     }

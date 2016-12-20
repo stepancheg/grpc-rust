@@ -10,7 +10,8 @@ mod test_misc;
 
 use std::sync::Arc;
 
-use futures::*;
+use futures::future::*;
+use futures::stream;
 use futures::stream::Stream;
 
 use grpc::server::*;

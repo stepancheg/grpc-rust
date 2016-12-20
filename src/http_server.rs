@@ -401,6 +401,7 @@ impl HttpServerConnectionAsync {
         HttpServerConnectionAsync::connected(lh, Box::new(futures::finished(socket)), factory)
     }
 
+    /*
     pub fn new_tls<F>(lh: &reactor::Handle, socket: TcpStream, server_context: tokio_tls::ServerContext, factory: F) -> HttpFuture<()>
         where
             F : HttpService,
@@ -409,6 +410,7 @@ impl HttpServerConnectionAsync {
 
         HttpServerConnectionAsync::connected(lh, Box::new(stream), factory)
     }
+    */
 
     pub fn new_plain_fn<F>(lh: &reactor::Handle, socket: TcpStream, f: F) -> HttpFuture<()>
         where
@@ -427,6 +429,7 @@ impl HttpServerConnectionAsync {
         HttpServerConnectionAsync::new_plain(lh, socket, HttpServiceFn(f))
     }
 
+    /*
     pub fn new_tls_fn<F>(lh: &reactor::Handle, socket: TcpStream, server_context: tokio_tls::ServerContext, f: F) -> HttpFuture<()>
         where
             F : Fn(Vec<StaticHeader>, HttpStreamStreamSend) -> HttpStreamStreamSend + Send + 'static,
@@ -443,4 +446,5 @@ impl HttpServerConnectionAsync {
 
         HttpServerConnectionAsync::new_tls(lh, socket, server_context, HttpServiceFn(f))
     }
+    */
 }
