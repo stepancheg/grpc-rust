@@ -151,9 +151,20 @@ pub trait HttpReadLoopInner : 'static {
 
     fn process_stream_window_update_frame(&mut self, frame: WindowUpdateFrame) {
         {
-            let stream = self.common().get_stream_mut(frame.get_stream_id()).expect("stream not found");
-            stream.common_mut().out_window_size.try_increase(frame.increment())
-                .expect("failed to increment stream window");
+            match self.common().get_stream_mut(frame.get_stream_id()) {
+                Some(stream) => {
+                    stream.common_mut().out_window_size.try_increase(frame.increment())
+                        .expect("failed to increment stream window");
+                }
+                None => {
+                    // 6.9
+                    // WINDOW_UPDATE can be sent by a peer that has sent a frame bearing the
+                    // END_STREAM flag.  This means that a receiver could receive a
+                    // WINDOW_UPDATE frame on a "half-closed (remote)" or "closed" stream.
+                    // A receiver MUST NOT treat this as an error (see Section 5.1).
+                    debug!("WINDOW_UPDATE of unknown stream: {}", frame.get_stream_id());
+                }
+            }
         }
         self.out_window_increased(Some(frame.get_stream_id()));
     }
@@ -184,7 +195,8 @@ pub trait HttpReadLoopInner : 'static {
             };
 
         let increment_stream = {
-            let stream = self.common().get_stream_mut(frame.get_stream_id()).expect("stream not found");
+            let stream = self.common().get_stream_mut(frame.get_stream_id())
+                .expect(&format!("stream not found: {}", frame.get_stream_id()));
 
             stream.common_mut().in_window_size.try_decrease(frame.payload_len() as i32)
                 .expect("failed to decrease stream win");
@@ -265,7 +277,8 @@ pub trait HttpReadLoopInner : 'static {
         debug!("close remote: {}", stream_id);
 
         let remove = {
-            let mut stream = self.common().get_stream_mut(stream_id).expect("stream not found");
+            let mut stream = self.common().get_stream_mut(stream_id)
+                .expect(&format!("stream not found: {}", stream_id));
             stream.close_remote();
             stream.common().state == StreamState::Closed
         };
