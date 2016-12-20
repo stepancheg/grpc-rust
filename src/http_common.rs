@@ -151,9 +151,12 @@ pub trait HttpReadLoopInner : 'static {
 
     fn process_stream_window_update_frame(&mut self, frame: WindowUpdateFrame) {
         {
-            let stream = self.common().get_stream_mut(frame.get_stream_id()).expect("stream not found");
-            stream.common_mut().out_window_size.try_increase(frame.increment())
-                .expect("failed to increment stream window");
+            match self.common().get_stream_mut(frame.get_stream_id()) {
+                Some(stream) =>  stream.common_mut()
+                    .out_window_size.try_increase(frame.increment())
+                    .expect("failed to increment stream window"),
+                None => debug!("Attempted to update window on a stream that has been closed {:?}", frame),
+            }
         }
         self.out_window_increased(Some(frame.get_stream_id()));
     }
@@ -265,10 +268,18 @@ pub trait HttpReadLoopInner : 'static {
         debug!("close remote: {}", stream_id);
 
         let remove = {
-            let mut stream = self.common().get_stream_mut(stream_id).expect("stream not found");
-            stream.close_remote();
-            stream.common().state == StreamState::Closed
+            match self.common().get_stream_mut(stream_id) {
+                Some(stream) => {
+                    stream.close_remote();
+                    stream.common().state == StreamState::Closed
+                },
+                None => {
+                    debug!("attempted to close_remote on a stream that doesn't exist {}", stream_id);
+                    false
+                },
+            }
         };
+
         if remove {
             self.common().remove_stream(stream_id);
         }
