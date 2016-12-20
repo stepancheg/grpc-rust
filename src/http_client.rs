@@ -122,7 +122,9 @@ struct ClientInner {
 impl ClientInner {
     fn insert_stream(&mut self, stream: GrpcHttpClientStream) -> StreamId {
         let id = self.session_state.next_stream_id;
-        self.common.streams.insert(id, stream);
+        if let Some(..) = self.common.streams.insert(id, stream) {
+            panic!("inserted stream that already existed");
+        }
         self.session_state.next_stream_id += 2;
         id
     }

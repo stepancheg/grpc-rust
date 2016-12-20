@@ -179,7 +179,9 @@ impl<F : HttpService> ServerInner<F> {
             request_handler: Some(req_tx),
             _marker: marker::PhantomData,
         };
-        self.common.streams.insert(stream_id, stream);
+        if let Some(..) = self.common.streams.insert(stream_id, stream) {
+            panic!("inserted stream that already existed");
+        }
         self.common.streams.get_mut(&stream_id).unwrap()
     }
 
