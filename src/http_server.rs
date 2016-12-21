@@ -151,16 +151,20 @@ impl<F : HttpService> ServerInner<F> {
             let process_response = response.for_each(move |part: HttpStreamPart| {
                 // drop error if connection is closed
                 if let Err(e) = to_write_tx.send(ServerToWriteMessage::ResponsePart(stream_id, part)) {
-                    warn!("failed to write to channel, probably connection is closed: {}", e);
+                    warn!("failed to write Part to channel, probably connection is closed: {}", e);
+                    // failing to retun an Err when the other side is broken results in a never-ending
+                    // event loop.
+                    return Err(HttpError::from(io::Error::new(io::ErrorKind::Other, "unexpected eof when writing Part")));
                 }
                 Ok(())
             }).and_then(move |()| {
                 // drop error if connection is closed
                 if let Err(e) = to_write_tx2.send(ServerToWriteMessage::ResponseStreamEnd(stream_id)) {
-                    warn!("failed to write to channel, probably connection is closed: {}", e);
+                    warn!("failed to write Stream End to channel, probably connection is closed: {}", e);
+                    return Err(HttpError::from(io::Error::new(io::ErrorKind::Other, "unexpected eof when writing Stream End")));
                 }
                 Ok(())
-            }).map_err(|e| panic!("{:?}", e)); // TODO: handle
+            }).map_err(|e| warn!("processing stream resulted in an error {:?}", e));
 
             self.session_state.loop_handle.spawn(process_response);
         }
