@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::collections::VecDeque;
+use std::cmp;
 
 use futures::stream::Stream;
 use futures::Future;
@@ -16,6 +17,7 @@ use solicit::http::HttpError;
 use solicit::http::WindowSize;
 use solicit::http::HttpScheme;
 use solicit::http::INITIAL_CONNECTION_WINDOW_SIZE;
+use solicit::http::connection::EndStream;
 use solicit::http::connection::HttpConnection;
 use solicit::http::connection::SendFrame;
 
@@ -77,7 +79,7 @@ pub trait HttpService: Send + 'static {
 
 
 pub enum CommonToWriteMessage {
-    OutWindowIncreased(Option<StreamId>),
+    TryFlushStream(Option<StreamId>), // flush stream when window increased or new data added
     Write(Vec<u8>),
 }
 
@@ -147,6 +149,14 @@ impl GrpcHttpStreamCommon {
             last: self.outgoing_end && self.outgoing.is_empty(),
         })
     }
+
+    pub fn pop_outg_all(&mut self, conn_out_window_size: &mut WindowSize) -> Vec<HttpStreamPart> {
+        let mut r = Vec::new();
+        while let Some(p) = self.pop_outg(conn_out_window_size) {
+            r.push(p);
+        }
+        r
+    }
 }
 
 
@@ -198,40 +208,135 @@ impl<S> LoopInnerCommon<S>
         }
     }
 
-    pub fn pop_outg_for_conn(&mut self) -> Option<HttpStreamPart> {
+    pub fn pop_outg_for_conn(&mut self) -> Option<(StreamId, HttpStreamPart)> {
         // TODO: lame
         let stream_ids: Vec<StreamId> = self.streams.keys().cloned().collect();
         for stream_id in stream_ids {
             let r = self.pop_outg_for_stream(stream_id);
             if let Some(r) = r {
-                return Some(r);
+                return Some((stream_id, r));
             }
         }
         None
+    }
+
+    pub fn pop_outg_all_for_stream(&mut self, stream_id: StreamId) -> Vec<HttpStreamPart> {
+        let mut r = Vec::new();
+        while let Some(p) = self.pop_outg_for_stream(stream_id) {
+            r.push(p);
+        }
+        r
+    }
+
+    pub fn pop_outg_all_for_conn(&mut self) -> Vec<(StreamId, HttpStreamPart)> {
+        let mut r = Vec::new();
+        while let Some(p) = self.pop_outg_for_conn() {
+            r.push(p);
+        }
+        r
+    }
+
+    fn write_part(&mut self, target: &mut VecSendFrame, stream_id: StreamId, part: HttpStreamPart) {
+        match part.content {
+            HttpStreamPartContent::Data(data) => {
+                // if client requested end of stream,
+                // we must send at least one frame with end stream flag
+                if part.last && data.len() == 0 {
+                    let mut frame = DataFrame::with_data(stream_id, Vec::new());
+                    frame.set_flag(DataFlag::EndStream);
+                    return target.send_frame(frame).unwrap();
+                }
+
+                let mut pos = 0;
+                const MAX_CHUNK_SIZE: usize = 8 * 1024;
+                while pos < data.len() {
+                    let end = cmp::min(data.len(), pos + MAX_CHUNK_SIZE);
+
+                    let end_stream =
+                        if end == data.len() && part.last {
+                            EndStream::Yes
+                        } else {
+                            EndStream::No
+                        };
+
+                    let mut frame = DataFrame::with_data(stream_id, &data[pos..end]);
+                    if end_stream == EndStream::Yes {
+                        frame.set_flag(DataFlag::EndStream);
+                    }
+                    target.send_frame(frame).unwrap();
+
+                    pos = end;
+                }
+            }
+            HttpStreamPartContent::Headers(headers) => {
+                let headers_fragment = self
+                    .conn.encoder.encode(headers.iter().map(|h| (h.name(), h.value())));
+
+                // For now, sending header fragments larger than 16kB is not supported
+                // (i.e. the encoded representation cannot be split into CONTINUATION
+                // frames).
+                let mut frame = HeadersFrame::new(headers_fragment, stream_id);
+                frame.set_flag(HeadersFlag::EndHeaders);
+
+                if part.last {
+                    frame.set_flag(HeadersFlag::EndStream);
+                }
+
+                target.send_frame(frame).unwrap();
+            }
+        }
+    }
+
+    pub fn pop_outg_all_for_stream_bytes(&mut self, stream_id: StreamId) -> Vec<u8> {
+        let mut send = VecSendFrame(Vec::new());
+        for part in self.pop_outg_all_for_stream(stream_id) {
+            self.write_part(&mut send, stream_id, part);
+        }
+        send.0
+    }
+
+    pub fn pop_outg_all_for_conn_bytes(&mut self) -> Vec<u8> {
+        let mut send = VecSendFrame(Vec::new());
+        for (stream_id, part) in self.pop_outg_all_for_conn() {
+            self.write_part(&mut send, stream_id, part);
+        }
+        send.0
     }
 }
 
 
 pub trait WriteLoop : Sized + 'static {
+    type Inner : LoopInner;
+
+    fn with_inner<G, R>(&self, f: G) -> R
+        where G: FnOnce(&mut Self::Inner) -> R;
+
+    fn write_all(self, buf: Vec<u8>) -> HttpFuture<Self>;
+
     fn send_outg_stream(self, stream_id: StreamId) -> HttpFuture<Self> {
-        // TODO
-        Box::new(futures::finished(self))
+        let bytes = self.with_inner(|inner| {
+            inner.common().pop_outg_all_for_stream_bytes(stream_id)
+        });
+
+        self.write_all(bytes)
     }
 
     fn send_outg_conn(self) -> HttpFuture<Self> {
-        // TODO
-        Box::new(futures::finished(self))
+        let bytes = self.with_inner(|inner| {
+            inner.common().pop_outg_all_for_conn_bytes()
+        });
+
+        self.write_all(bytes)
     }
 
     fn process_common(self, common: CommonToWriteMessage) -> HttpFuture<Self> {
         match common {
-            CommonToWriteMessage::OutWindowIncreased(None) => self.send_outg_conn(),
-            CommonToWriteMessage::OutWindowIncreased(Some(stream_id)) => self.send_outg_stream(stream_id),
+            CommonToWriteMessage::TryFlushStream(None) => self.send_outg_conn(),
+            CommonToWriteMessage::TryFlushStream(Some(stream_id)) => self.send_outg_stream(stream_id),
             CommonToWriteMessage::Write(buf) => self.write_all(buf),
         }
     }
 
-    fn write_all(self, buf: Vec<u8>) -> HttpFuture<Self>;
 }
 
 
@@ -251,7 +356,7 @@ pub trait LoopInner: 'static {
     fn send_common(&mut self, message: CommonToWriteMessage);
 
     fn out_window_increased(&mut self, stream_id: Option<StreamId>) {
-        self.send_common(CommonToWriteMessage::OutWindowIncreased(stream_id))
+        self.send_common(CommonToWriteMessage::TryFlushStream(stream_id))
     }
 
     /// Sends an SETTINGS Frame with ack set to acknowledge seeing a SETTINGS frame from the peer.

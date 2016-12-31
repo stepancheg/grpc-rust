@@ -111,6 +111,7 @@ impl GrpcHttpClientStream {
 struct GrpcHttpClientSessionState {
     next_stream_id: StreamId,
     decoder: hpack::Decoder<'static>,
+    loop_handle: reactor::Handle,
 }
 
 struct ClientInner {
@@ -208,6 +209,14 @@ struct ClientWriteLoop<I : Io + Send + 'static> {
 }
 
 impl<I : Io + Send + 'static> WriteLoop for ClientWriteLoop<I> {
+    type Inner = ClientInner;
+
+    fn with_inner<G, R>(&self, f: G) -> R
+        where G: FnOnce(&mut Self::Inner) -> R
+    {
+        self.inner.with(f)
+    }
+
     fn write_all(self, buf: Vec<u8>) -> HttpFuture<Self> {
         let ClientWriteLoop { write, inner } = self;
 
@@ -220,6 +229,23 @@ impl<I : Io + Send + 'static> WriteLoop for ClientWriteLoop<I> {
 impl<I : Io + Send + 'static> ClientWriteLoop<I> {
     fn process_start(self, start: StartRequestMessage) -> HttpFuture<Self> {
         let StartRequestMessage { headers, body, response_handler } = start;
+
+        /*
+
+        let stream_id = self.inner.with(move |inner: &mut ClientInner| {
+
+            let stream = GrpcHttpClientStream {
+                common: GrpcHttpStreamCommon::new(),
+                response_handler: Some(response_handler),
+            };
+
+            stream.common.outgoing.push_back(HttpStreamPartContent::Headers(headers));
+
+            inner.insert_stream(stream)
+        });
+
+        */
+
         let (buf, stream_id) = self.inner.with(move |inner: &mut ClientInner| {
 
             let stream = GrpcHttpClientStream {
@@ -233,41 +259,49 @@ impl<I : Io + Send + 'static> ClientWriteLoop<I> {
             (send_buf, stream_id)
         });
 
-        Box::new(self.write_all(buf)
-            .and_then(move |wl: ClientWriteLoop<_>| {
-                body.fold(wl, move |wl: ClientWriteLoop<_>, chunk| {
-                    wl.inner.with(|inner: &mut ClientInner| {
-                        inner.to_write_tx.send(ClientToWriteMessage::BodyChunk(BodyChunkMessage {
-                            stream_id: stream_id,
-                            chunk: chunk,
-                        })).unwrap()
-                    });
-                    futures::finished::<_, HttpError>(wl)
-                })
-            })
-            .and_then(move |wl: ClientWriteLoop<_>| {
-                wl.inner.with(|inner: &mut ClientInner| {
-                    inner.to_write_tx.send(ClientToWriteMessage::End(EndRequestMessage {
+        let to_write_tx_1 = self.inner.with(|inner| inner.to_write_tx.clone());
+        let to_write_tx_2 = to_write_tx_1.clone();
+
+        self.inner.with(|inner: &mut ClientInner| {
+            let future = body
+                .fold((), move |(), chunk| {
+                    to_write_tx_1.send(ClientToWriteMessage::BodyChunk(BodyChunkMessage {
                         stream_id: stream_id,
-                    })).unwrap()
+                        chunk: chunk,
+                    })).unwrap();
+                    futures::finished::<_, HttpError>(())
                 });
-                futures::finished::<_, HttpError>(wl)
-            }))
+            let future = future
+                .and_then(move |()| {
+                    to_write_tx_2.send(ClientToWriteMessage::End(EndRequestMessage {
+                        stream_id: stream_id,
+                    })).unwrap();
+                    futures::finished::<_, HttpError>(())
+                });
+
+            let future = future.map_err(|e| {
+                warn!("{:?}", e);
+                ()
+            });
+
+            inner.session_state.loop_handle.spawn(future);
+        });
+
+        Box::new(self.write_all(buf))
     }
 
     fn process_body_chunk(self, body_chunk: BodyChunkMessage) -> HttpFuture<Self> {
         let BodyChunkMessage { stream_id, chunk } = body_chunk;
 
-        let buf = self.inner.with(move |inner: &mut ClientInner| {
-            {
-                let _stream = inner.common.get_stream_mut(stream_id);
-                // TODO: check stream state
-            }
+        self.inner.with(move |inner: &mut ClientInner| {
+            let stream = inner.common.get_stream_mut(stream_id)
+                .expect(&format!("stream not found: {}", stream_id));
+            // TODO: check stream state
 
-            inner.common.conn.send_data_frames_to_vec(stream_id, &chunk, EndStream::No).unwrap()
+            stream.common.outgoing.push_front(HttpStreamPartContent::Data(chunk));
         });
 
-        self.write_all(buf)
+        self.send_outg_stream(stream_id)
     }
 
     fn process_end(self, end: EndRequestMessage) -> HttpFuture<Self> {
@@ -324,6 +358,7 @@ impl HttpClientConnectionAsync {
                 session_state: GrpcHttpClientSessionState {
                     next_stream_id: 1,
                     decoder: hpack::Decoder::new(),
+                    loop_handle: lh,
                 }
             });
 

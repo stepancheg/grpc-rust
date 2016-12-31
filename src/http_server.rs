@@ -245,6 +245,14 @@ struct ServerWriteLoop<F, I>
 }
 
 impl<F : HttpService, I : Io> WriteLoop for ServerWriteLoop<F, I> {
+    type Inner = ServerInner<F>;
+
+    fn with_inner<G, R>(&self, f: G) -> R
+        where G: FnOnce(&mut Self::Inner) -> R
+    {
+        self.inner.with(f)
+    }
+
     fn write_all(self, buf: Vec<u8>) -> HttpFuture<Self> {
         let ServerWriteLoop { write, inner } = self;
 
