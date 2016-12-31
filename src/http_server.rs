@@ -204,16 +204,9 @@ impl<F : HttpService> HttpReadLoopInner for ServerInner<F> {
         &mut self.common
     }
 
-    fn send_frame<R : FrameIR>(&mut self, frame: R) {
-        let mut send_buf = VecSendFrame(Vec::new());
-        send_buf.send_frame(frame).unwrap();
-        self.session_state.to_write_tx.send(ServerToWriteMessage::FromRead(ServerReadToWriteMessage { buf: send_buf.0 }))
-            .expect("read to write");
-    }
-
-    fn out_window_increased(&mut self, stream_id: Option<StreamId>) {
-        self.session_state.to_write_tx.send(ServerToWriteMessage::OutWindowIncreased(stream_id))
-            .expect("read to write");
+    fn send_common(&mut self, message: CommonToWriteMessage) {
+        self.session_state.to_write_tx.send(ServerToWriteMessage::Common(message))
+            .expect("read to write common");
     }
 
     fn process_headers_frame(&mut self, frame: HeadersFrame) {
@@ -235,16 +228,11 @@ impl<F : HttpService> HttpReadLoopInner for ServerInner<F> {
 type ServerReadLoop<F, I> = HttpReadLoopData<I, ServerInner<F>>;
 
 
-struct ServerReadToWriteMessage {
-    buf: Vec<u8>,
-}
-
 enum ServerToWriteMessage<F : HttpService> {
     _Dummy(F),
-    FromRead(ServerReadToWriteMessage),
     ResponsePart(StreamId, HttpStreamPart),
     ResponseStreamEnd(StreamId),
-    OutWindowIncreased(Option<StreamId>),
+    Common(CommonToWriteMessage),
 }
 
 struct ServerWriteLoop<F, I>
@@ -256,15 +244,7 @@ struct ServerWriteLoop<F, I>
     inner: TaskRcMut<ServerInner<F>>,
 }
 
-impl<F : HttpService, I : Io> ServerWriteLoop<F, I> {
-    fn _loop_handle(&self) -> reactor::Handle {
-        self.inner.with(move |inner: &mut ServerInner<F>| inner.session_state.loop_handle.clone())
-    }
-
-    fn _to_write_tx(&self) -> tokio_core::channel::Sender<ServerToWriteMessage<F>> {
-        self.inner.with(move |inner: &mut ServerInner<F>| inner.session_state.to_write_tx.clone())
-    }
-
+impl<F : HttpService, I : Io> WriteLoop for ServerWriteLoop<F, I> {
     fn write_all(self, buf: Vec<u8>) -> HttpFuture<Self> {
         let ServerWriteLoop { write, inner } = self;
 
@@ -272,9 +252,15 @@ impl<F : HttpService, I : Io> ServerWriteLoop<F, I> {
             .map(move |(write, _)| ServerWriteLoop { write: write, inner: inner })
             .map_err(HttpError::from))
     }
+}
 
-    fn process_from_read(self, message: ServerReadToWriteMessage) -> HttpFuture<Self> {
-        self.write_all(message.buf)
+impl<F : HttpService, I : Io> ServerWriteLoop<F, I> {
+    fn _loop_handle(&self) -> reactor::Handle {
+        self.inner.with(move |inner: &mut ServerInner<F>| inner.session_state.loop_handle.clone())
+    }
+
+    fn _to_write_tx(&self) -> tokio_core::channel::Sender<ServerToWriteMessage<F>> {
+        self.inner.with(move |inner: &mut ServerInner<F>| inner.session_state.to_write_tx.clone())
     }
 
     fn process_response_part(self, stream_id: StreamId, part: HttpStreamPart) -> HttpFuture<Self> {
@@ -339,10 +325,9 @@ impl<F : HttpService, I : Io> ServerWriteLoop<F, I> {
 
     fn process_message(self, message: ServerToWriteMessage<F>) -> HttpFuture<Self> {
         match message {
-            ServerToWriteMessage::FromRead(from_read) => self.process_from_read(from_read),
             ServerToWriteMessage::ResponsePart(stream_id, response) => self.process_response_part(stream_id, response),
             ServerToWriteMessage::ResponseStreamEnd(stream_id) => self.process_response_end(stream_id),
-            ServerToWriteMessage::OutWindowIncreased(_stream_id) => { /* TODO */ Box::new(futures::finished(self)) },
+            ServerToWriteMessage::Common(common) => self.process_common(common),
             ServerToWriteMessage::_Dummy(..) => panic!(),
         }
     }

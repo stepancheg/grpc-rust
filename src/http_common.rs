@@ -16,6 +16,7 @@ use solicit::http::WindowSize;
 use solicit::http::HttpScheme;
 use solicit::http::INITIAL_CONNECTION_WINDOW_SIZE;
 use solicit::http::connection::HttpConnection;
+use solicit::http::connection::SendFrame;
 
 use futures_misc::*;
 
@@ -71,6 +72,12 @@ pub type HttpStreamStreamSend = Box<Stream<Item=HttpStreamPart, Error=HttpError>
 
 pub trait HttpService: Send + 'static {
     fn new_request(&mut self, headers: Vec<StaticHeader>, req: HttpStreamStreamSend) -> HttpStreamStreamSend;
+}
+
+
+pub enum CommonToWriteMessage {
+    OutWindowIncreased(Option<StreamId>),
+    Write(Vec<u8>),
 }
 
 
@@ -132,6 +139,19 @@ impl<S> LoopInnerCommon<S>
 }
 
 
+pub trait WriteLoop : Sized + 'static {
+    fn process_common(self, common: CommonToWriteMessage) -> HttpFuture<Self> {
+        match common {
+            // TODO
+            CommonToWriteMessage::OutWindowIncreased(..) => Box::new(futures::finished(self)),
+            CommonToWriteMessage::Write(buf) => self.write_all(buf),
+        }
+    }
+
+    fn write_all(self, buf: Vec<u8>) -> HttpFuture<Self>;
+}
+
+
 pub trait HttpReadLoopInner : 'static {
     type LoopHttpStream : GrpcHttpStream;
 
@@ -139,8 +159,17 @@ pub trait HttpReadLoopInner : 'static {
 
     /// Send a frame back to the network
     /// Must not be data frame
-    fn send_frame<R : FrameIR>(&mut self, frame: R);
-    fn out_window_increased(&mut self, stream_id: Option<StreamId>);
+    fn send_frame<R : FrameIR>(&mut self, frame: R) {
+        let mut send_buf = VecSendFrame(Vec::new());
+        send_buf.send_frame(frame).unwrap();
+        self.send_common(CommonToWriteMessage::Write(send_buf.0))
+    }
+
+    fn send_common(&mut self, message: CommonToWriteMessage);
+
+    fn out_window_increased(&mut self, stream_id: Option<StreamId>) {
+        self.send_common(CommonToWriteMessage::OutWindowIncreased(stream_id))
+    }
 
     /// Sends an SETTINGS Frame with ack set to acknowledge seeing a SETTINGS frame from the peer.
     fn ack_settings(&mut self) {

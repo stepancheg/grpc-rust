@@ -141,16 +141,9 @@ impl HttpReadLoopInner for ClientInner {
         &mut self.common
     }
 
-    fn send_frame<R: FrameIR>(&mut self, frame: R) {
-        let mut send_buf = VecSendFrame(Vec::new());
-        send_buf.send_frame(frame).unwrap();
-        self.to_write_tx.send(ClientToWriteMessage::FromRead(ClientReadToWriteMessage { buf: send_buf.0 }))
-            .expect("read to write");
-    }
-
-    fn out_window_increased(&mut self, stream_id: Option<StreamId>) {
-        self.to_write_tx.send(ClientToWriteMessage::OutWindowIncreased(stream_id))
-            .expect("read to write");
+    fn send_common(&mut self, message: CommonToWriteMessage) {
+        self.to_write_tx.send(ClientToWriteMessage::Common(message))
+            .expect("read to write common");
     }
 
     fn process_headers_frame(&mut self, frame: HeadersFrame) {
@@ -178,7 +171,6 @@ impl HttpReadLoopInner for ClientInner {
             }
         }
     }
-
 }
 
 pub struct HttpClientConnectionAsync {
@@ -203,16 +195,11 @@ struct EndRequestMessage {
     stream_id: StreamId,
 }
 
-struct ClientReadToWriteMessage {
-    buf: Vec<u8>,
-}
-
 enum ClientToWriteMessage {
     Start(StartRequestMessage),
     BodyChunk(BodyChunkMessage),
     End(EndRequestMessage),
-    FromRead(ClientReadToWriteMessage),
-    OutWindowIncreased(Option<StreamId>),
+    Common(CommonToWriteMessage),
 }
 
 struct ClientWriteLoop<I : Io + Send + 'static> {
@@ -220,7 +207,7 @@ struct ClientWriteLoop<I : Io + Send + 'static> {
     inner: TaskRcMut<ClientInner>,
 }
 
-impl<I : Io + Send + 'static> ClientWriteLoop<I> {
+impl<I : Io + Send + 'static> WriteLoop for ClientWriteLoop<I> {
     fn write_all(self, buf: Vec<u8>) -> HttpFuture<Self> {
         let ClientWriteLoop { write, inner } = self;
 
@@ -228,11 +215,9 @@ impl<I : Io + Send + 'static> ClientWriteLoop<I> {
             .map(move |(write, _)| ClientWriteLoop { write: write, inner: inner })
             .map_err(HttpError::from))
     }
+}
 
-    fn process_from_read(self, message: ClientReadToWriteMessage) -> HttpFuture<Self> {
-        self.write_all(message.buf)
-    }
-
+impl<I : Io + Send + 'static> ClientWriteLoop<I> {
     fn process_start(self, start: StartRequestMessage) -> HttpFuture<Self> {
         let StartRequestMessage { headers, body, response_handler } = start;
         let (buf, stream_id) = self.inner.with(move |inner: &mut ClientInner| {
@@ -300,8 +285,7 @@ impl<I : Io + Send + 'static> ClientWriteLoop<I> {
             ClientToWriteMessage::Start(start) => self.process_start(start),
             ClientToWriteMessage::BodyChunk(body_chunk) => self.process_body_chunk(body_chunk),
             ClientToWriteMessage::End(end) => self.process_end(end),
-            ClientToWriteMessage::FromRead(from_read) => self.process_from_read(from_read),
-            ClientToWriteMessage::OutWindowIncreased(_stream_id) => { /* TODO */ Box::new(futures::finished(self)) },
+            ClientToWriteMessage::Common(common) => self.process_common(common),
         }
     }
 
