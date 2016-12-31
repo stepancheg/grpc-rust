@@ -290,11 +290,15 @@ impl<I : Io + Send + 'static> ClientWriteLoop<I> {
     fn process_end(self, end: EndRequestMessage) -> HttpFuture<Self> {
         let EndRequestMessage { stream_id } = end;
 
-        let buf = self.inner.with(move |inner: &mut ClientInner| {
-            inner.common.conn.send_end_of_stream_to_vec(stream_id).unwrap()
+        self.inner.with(move |inner: &mut ClientInner| {
+            let stream = inner.common.get_stream_mut(stream_id)
+                .expect(&format!("stream not found: {}", stream_id));
+
+            // TODO: check stream state
+            stream.common.outgoing_end = true;
         });
 
-        self.write_all(buf)
+        self.send_outg_stream(stream_id)
     }
 
     fn process_message(self, message: ClientToWriteMessage) -> HttpFuture<Self> {

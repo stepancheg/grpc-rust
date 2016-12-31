@@ -103,9 +103,26 @@ impl GrpcHttpStreamCommon {
         }
     }
 
+    fn close_local(&mut self) {
+        self.state = match self.state {
+            StreamState::Closed | StreamState::HalfClosedRemote => StreamState::Closed,
+            _ => StreamState::HalfClosedLocal,
+        };
+    }
+
     pub fn pop_outg(&mut self, conn_out_window_size: &mut WindowSize) -> Option<HttpStreamPart> {
         if self.outgoing.is_empty() {
-            return None
+            return
+                if self.outgoing_end {
+                    if self.state.is_closed_local() {
+                        None
+                    } else {
+                        self.close_local();
+                        Some(HttpStreamPart::last_data(Vec::new()))
+                    }
+                } else {
+                    None
+                };
         }
 
         let pop_headers =
@@ -116,9 +133,13 @@ impl GrpcHttpStreamCommon {
             };
         if pop_headers {
             let r = self.outgoing.pop_front().unwrap();
+            let last = self.outgoing_end && self.outgoing.is_empty();
+            if last {
+                self.close_local();
+            }
             return Some(HttpStreamPart {
                 content: r,
-                last: self.outgoing_end && self.outgoing.is_empty(),
+                last: last,
             })
         }
 
@@ -144,9 +165,13 @@ impl GrpcHttpStreamCommon {
             self.out_window_size.try_decrease(data.len() as i32).unwrap();
         };
 
+        let last = self.outgoing_end && self.outgoing.is_empty();
+        if last {
+            self.close_local();
+        }
         Some(HttpStreamPart {
             content: HttpStreamPartContent::Data(data),
-            last: self.outgoing_end && self.outgoing.is_empty(),
+            last: last,
         })
     }
 
@@ -201,6 +226,7 @@ impl<S> LoopInnerCommon<S>
 
 
     pub fn pop_outg_for_stream(&mut self, stream_id: StreamId) -> Option<HttpStreamPart> {
+        // TODO: remove closed streams
         if let Some(stream) = self.streams.get_mut(&stream_id) {
             stream.common_mut().pop_outg(&mut self.conn.out_window_size)
         } else {
