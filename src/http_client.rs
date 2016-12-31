@@ -134,7 +134,7 @@ impl ClientInner {
     }
 }
 
-impl HttpReadLoopInner for ClientInner {
+impl LoopInner for ClientInner {
     type LoopHttpStream = GrpcHttpClientStream;
 
     fn common(&mut self) -> &mut LoopInnerCommon<GrpcHttpClientStream> {

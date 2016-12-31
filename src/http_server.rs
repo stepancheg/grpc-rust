@@ -197,7 +197,7 @@ impl<F : HttpService> ServerInner<F> {
     }
 }
 
-impl<F : HttpService> HttpReadLoopInner for ServerInner<F> {
+impl<F : HttpService> LoopInner for ServerInner<F> {
     type LoopHttpStream = GrpcHttpServerStream<F>;
 
     fn common(&mut self) -> &mut LoopInnerCommon<GrpcHttpServerStream<F>> {

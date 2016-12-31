@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::collections::VecDeque;
 
 use futures::stream::Stream;
 use futures::Future;
@@ -85,6 +86,8 @@ pub struct GrpcHttpStreamCommon {
     pub state: StreamState,
     pub out_window_size: WindowSize,
     pub in_window_size: WindowSize,
+    pub outgoing: VecDeque<HttpStreamPartContent>,
+    pub outgoing_end: bool,
 }
 
 impl GrpcHttpStreamCommon {
@@ -93,7 +96,56 @@ impl GrpcHttpStreamCommon {
             state: StreamState::Open,
             in_window_size: WindowSize::new(INITIAL_CONNECTION_WINDOW_SIZE),
             out_window_size: WindowSize::new(INITIAL_CONNECTION_WINDOW_SIZE),
+            outgoing: VecDeque::new(),
+            outgoing_end: false,
         }
+    }
+
+    pub fn pop_outg(&mut self, conn_out_window_size: &mut WindowSize) -> Option<HttpStreamPart> {
+        if self.outgoing.is_empty() {
+            return None
+        }
+
+        let pop_headers =
+            if let &HttpStreamPartContent::Headers(..) = self.outgoing.front().unwrap() {
+                true
+            } else {
+                false
+            };
+        if pop_headers {
+            let r = self.outgoing.pop_front().unwrap();
+            return Some(HttpStreamPart {
+                content: r,
+                last: self.outgoing_end && self.outgoing.is_empty(),
+            })
+        }
+
+        if self.out_window_size.size() <= 0 {
+            return None
+        }
+
+        let mut data =
+            if let Some(HttpStreamPartContent::Data(data)) = self.outgoing.pop_front() {
+                data
+            } else {
+                unreachable!()
+            };
+
+        if data.len() as usize > self.out_window_size.size() as usize {
+            let size = self.out_window_size.size() as usize;
+            self.outgoing.push_front(HttpStreamPartContent::Data(
+                data[size..].to_vec()
+            ));
+            data.truncate(size);
+            self.out_window_size.try_decrease(size as i32).unwrap();
+        } else {
+            self.out_window_size.try_decrease(data.len() as i32).unwrap();
+        };
+
+        Some(HttpStreamPart {
+            content: HttpStreamPartContent::Data(data),
+            last: self.outgoing_end && self.outgoing.is_empty(),
+        })
     }
 }
 
@@ -136,14 +188,45 @@ impl<S> LoopInnerCommon<S>
             self.remove_stream(stream_id);
         }
     }
+
+
+    pub fn pop_outg_for_stream(&mut self, stream_id: StreamId) -> Option<HttpStreamPart> {
+        if let Some(stream) = self.streams.get_mut(&stream_id) {
+            stream.common_mut().pop_outg(&mut self.conn.out_window_size)
+        } else {
+            None
+        }
+    }
+
+    pub fn pop_outg_for_conn(&mut self) -> Option<HttpStreamPart> {
+        // TODO: lame
+        let stream_ids: Vec<StreamId> = self.streams.keys().cloned().collect();
+        for stream_id in stream_ids {
+            let r = self.pop_outg_for_stream(stream_id);
+            if let Some(r) = r {
+                return Some(r);
+            }
+        }
+        None
+    }
 }
 
 
 pub trait WriteLoop : Sized + 'static {
+    fn send_outg_stream(self, stream_id: StreamId) -> HttpFuture<Self> {
+        // TODO
+        Box::new(futures::finished(self))
+    }
+
+    fn send_outg_conn(self) -> HttpFuture<Self> {
+        // TODO
+        Box::new(futures::finished(self))
+    }
+
     fn process_common(self, common: CommonToWriteMessage) -> HttpFuture<Self> {
         match common {
-            // TODO
-            CommonToWriteMessage::OutWindowIncreased(..) => Box::new(futures::finished(self)),
+            CommonToWriteMessage::OutWindowIncreased(None) => self.send_outg_conn(),
+            CommonToWriteMessage::OutWindowIncreased(Some(stream_id)) => self.send_outg_stream(stream_id),
             CommonToWriteMessage::Write(buf) => self.write_all(buf),
         }
     }
@@ -152,7 +235,7 @@ pub trait WriteLoop : Sized + 'static {
 }
 
 
-pub trait HttpReadLoopInner : 'static {
+pub trait LoopInner: 'static {
     type LoopHttpStream : GrpcHttpStream;
 
     fn common(&mut self) -> &mut LoopInnerCommon<Self::LoopHttpStream>;
@@ -327,7 +410,7 @@ pub trait HttpReadLoopInner : 'static {
 pub struct HttpReadLoopData<I, N>
     where
         I : Io + 'static,
-        N : HttpReadLoopInner,
+        N : LoopInner,
 {
     pub read: ReadHalf<I>,
     pub inner: TaskRcMut<N>,
@@ -336,7 +419,7 @@ pub struct HttpReadLoopData<I, N>
 impl<I, N> HttpReadLoopData<I, N>
     where
         I : Io + Send + 'static,
-        N : HttpReadLoopInner,
+        N : LoopInner,
 {
     /// Recv a frame from the network
     fn recv_raw_frame(self) -> HttpFuture<(Self, RawFrame<'static>)> {
