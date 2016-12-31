@@ -230,11 +230,9 @@ impl<I : Io + Send + 'static> ClientWriteLoop<I> {
     fn process_start(self, start: StartRequestMessage) -> HttpFuture<Self> {
         let StartRequestMessage { headers, body, response_handler } = start;
 
-        /*
-
         let stream_id = self.inner.with(move |inner: &mut ClientInner| {
 
-            let stream = GrpcHttpClientStream {
+            let mut stream = GrpcHttpClientStream {
                 common: GrpcHttpStreamCommon::new(),
                 response_handler: Some(response_handler),
             };
@@ -242,21 +240,6 @@ impl<I : Io + Send + 'static> ClientWriteLoop<I> {
             stream.common.outgoing.push_back(HttpStreamPartContent::Headers(headers));
 
             inner.insert_stream(stream)
-        });
-
-        */
-
-        let (buf, stream_id) = self.inner.with(move |inner: &mut ClientInner| {
-
-            let stream = GrpcHttpClientStream {
-                common: GrpcHttpStreamCommon::new(),
-                response_handler: Some(response_handler),
-            };
-            let stream_id = inner.insert_stream(stream);
-
-            let send_buf = inner.common.conn.send_headers_to_vec(stream_id, &headers, EndStream::No).unwrap();
-
-            (send_buf, stream_id)
         });
 
         let to_write_tx_1 = self.inner.with(|inner| inner.to_write_tx.clone());
@@ -287,7 +270,7 @@ impl<I : Io + Send + 'static> ClientWriteLoop<I> {
             inner.session_state.loop_handle.spawn(future);
         });
 
-        Box::new(self.write_all(buf))
+        self.send_outg_stream(stream_id)
     }
 
     fn process_body_chunk(self, body_chunk: BodyChunkMessage) -> HttpFuture<Self> {
