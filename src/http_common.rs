@@ -227,11 +227,17 @@ impl<S> LoopInnerCommon<S>
 
     pub fn pop_outg_for_stream(&mut self, stream_id: StreamId) -> Option<HttpStreamPart> {
         // TODO: remove closed streams
-        if let Some(stream) = self.streams.get_mut(&stream_id) {
-            stream.common_mut().pop_outg(&mut self.conn.out_window_size)
-        } else {
-            None
+        let r = {
+            if let Some(stream) = self.streams.get_mut(&stream_id) {
+                stream.common_mut().pop_outg(&mut self.conn.out_window_size)
+            } else {
+                None
+            }
+        };
+        if let Some(..) = r {
+            self.remove_stream_if_closed(stream_id);
         }
+        r
     }
 
     pub fn pop_outg_for_conn(&mut self) -> Option<(StreamId, HttpStreamPart)> {
