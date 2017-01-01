@@ -49,5 +49,5 @@ fn stream_count() {
     }
     let state: ConnectionState = client.dump_state().wait().expect("state");
     // TODO: crashes here
-    //assert_eq!(0, state.streams.len());
+    //assert_eq!(0, state.streams.len(), "{:?}", state);
 }

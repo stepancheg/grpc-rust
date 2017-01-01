@@ -128,7 +128,7 @@ impl ClientInner {
 
     fn dump_state(&self) -> ConnectionState {
         ConnectionState {
-            streams: self.common.streams.iter().map(|(&k, _v)| (k, ())).collect(),
+            streams: self.common.streams.iter().map(|(&k, s)| (k, s.common.state)).collect(),
         }
     }
 
@@ -332,8 +332,9 @@ impl<I : Io + Send + 'static> ClientWriteLoop<I> {
 
 type ClientReadLoop<I> = HttpReadLoopData<I, ClientInner>;
 
+#[derive(Debug)]
 pub struct ConnectionState {
-    pub streams: HashMap<StreamId, ()>,
+    pub streams: HashMap<StreamId, StreamState>,
 }
 
 impl HttpClientConnectionAsync {
