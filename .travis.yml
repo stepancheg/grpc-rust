@@ -14,5 +14,5 @@ rust:
 script:
   - rustc --version
   - cargo build
-  - cargo test
+  - ./test.sh
   - ./build-all.sh

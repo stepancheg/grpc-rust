@@ -7,9 +7,9 @@ use std::panic::catch_unwind;
 use std::panic::AssertUnwindSafe;
 use std::any::Any;
 
-use solicit::http::HttpError;
-use solicit::http::Header;
-use solicit::http::StaticHeader;
+use http2::HttpError;
+use http2::Header;
+use http2::StaticHeader;
 
 use futures;
 use futures::Future;
@@ -21,13 +21,13 @@ use tokio_core::net::TcpListener;
 use method::*;
 use error::*;
 use futures_grpc::*;
-use futures_misc::*;
-use solicit_misc::*;
+use http2::futures_misc::*;
+use http2::solicit_misc::*;
 use grpc::*;
 use grpc_frame::*;
-use assert_types::*;
-use http_server::*;
-use http_common::*;
+use http2::assert_types::*;
+use http2::http_server::*;
+use http2::http_common::*;
 
 
 pub trait MethodHandler<Req, Resp> {

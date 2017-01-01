@@ -14,7 +14,7 @@ use tokio_tls;
 use solicit::http::StaticHeader;
 use solicit::http::HttpError;
 
-use grpc::for_test::*;
+use http2::for_test::*;
 
 
 /// Single connection HTTP/server.

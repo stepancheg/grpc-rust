@@ -4,7 +4,7 @@ use std::fmt;
 
 use futures;
 
-use solicit::http::HttpError;
+use http2::HttpError;
 
 use protobuf::ProtobufError;
 

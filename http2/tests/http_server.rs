@@ -2,7 +2,7 @@ extern crate solicit_fork as solicit;
 extern crate futures;
 extern crate tokio_core;
 extern crate tokio_tls;
-extern crate grpc;
+extern crate http2;
 #[macro_use]
 extern crate log;
 
@@ -20,7 +20,7 @@ use tokio_core::reactor;
 use solicit::http::Header;
 use solicit::http::HttpError;
 
-use grpc::for_test::*;
+use http2::for_test::*;
 
 use test_misc::*;
 

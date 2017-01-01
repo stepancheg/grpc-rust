@@ -1,5 +1,7 @@
 #!/bin/sh -ex
 
+export RUST_BACKTRACE=1
+
 cargo build
 cargo build --manifest-path=grpc-compiler/Cargo.toml
 cargo build --manifest-path=grpc-examples/Cargo.toml

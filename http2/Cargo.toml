@@ -1,0 +1,21 @@
+[package]
+name = "http2"
+version = "0.0.2"
+authors = ["Stepan Koltsov <stepan.koltsov@gmail.com>"]
+license = "MIT/Apache-2.0"
+description = "Rust implementation of HTTP/2 protocol"
+repository = "https://github.com/stepancheg/grpc-rust"
+keywords = ["http2"]
+
+[dependencies]
+
+log            = "0.*"
+#solicit         = { git = "http://github.com/mlalic/solicit.git" }
+solicit-fork   = { git = "http://github.com/stepancheg/solicit.git" }
+hpack          = "0.3"
+futures         = "0.*"
+#futures-cpupool = { git = "https://github.com/alexcrichton/futures-rs" }
+futures-cpupool = "0.*"
+tokio-core      = "0.*"
+#tokio-tls       = { git = "https://github.com/tokio-rs/tokio-tls/", features = ["force-openssl"] }
+tokio-tls       = { git = "https://github.com/tokio-rs/tokio-tls/" }

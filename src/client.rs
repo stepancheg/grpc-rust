@@ -11,9 +11,9 @@ use futures::stream::Stream;
 
 use tokio_core::reactor;
 
-use solicit::http::HttpScheme;
-use solicit::http::HttpError;
-use solicit::http::Header;
+use http2::HttpScheme;
+use http2::HttpError;
+use http2::Header;
 
 
 use method::MethodDescriptor;
@@ -21,14 +21,14 @@ use method::MethodDescriptor;
 use error::*;
 use result::*;
 
-use futures_misc::*;
+use http2::futures_misc::*;
 use futures_grpc::*;
 
 use grpc_frame::*;
 
-use http_client::*;
+use http2::http_client::*;
 
-use assert_types::*;
+use http2::assert_types::*;
 
 
 // Data sent from event loop to GrpcClient

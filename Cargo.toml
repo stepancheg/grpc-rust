@@ -10,10 +10,7 @@ readme = "README.md"
 keywords = ["grpc"]
 
 [dependencies]
-log             = "0.3"
-#solicit         = { git = "http://github.com/mlalic/solicit.git" }
-solicit-fork   = { git = "http://github.com/stepancheg/solicit.git" }
-hpack          = "0.3"
+log             = "0.*"
 #protobuf       = { path = "../rust-protobuf" }
 protobuf        = { git = "http://github.com/stepancheg/rust-protobuf" }
 #futures         = { git = "https://github.com/alexcrichton/futures-rs" }
@@ -23,6 +20,7 @@ futures-cpupool = "0.*"
 tokio-core      = "0.*"
 #tokio-tls       = { git = "https://github.com/tokio-rs/tokio-tls/", features = ["force-openssl"] }
 tokio-tls       = { git = "https://github.com/tokio-rs/tokio-tls/" }
+http2           = { path = "http2" }
 
 openssl = { version = "0.8", optional = true }
 
