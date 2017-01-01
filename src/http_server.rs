@@ -2,7 +2,6 @@ use std::marker;
 use std::io;
 
 use solicit::http::session::StreamState;
-use solicit::http::connection::SendFrame;
 use solicit::http::frame::*;
 use solicit::http::StreamId;
 use solicit::http::HttpScheme;
@@ -14,14 +13,13 @@ use futures;
 use futures::Future;
 use futures::stream::Stream;
 
-use tokio_core;
 use tokio_core::io as tokio_io;
 use tokio_core::io::Io;
 use tokio_core::io::WriteHalf;
 use tokio_core::net::TcpStream;
 use tokio_core::reactor;
 
-use tokio_tls;
+//use tokio_tls;
 
 use futures_misc::*;
 
@@ -32,7 +30,7 @@ use http_common::*;
 
 struct GrpcHttpServerStream<F : HttpService> {
     common: GrpcHttpStreamCommon,
-    request_handler: Option<tokio_core::channel::Sender<ResultOrEof<HttpStreamPart, HttpError>>>,
+    request_handler: Option<futures::sync::mpsc::UnboundedSender<ResultOrEof<HttpStreamPart, HttpError>>>,
     _marker: marker::PhantomData<F>,
 }
 
@@ -107,7 +105,7 @@ impl<F : HttpService> GrpcHttpServerStream<F> {
     fn set_state(&mut self, state: StreamState) {
         self.common.state = state;
         if self.is_closed_remote() {
-            if let Some(sender) = self.request_handler.take() {
+            if let Some(mut sender) = self.request_handler.take() {
                 // ignore error
                 sender.send(ResultOrEof::Eof).ok();
             }
@@ -122,7 +120,7 @@ impl<F : HttpService> GrpcHttpServerStream<F> {
 
 struct GrpcHttpServerSessionState<F : HttpService> {
     factory: F,
-    to_write_tx: tokio_core::channel::Sender<ServerToWriteMessage<F>>,
+    to_write_tx: futures::sync::mpsc::UnboundedSender<ServerToWriteMessage<F>>,
     loop_handle: reactor::Handle,
 }
 
@@ -134,19 +132,18 @@ struct ServerInner<F : HttpService> {
 
 impl<F : HttpService> ServerInner<F> {
     fn new_request(&mut self, stream_id: StreamId, headers: Vec<StaticHeader>)
-        -> tokio_core::channel::Sender<ResultOrEof<HttpStreamPart, HttpError>>
+        -> futures::sync::mpsc::UnboundedSender<ResultOrEof<HttpStreamPart, HttpError>>
     {
-        let (req_tx, req_rx) = tokio_core::channel::channel(&self.session_state.loop_handle)
-            .expect("failed to create a channel");
+        let (req_tx, req_rx) = futures::sync::mpsc::unbounded();
 
-        let req_rx = req_rx.map_err(HttpError::from);
+        let req_rx = req_rx.map_err(|()| HttpError::from(io::Error::new(io::ErrorKind::Other, "req")));
         let req_rx = stream_with_eof_and_error(req_rx, || HttpError::from(io::Error::new(io::ErrorKind::Other, "unexpected eof")));
 
         let response = self.session_state.factory.new_request(headers, Box::new(req_rx));
 
         {
-            let to_write_tx = self.session_state.to_write_tx.clone();
-            let to_write_tx2 = to_write_tx.clone();
+            let mut to_write_tx = self.session_state.to_write_tx.clone();
+            let mut to_write_tx2 = to_write_tx.clone();
 
             let process_response = response.for_each(move |part: HttpStreamPart| {
                 // drop error if connection is closed
@@ -267,10 +264,6 @@ impl<F : HttpService, I : Io> ServerWriteLoop<F, I> {
         self.inner.with(move |inner: &mut ServerInner<F>| inner.session_state.loop_handle.clone())
     }
 
-    fn _to_write_tx(&self) -> tokio_core::channel::Sender<ServerToWriteMessage<F>> {
-        self.inner.with(move |inner: &mut ServerInner<F>| inner.session_state.to_write_tx.clone())
-    }
-
     fn process_response_part(self, stream_id: StreamId, part: HttpStreamPart) -> HttpFuture<Self> {
         let stream_id = self.inner.with(move |inner: &mut ServerInner<F>| {
             let stream = inner.common.get_stream_mut(stream_id);
@@ -357,7 +350,7 @@ impl HttpServerConnectionAsync {
     {
         let lh = lh.clone();
 
-        let (to_write_tx, to_write_rx) = tokio_core::channel::channel::<ServerToWriteMessage<F>>(&lh).unwrap();
+        let (to_write_tx, to_write_rx) = futures::sync::mpsc::unbounded::<ServerToWriteMessage<F>>();
 
         let handshake = socket.and_then(server_handshake);
 
@@ -373,7 +366,9 @@ impl HttpServerConnectionAsync {
                 },
             });
 
-            let run_write = ServerWriteLoop { write: write, inner: inner.clone() }.run(Box::new(to_write_rx.map_err(HttpError::from)));
+            let to_write_rx = to_write_rx.map_err(|()| HttpError::IoError(io::Error::new(io::ErrorKind::Other, "to_write")));
+
+            let run_write = ServerWriteLoop { write: write, inner: inner.clone() }.run(Box::new(to_write_rx));
             let run_read = ServerReadLoop { read: read, inner: inner.clone() }.run();
 
             run_write.join(run_read).map(|_| ())

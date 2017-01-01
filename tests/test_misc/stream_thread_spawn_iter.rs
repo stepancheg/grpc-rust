@@ -2,9 +2,9 @@
 
 use std::thread;
 
+use futures;
 use futures::stream::Stream;
 
-use grpc::futures_misc::channel_sync_sender;
 
 /// Spawn a thread with a function which returns an iterator.
 /// Resulting iterator elements will be emitted as Stream.
@@ -17,10 +17,17 @@ pub fn stream_thread_spawn_iter<I, F, E>(f: F)
             E : Send + 'static,
             I::Item : Send + 'static,
 {
-    let (sender, receiver) = channel_sync_sender();
+    let (mut sender, receiver) = futures::sync::mpsc::unbounded();
     thread::spawn(move || {
         for item in f() {
-            sender.send(Ok(item));
+            sender.send(item).expect("send");
+        }
+    });
+
+    let receiver = receiver.then(|r| {
+        match r {
+            Ok(r) => Ok(r),
+            Err(()) => panic!("unexpected"),
         }
     });
 

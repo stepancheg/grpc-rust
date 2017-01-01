@@ -1,7 +1,6 @@
 //! Functions used by generated code.
 
 use futures;
-use futures::Future;
 use futures::stream;
 use futures::stream::Stream;
 
@@ -53,17 +52,24 @@ pub fn sync_to_async_server_streaming<Req, Resp, H>(cpupool: &CpuPool, req: Req,
         Resp : Send + 'static,
         H : FnOnce(Req) -> GrpcIterator<Resp> + Send + 'static,
 {
-    let (sender, receiver) = stream::channel();
-    cpupool
+    let (mut sender, receiver) = futures::sync::mpsc::unbounded();
+    drop(cpupool
         .spawn(futures::lazy(move || {
-            let mut sender = sender;
             for result in sync_handler(req) {
                 // TODO: do not unwrap
-                sender = sender.send(result).wait().ok().expect("failed to send");
+                sender.send(result).expect("failed to send");
             }
             futures::finished::<_, GrpcError>(())
-        }));
+        })));
         // TODO: handle cpupool error
+
+    let receiver = receiver.then(|r| {
+        match r {
+            Ok(r) => r,
+            Err(()) => Err(GrpcError::Other("receive")),
+        }
+    });
+
     Box::new(receiver)
 }
 
@@ -73,16 +79,23 @@ pub fn sync_to_async_bidi<Req, Resp, H>(cpupool: &CpuPool, req: GrpcStreamSend<R
         Resp : Send + 'static,
         H : FnOnce(GrpcIterator<Req>) -> GrpcIterator<Resp> + Send + 'static,
 {
-    let (sender, receiver) = stream::channel();
-    cpupool
+    let (mut sender, receiver) = futures::sync::mpsc::unbounded();
+    drop(cpupool
         .spawn(futures::lazy(move || {
-            let mut sender = sender;
             for result in sync_handler(Box::new(req.wait())) {
                 // TODO: do not unwrap
-                sender = sender.send(result).wait().ok().expect("failed to send");
+                sender.send(result).expect("failed to send");
             }
             futures::finished::<_, GrpcError>(())
-        }));
+        })));
         // TODO: handle cpupool error
+
+    let receiver = receiver.then(|r| {
+        match r {
+            Ok(r) => r,
+            Err(()) => Err(GrpcError::Other("receive")),
+        }
+    });
+
     Box::new(receiver)
 }

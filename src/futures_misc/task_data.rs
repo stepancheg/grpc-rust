@@ -1,6 +1,7 @@
+// waiting for reply there https://github.com/alexcrichton/futures-rs/pull/233
+#![allow(deprecated)]
+
 use std::cell::RefCell;
-use std::sync::Arc;
-use std::sync::Mutex;
 
 use futures::task::TaskRc;
 

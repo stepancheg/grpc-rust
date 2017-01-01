@@ -2,8 +2,6 @@ use std::net::SocketAddr;
 use std::io;
 
 use solicit::http::session::StreamState;
-use solicit::http::connection::EndStream;
-use solicit::http::connection::SendFrame;
 use solicit::http::frame::*;
 use solicit::http::StreamId;
 use solicit::http::HttpScheme;
@@ -15,26 +13,22 @@ use futures;
 use futures::Future;
 use futures::stream::Stream;
 
-use tokio_core;
 use tokio_core::net::TcpStream;
 use tokio_core::io as tokio_io;
 use tokio_core::io::Io;
 use tokio_core::io::WriteHalf;
 use tokio_core::reactor;
 
-use tokio_tls;
-
 use futures_misc::*;
 
 use solicit_async::*;
-use solicit_misc::*;
 
 use http_common::*;
 
 
 struct GrpcHttpClientStream {
     common: GrpcHttpStreamCommon,
-    response_handler: Option<tokio_core::channel::Sender<ResultOrEof<HttpStreamPart, HttpError>>>,
+    response_handler: Option<futures::sync::mpsc::UnboundedSender<ResultOrEof<HttpStreamPart, HttpError>>>,
 }
 
 impl GrpcHttpStream for GrpcHttpClientStream {
@@ -61,7 +55,7 @@ impl GrpcHttpStream for GrpcHttpClientStream {
             _ => StreamState::HalfClosedRemote,
         };
         self.set_state(next);
-        if let Some(response_handler) = self.response_handler.take() {
+        if let Some(mut response_handler) = self.response_handler.take() {
             response_handler.send(ResultOrEof::Eof).unwrap();
         }
     }
@@ -116,7 +110,7 @@ struct GrpcHttpClientSessionState {
 
 struct ClientInner {
     common: LoopInnerCommon<GrpcHttpClientStream>,
-    to_write_tx: tokio_core::channel::Sender<ClientToWriteMessage>,
+    to_write_tx: futures::sync::mpsc::UnboundedSender<ClientToWriteMessage>,
     session_state: GrpcHttpClientSessionState,
 }
 
@@ -175,8 +169,8 @@ impl LoopInner for ClientInner {
 }
 
 pub struct HttpClientConnectionAsync {
-    call_tx: tokio_core::channel::Sender<ClientToWriteMessage>,
-    remote: reactor::Remote,
+    call_tx: futures::sync::mpsc::UnboundedSender<ClientToWriteMessage>,
+    _remote: reactor::Remote,
 }
 
 unsafe impl  Sync for HttpClientConnectionAsync {}
@@ -184,7 +178,7 @@ unsafe impl  Sync for HttpClientConnectionAsync {}
 struct StartRequestMessage {
     headers: Vec<StaticHeader>,
     body: HttpStreamSend<Vec<u8>>,
-    response_handler: tokio_core::channel::Sender<ResultOrEof<HttpStreamPart, HttpError>>,
+    response_handler: futures::sync::mpsc::UnboundedSender<ResultOrEof<HttpStreamPart, HttpError>>,
 }
 
 struct BodyChunkMessage {
@@ -242,8 +236,8 @@ impl<I : Io + Send + 'static> ClientWriteLoop<I> {
             inner.insert_stream(stream)
         });
 
-        let to_write_tx_1 = self.inner.with(|inner| inner.to_write_tx.clone());
-        let to_write_tx_2 = to_write_tx_1.clone();
+        let mut to_write_tx_1 = self.inner.with(|inner| inner.to_write_tx.clone());
+        let mut to_write_tx_2 = to_write_tx_1.clone();
 
         self.inner.with(|inner: &mut ClientInner| {
             let future = body
@@ -324,12 +318,12 @@ type ClientReadLoop<I> = HttpReadLoopData<I, ClientInner>;
 
 impl HttpClientConnectionAsync {
     fn connected<I : Io + Send + 'static>(lh: reactor::Handle, connect: HttpFutureSend<I>) -> (Self, HttpFuture<()>) {
-        let (to_write_tx, to_write_rx) = tokio_core::channel::channel(&lh).unwrap();
+        let (to_write_tx, to_write_rx) = futures::sync::mpsc::unbounded();
 
-        let to_write_rx = Box::new(to_write_rx.map_err(HttpError::from));
+        let to_write_rx = Box::new(to_write_rx.map_err(|()| HttpError::IoError(io::Error::new(io::ErrorKind::Other, "to_write"))));
 
         let c = HttpClientConnectionAsync {
-            remote: lh.remote().clone(),
+            _remote: lh.remote().clone(),
             call_tx: to_write_tx.clone(),
         };
 
@@ -369,7 +363,7 @@ impl HttpClientConnectionAsync {
         HttpClientConnectionAsync::connected(lh, Box::new(connect))
     }
 
-    pub fn new_tls(lh: reactor::Handle, addr: &SocketAddr) -> (Self, HttpFuture<()>) {
+    pub fn new_tls(_lh: reactor::Handle, _addr: &SocketAddr) -> (Self, HttpFuture<()>) {
         unimplemented!()
         /*
         let addr = addr.clone();
@@ -398,23 +392,20 @@ impl HttpClientConnectionAsync {
     {
         let (tx, rx) = futures::oneshot();
 
-        let call_tx = self.call_tx.clone();
+        let mut call_tx = self.call_tx.clone();
 
-        self.remote.spawn(move |handle| {
-            let (req_tx, req_rx) = tokio_core::channel::channel(&handle).unwrap();
+        let (req_tx, req_rx) = futures::sync::mpsc::unbounded();
 
-            call_tx.send(ClientToWriteMessage::Start(StartRequestMessage {
-                headers: headers,
-                body: body,
-                response_handler: req_tx,
-            })).unwrap();
+        call_tx.send(ClientToWriteMessage::Start(StartRequestMessage {
+            headers: headers,
+            body: body,
+            response_handler: req_tx,
+        })).unwrap();
 
-            let req_rx = req_rx.map_err(HttpError::from);
+        let req_rx = req_rx.map_err(|()| HttpError::from(io::Error::new(io::ErrorKind::Other, "req")));
 
-            tx.complete(stream_with_eof_and_error(req_rx, || HttpError::from(io::Error::new(io::ErrorKind::Other, "unexpected eof"))));
-
-            Ok(())
-        });
+        // TODO: future is no longer needed here
+        tx.complete(stream_with_eof_and_error(req_rx, || HttpError::from(io::Error::new(io::ErrorKind::Other, "unexpected eof"))));
 
         let rx = rx.map_err(|_| HttpError::from(io::Error::new(io::ErrorKind::Other, "oneshot canceled")));
 

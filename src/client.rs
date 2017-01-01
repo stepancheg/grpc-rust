@@ -9,7 +9,6 @@ use futures::Future;
 use futures::stream;
 use futures::stream::Stream;
 
-use tokio_core;
 use tokio_core::reactor;
 
 use solicit::http::HttpScheme;
@@ -35,14 +34,13 @@ use assert_types::*;
 // Data sent from event loop to GrpcClient
 struct LoopToClient {
     // used only once to send shutdown signal
-    shutdown_tx: tokio_core::channel::Sender<()>,
-    loop_handle: reactor::Remote,
+    shutdown_tx: futures::sync::mpsc::UnboundedSender<()>,
+    _loop_handle: reactor::Remote,
     http_conn: Arc<HttpClientConnectionAsync>,
 }
 
 fn _assert_loop_to_client() {
     assert_send::<reactor::Remote>();
-    assert_send::<tokio_core::channel::Sender<()>>();
     assert_send::<LoopToClient>();
 }
 
@@ -85,20 +83,18 @@ impl GrpcClient {
     }
 
     pub fn new_resp_channel<Resp : Send + 'static>(&self)
-        -> futures::Oneshot<(tokio_core::channel::Sender<ResultOrEof<Resp, GrpcError>>, GrpcStreamSend<Resp>)>
+        -> futures::Oneshot<(futures::sync::mpsc::UnboundedSender<ResultOrEof<Resp, GrpcError>>, GrpcStreamSend<Resp>)>
     {
         let (one_sender, one_receiver) = futures::oneshot();
 
-        self.loop_to_client.loop_handle.spawn(move |handle| {
-            let (sender, receiver) = tokio_core::channel::channel(&handle).unwrap();
-            let receiver: GrpcStreamSend<ResultOrEof<Resp, GrpcError>> = Box::new(receiver.map_err(GrpcError::from));
+        let (sender, receiver) = futures::sync::mpsc::unbounded();
+        let receiver: GrpcStreamSend<ResultOrEof<Resp, GrpcError>> =
+            Box::new(receiver.map_err(|()| GrpcError::Other("receive from resp channel")));
 
-            let receiver: GrpcStreamSend<Resp> = Box::new(stream_with_eof_and_error(receiver, || GrpcError::Other("unexpected EOF")));
+        let receiver: GrpcStreamSend<Resp> = Box::new(stream_with_eof_and_error(receiver, || GrpcError::Other("unexpected EOF")));
 
-            one_sender.complete((sender, receiver));
-
-            futures::finished(())
-        });
+        // TODO: oneshot sender is no longer necessary as we don't use tokio queues
+        one_sender.complete((sender, receiver));
 
         one_receiver
     }
@@ -187,7 +183,7 @@ fn run_client_event_loop(
     let mut lp = reactor::Core::new().unwrap();
 
     // Create a channel to receive shutdown signal.
-    let (shutdown_tx, shutdown_rx) = tokio_core::channel::channel(&lp.handle()).unwrap();
+    let (shutdown_tx, shutdown_rx) = futures::sync::mpsc::unbounded();
 
     let (http_conn, http_conn_future) =
         if tls {
@@ -201,12 +197,12 @@ fn run_client_event_loop(
     send_to_back
         .send(LoopToClient {
             shutdown_tx: shutdown_tx,
-            loop_handle: lp.remote(),
+            _loop_handle: lp.remote(),
             http_conn: Arc::new(http_conn),
         })
         .expect("send back");
 
-    let shutdown = shutdown_rx.into_future().map_err(|(e, _)| GrpcError::from(e)).and_then(move |_| {
+    let shutdown = shutdown_rx.into_future().map_err(|((), _)| GrpcError::Other("shutdown_rx")).and_then(move |_| {
         // Must complete with error,
         // so `join` with this future cancels another future.
         futures::failed::<(), _>(GrpcError::Other("shutdown"))

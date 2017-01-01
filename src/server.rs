@@ -15,7 +15,6 @@ use futures;
 use futures::Future;
 use futures::stream;
 use futures::stream::Stream;
-use tokio_core;
 use tokio_core::reactor;
 use tokio_core::net::TcpListener;
 
@@ -266,7 +265,7 @@ impl ServerServiceDefinition {
 
 struct LoopToServer {
     // used only once to send shutdown signal
-    shutdown_tx: tokio_core::channel::Sender<()>,
+    shutdown_tx: futures::sync::mpsc::UnboundedSender<()>,
     local_addr: SocketAddr,
 }
 
@@ -373,9 +372,9 @@ fn run_server_event_loop(
 
     let mut lp = reactor::Core::new().expect("loop new");
 
-    let (shutdown_tx, shutdown_rx) = tokio_core::channel::channel(&lp.handle()).unwrap();
+    let (shutdown_tx, shutdown_rx) = futures::sync::mpsc::unbounded();
 
-    let shutdown_rx = shutdown_rx.map_err(GrpcError::from);
+    let shutdown_rx = shutdown_rx.map_err(|()| GrpcError::Other("shutdown_rx"));
 
     let listen = TcpListener::bind(&listen_addr, &lp.handle()).unwrap();
 
