@@ -8,9 +8,11 @@ use std::net::ToSocketAddrs;
 use futures;
 use futures::Future;
 use futures::Stream;
+use futures::stream;
 
 use tokio_core::reactor;
 
+use solicit::http::Header;
 use solicit::http::HttpResult;
 use solicit::http::HttpError;
 use solicit::http::HttpScheme;
@@ -73,6 +75,32 @@ impl Http2Client {
             -> HttpStreamStreamSend
     {
         self.loop_to_client.http_conn.start_request(headers, body)
+    }
+
+    pub fn start_request_simple(
+        &self,
+        headers: Vec<StaticHeader>,
+        body: Vec<u8>)
+            -> HttpStreamStreamSend
+    {
+        self.start_request(
+            headers,
+            Box::new(stream::once(Ok(body))))
+    }
+
+    pub fn start_post(
+        &self,
+        path: &str,
+        body: Vec<u8>)
+            -> HttpStreamStreamSend
+    {
+        let headers = vec![
+            Header::new(":method", "POST"),
+            Header::new(":path", path.to_owned()),
+            Header::new(":authority", self.host.clone()),
+            Header::new(":scheme", self.http_scheme.as_bytes()),
+        ];
+        self.start_request_simple(headers, body)
     }
 
     pub fn dump_state(&self) -> HttpFutureSend<ConnectionState> {

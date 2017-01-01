@@ -14,6 +14,7 @@ pub mod client;
 pub mod server_conn;
 pub mod server;
 pub mod http_common;
+pub mod message;
 
 pub mod futures_misc;
 
@@ -36,4 +37,5 @@ pub mod for_test {
     pub use http_common::*;
     pub use solicit_async::*;
     pub use futures_misc::*;
+    pub use message::*;
 }
