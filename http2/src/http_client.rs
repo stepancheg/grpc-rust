@@ -56,7 +56,8 @@ impl GrpcHttpStream for GrpcHttpClientStream {
         };
         self.set_state(next);
         if let Some(mut response_handler) = self.response_handler.take() {
-            response_handler.send(ResultOrEof::Eof).unwrap();
+            // it is OK to ignore error: handler may be already dead
+            drop(response_handler.send(ResultOrEof::Eof));
         }
     }
 }
@@ -330,7 +331,7 @@ impl HttpClientConnectionAsync {
         let handshake = connect.and_then(client_handshake);
 
         let future = handshake.and_then(move |conn| {
-            trace!("handshake done");
+            debug!("handshake done");
             let (read, write) = conn.split();
 
             let inner = TaskRcMut::new(ClientInner {
@@ -400,7 +401,7 @@ impl HttpClientConnectionAsync {
             headers: headers,
             body: body,
             response_handler: req_tx,
-        })).unwrap();
+        })).expect("send request to client");
 
         let req_rx = req_rx.map_err(|()| HttpError::from(io::Error::new(io::ErrorKind::Other, "req")));
 

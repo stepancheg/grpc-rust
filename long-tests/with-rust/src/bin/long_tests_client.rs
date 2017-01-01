@@ -43,7 +43,7 @@ fn run_echo(client: LongTestsAsyncClient, cmd_args: &[String]) {
         let mut req = EchoRequest::new();
         req.set_payload(payload.clone());
 
-        let r = client.echo(req).wait().unwrap();
+        let r = client.echo(req).wait().expect("failed to get echo response");
 
         assert!(payload == r.get_payload());
     }

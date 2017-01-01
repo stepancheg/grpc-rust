@@ -20,13 +20,13 @@
 use protobuf::Message as Message_imported_for_functions;
 use protobuf::ProtobufEnum as ProtobufEnum_imported_for_functions;
 
-#[derive(Clone,Default)]
+#[derive(PartialEq,Clone,Default)]
 pub struct EchoRequest {
     // message fields
     pub payload: ::std::string::String,
     // special fields
     unknown_fields: ::protobuf::UnknownFields,
-    cached_size: ::std::cell::Cell<u32>,
+    cached_size: ::protobuf::CachedSize,
 }
 
 // see codegen.rs for the explanation why impl Sync explicitly
@@ -134,10 +134,6 @@ impl ::protobuf::Message for EchoRequest {
         &mut self.unknown_fields
     }
 
-    fn type_id(&self) -> ::std::any::TypeId {
-        ::std::any::TypeId::of::<EchoRequest>()
-    }
-
     fn as_any(&self) -> &::std::any::Any {
         self as &::std::any::Any
     }
@@ -182,13 +178,6 @@ impl ::protobuf::Clear for EchoRequest {
     }
 }
 
-impl ::std::cmp::PartialEq for EchoRequest {
-    fn eq(&self, other: &EchoRequest) -> bool {
-        self.payload == other.payload &&
-        self.unknown_fields == other.unknown_fields
-    }
-}
-
 impl ::std::fmt::Debug for EchoRequest {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         ::protobuf::text_format::fmt(self, f)
@@ -201,13 +190,13 @@ impl ::protobuf::reflect::ProtobufValue for EchoRequest {
     }
 }
 
-#[derive(Clone,Default)]
+#[derive(PartialEq,Clone,Default)]
 pub struct EchoResponse {
     // message fields
     pub payload: ::std::string::String,
     // special fields
     unknown_fields: ::protobuf::UnknownFields,
-    cached_size: ::std::cell::Cell<u32>,
+    cached_size: ::protobuf::CachedSize,
 }
 
 // see codegen.rs for the explanation why impl Sync explicitly
@@ -315,10 +304,6 @@ impl ::protobuf::Message for EchoResponse {
         &mut self.unknown_fields
     }
 
-    fn type_id(&self) -> ::std::any::TypeId {
-        ::std::any::TypeId::of::<EchoResponse>()
-    }
-
     fn as_any(&self) -> &::std::any::Any {
         self as &::std::any::Any
     }
@@ -363,13 +348,6 @@ impl ::protobuf::Clear for EchoResponse {
     }
 }
 
-impl ::std::cmp::PartialEq for EchoResponse {
-    fn eq(&self, other: &EchoResponse) -> bool {
-        self.payload == other.payload &&
-        self.unknown_fields == other.unknown_fields
-    }
-}
-
 impl ::std::fmt::Debug for EchoResponse {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         ::protobuf::text_format::fmt(self, f)
@@ -382,13 +360,13 @@ impl ::protobuf::reflect::ProtobufValue for EchoResponse {
     }
 }
 
-#[derive(Clone,Default)]
+#[derive(PartialEq,Clone,Default)]
 pub struct CharCountRequest {
     // message fields
     pub part: ::std::string::String,
     // special fields
     unknown_fields: ::protobuf::UnknownFields,
-    cached_size: ::std::cell::Cell<u32>,
+    cached_size: ::protobuf::CachedSize,
 }
 
 // see codegen.rs for the explanation why impl Sync explicitly
@@ -496,10 +474,6 @@ impl ::protobuf::Message for CharCountRequest {
         &mut self.unknown_fields
     }
 
-    fn type_id(&self) -> ::std::any::TypeId {
-        ::std::any::TypeId::of::<CharCountRequest>()
-    }
-
     fn as_any(&self) -> &::std::any::Any {
         self as &::std::any::Any
     }
@@ -544,13 +518,6 @@ impl ::protobuf::Clear for CharCountRequest {
     }
 }
 
-impl ::std::cmp::PartialEq for CharCountRequest {
-    fn eq(&self, other: &CharCountRequest) -> bool {
-        self.part == other.part &&
-        self.unknown_fields == other.unknown_fields
-    }
-}
-
 impl ::std::fmt::Debug for CharCountRequest {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         ::protobuf::text_format::fmt(self, f)
@@ -563,13 +530,13 @@ impl ::protobuf::reflect::ProtobufValue for CharCountRequest {
     }
 }
 
-#[derive(Clone,Default)]
+#[derive(PartialEq,Clone,Default)]
 pub struct CharCountResponse {
     // message fields
     pub char_count: u64,
     // special fields
     unknown_fields: ::protobuf::UnknownFields,
-    cached_size: ::std::cell::Cell<u32>,
+    cached_size: ::protobuf::CachedSize,
 }
 
 // see codegen.rs for the explanation why impl Sync explicitly
@@ -670,10 +637,6 @@ impl ::protobuf::Message for CharCountResponse {
         &mut self.unknown_fields
     }
 
-    fn type_id(&self) -> ::std::any::TypeId {
-        ::std::any::TypeId::of::<CharCountResponse>()
-    }
-
     fn as_any(&self) -> &::std::any::Any {
         self as &::std::any::Any
     }
@@ -718,13 +681,6 @@ impl ::protobuf::Clear for CharCountResponse {
     }
 }
 
-impl ::std::cmp::PartialEq for CharCountResponse {
-    fn eq(&self, other: &CharCountResponse) -> bool {
-        self.char_count == other.char_count &&
-        self.unknown_fields == other.unknown_fields
-    }
-}
-
 impl ::std::fmt::Debug for CharCountResponse {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         ::protobuf::text_format::fmt(self, f)
@@ -737,13 +693,13 @@ impl ::protobuf::reflect::ProtobufValue for CharCountResponse {
     }
 }
 
-#[derive(Clone,Default)]
+#[derive(PartialEq,Clone,Default)]
 pub struct RandomStringsRequest {
     // message fields
     pub count: u64,
     // special fields
     unknown_fields: ::protobuf::UnknownFields,
-    cached_size: ::std::cell::Cell<u32>,
+    cached_size: ::protobuf::CachedSize,
 }
 
 // see codegen.rs for the explanation why impl Sync explicitly
@@ -844,10 +800,6 @@ impl ::protobuf::Message for RandomStringsRequest {
         &mut self.unknown_fields
     }
 
-    fn type_id(&self) -> ::std::any::TypeId {
-        ::std::any::TypeId::of::<RandomStringsRequest>()
-    }
-
     fn as_any(&self) -> &::std::any::Any {
         self as &::std::any::Any
     }
@@ -892,13 +844,6 @@ impl ::protobuf::Clear for RandomStringsRequest {
     }
 }
 
-impl ::std::cmp::PartialEq for RandomStringsRequest {
-    fn eq(&self, other: &RandomStringsRequest) -> bool {
-        self.count == other.count &&
-        self.unknown_fields == other.unknown_fields
-    }
-}
-
 impl ::std::fmt::Debug for RandomStringsRequest {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         ::protobuf::text_format::fmt(self, f)
@@ -911,13 +856,13 @@ impl ::protobuf::reflect::ProtobufValue for RandomStringsRequest {
     }
 }
 
-#[derive(Clone,Default)]
+#[derive(PartialEq,Clone,Default)]
 pub struct RandomStringsResponse {
     // message fields
     pub s: ::std::string::String,
     // special fields
     unknown_fields: ::protobuf::UnknownFields,
-    cached_size: ::std::cell::Cell<u32>,
+    cached_size: ::protobuf::CachedSize,
 }
 
 // see codegen.rs for the explanation why impl Sync explicitly
@@ -1025,10 +970,6 @@ impl ::protobuf::Message for RandomStringsResponse {
         &mut self.unknown_fields
     }
 
-    fn type_id(&self) -> ::std::any::TypeId {
-        ::std::any::TypeId::of::<RandomStringsResponse>()
-    }
-
     fn as_any(&self) -> &::std::any::Any {
         self as &::std::any::Any
     }
@@ -1070,13 +1011,6 @@ impl ::protobuf::Clear for RandomStringsResponse {
     fn clear(&mut self) {
         self.clear_s();
         self.unknown_fields.clear();
-    }
-}
-
-impl ::std::cmp::PartialEq for RandomStringsResponse {
-    fn eq(&self, other: &RandomStringsResponse) -> bool {
-        self.s == other.s &&
-        self.unknown_fields == other.unknown_fields
     }
 }
 

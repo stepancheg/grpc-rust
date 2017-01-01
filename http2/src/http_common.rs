@@ -218,8 +218,11 @@ impl<S> LoopInnerCommon<S>
         self.streams.get_mut(&stream_id)
     }
 
-    pub fn remove_stream(&mut self, stream_id: StreamId) -> Option<S> {
-        self.streams.remove(&stream_id)
+    pub fn remove_stream(&mut self, stream_id: StreamId) {
+        match self.streams.remove(&stream_id) {
+            Some(_) => debug!("removed stream: {}", stream_id),
+            None => debug!("incorrect request to remove stream: {}", stream_id),
+        }
     }
 
     pub fn remove_stream_if_closed(&mut self, stream_id: StreamId) {
