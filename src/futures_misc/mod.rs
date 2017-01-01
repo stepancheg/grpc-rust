@@ -12,7 +12,6 @@ pub mod stream_concat;
 pub mod stream_concat3;
 
 pub use self::task_data::TaskRcMut;
-pub use self::task_data::TaskRcMutex;
 
 pub use self::stream_single::stream_single;
 
