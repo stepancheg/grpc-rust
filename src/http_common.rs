@@ -154,15 +154,19 @@ impl GrpcHttpStreamCommon {
                 unreachable!()
             };
 
-        if data.len() as usize > self.out_window_size.size() as usize {
+        let max_window = cmp::max(self.out_window_size.size(), conn_out_window_size.size());
+
+        if data.len() as usize > max_window as usize {
             let size = self.out_window_size.size() as usize;
             self.outgoing.push_front(HttpStreamPartContent::Data(
                 data[size..].to_vec()
             ));
             data.truncate(size);
             self.out_window_size.try_decrease(size as i32).unwrap();
+            conn_out_window_size.try_decrease(size as i32).unwrap();
         } else {
             self.out_window_size.try_decrease(data.len() as i32).unwrap();
+            conn_out_window_size.try_decrease(data.len() as i32).unwrap();
         };
 
         let last = self.outgoing_end && self.outgoing.is_empty();
