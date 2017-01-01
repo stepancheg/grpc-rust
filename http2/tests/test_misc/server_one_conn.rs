@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::net::ToSocketAddrs;
 use std::thread;
 use std::io;
@@ -19,7 +21,6 @@ use http2::for_test::*;
 
 /// Single connection HTTP/server.
 /// Accepts only one connection.
-#[allow(dead_code)]
 pub struct HttpServerOneConn {
     from_loop: FromLoop,
     join_handle: Option<thread::JoinHandle<()>>,

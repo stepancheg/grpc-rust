@@ -19,3 +19,7 @@ futures-cpupool = "0.*"
 tokio-core      = "0.*"
 #tokio-tls       = { git = "https://github.com/tokio-rs/tokio-tls/", features = ["force-openssl"] }
 tokio-tls       = { git = "https://github.com/tokio-rs/tokio-tls/" }
+
+[dev-dependencies]
+
+env_logger = "0.*"

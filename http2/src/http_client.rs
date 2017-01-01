@@ -1,5 +1,6 @@
 use std::net::SocketAddr;
 use std::io;
+use std::collections::HashMap;
 
 use solicit::http::session::StreamState;
 use solicit::http::frame::*;
@@ -125,6 +126,12 @@ impl ClientInner {
         id
     }
 
+    fn dump_state(&self) -> ConnectionState {
+        ConnectionState {
+            streams: self.common.streams.iter().map(|(&k, _v)| (k, ())).collect(),
+        }
+    }
+
     fn _get_stream_ref(&self, stream_id: StreamId) -> Option<&GrpcHttpClientStream> {
         self.common.streams.get(&stream_id)
     }
@@ -196,6 +203,7 @@ enum ClientToWriteMessage {
     BodyChunk(BodyChunkMessage),
     End(EndRequestMessage),
     Common(CommonToWriteMessage),
+    DumpState(futures::sync::oneshot::Sender<ConnectionState>),
 }
 
 struct ClientWriteLoop<I : Io + Send + 'static> {
@@ -296,12 +304,19 @@ impl<I : Io + Send + 'static> ClientWriteLoop<I> {
         self.send_outg_stream(stream_id)
     }
 
+    fn process_dump_state(self, sender: futures::sync::oneshot::Sender<ConnectionState>) -> HttpFuture<Self> {
+        // ignore send error, client might be already dead
+        drop(sender.complete(self.inner.with(|inner| inner.dump_state())));
+        Box::new(futures::finished(self))
+    }
+
     fn process_message(self, message: ClientToWriteMessage) -> HttpFuture<Self> {
         match message {
             ClientToWriteMessage::Start(start) => self.process_start(start),
             ClientToWriteMessage::BodyChunk(body_chunk) => self.process_body_chunk(body_chunk),
             ClientToWriteMessage::End(end) => self.process_end(end),
             ClientToWriteMessage::Common(common) => self.process_common(common),
+            ClientToWriteMessage::DumpState(sender) => self.process_dump_state(sender),
         }
     }
 
@@ -316,6 +331,10 @@ impl<I : Io + Send + 'static> ClientWriteLoop<I> {
 }
 
 type ClientReadLoop<I> = HttpReadLoopData<I, ClientInner>;
+
+pub struct ConnectionState {
+    pub streams: HashMap<StreamId, ()>,
+}
 
 impl HttpClientConnectionAsync {
     fn connected<I : Io + Send + 'static>(lh: reactor::Handle, connect: HttpFutureSend<I>) -> (Self, HttpFuture<()>) {
@@ -411,5 +430,17 @@ impl HttpClientConnectionAsync {
         let rx = rx.map_err(|_| HttpError::from(io::Error::new(io::ErrorKind::Other, "oneshot canceled")));
 
         Box::new(rx.flatten_stream())
+    }
+
+    /// For tests
+    pub fn dump_state(&self) -> HttpFutureSend<ConnectionState> {
+        let (tx, rx) = futures::oneshot();
+
+        self.call_tx.clone().send(ClientToWriteMessage::DumpState(tx))
+            .expect("send request to dump state");
+
+        let rx = rx.map_err(|_| HttpError::from(io::Error::new(io::ErrorKind::Other, "oneshot canceled")));
+
+        Box::new(rx)
     }
 }

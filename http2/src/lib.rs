@@ -10,7 +10,8 @@ extern crate solicit_fork as solicit;
 extern crate hpack;
 
 pub mod http_client;
-pub mod http_server;
+pub mod server_conn;
+pub mod server;
 pub mod http_common;
 
 pub mod futures_misc;
@@ -29,7 +30,7 @@ pub use solicit::http::Header;
 pub use solicit::http::StaticHeader;
 
 pub mod for_test {
-    pub use http_server::*;
+    pub use server_conn::*;
     pub use http_client::*;
     pub use http_common::*;
     pub use solicit_async::*;
