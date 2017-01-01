@@ -74,6 +74,10 @@ impl Http2Client {
     {
         self.loop_to_client.http_conn.start_request(headers, body)
     }
+
+    pub fn dump_state(&self) -> HttpFutureSend<ConnectionState> {
+        self.loop_to_client.http_conn.dump_state()
+    }
 }
 
 // Event loop entry point

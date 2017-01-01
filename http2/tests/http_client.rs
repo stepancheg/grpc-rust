@@ -18,6 +18,7 @@ mod test_misc;
 use test_misc::*;
 
 use http2::client_conn::*;
+use http2::client::*;
 
 
 #[test]
@@ -28,7 +29,8 @@ fn stream_count() {
 
     debug!("started server on {}", server.port);
 
-    let mut client_lp = reactor::Core::new().expect("client");
+    let client: Http2Client = Http2Client::new("::1", server.port, false).expect("connect");
 
-    let (client, future) = HttpClientConnectionAsync::new_plain(client_lp.handle(), &("::1", server.port).to_socket_addrs().unwrap().next().unwrap());
+    let state: ConnectionState = client.dump_state().wait().expect("state");
+    assert_eq!(0, state.streams.len());
 }
