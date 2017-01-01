@@ -17,7 +17,7 @@ mod test_misc;
 
 use test_misc::*;
 
-use http2::http_client::*;
+use http2::client_conn::*;
 
 
 #[test]

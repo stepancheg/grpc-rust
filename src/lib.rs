@@ -25,7 +25,7 @@ pub mod rt;
 
 pub mod for_test {
     pub use http2::server_conn::*;
-    pub use http2::http_client::*;
+    pub use http2::client_conn::*;
     pub use http2::http_common::*;
     pub use http2::solicit_async::*;
     pub use http2::futures_misc::*;
