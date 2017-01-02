@@ -1,8 +1,6 @@
 use std::net::SocketAddr;
 use std::io;
-use std::collections::HashMap;
 
-use solicit::http::session::StreamState;
 use solicit::http::frame::*;
 use solicit::http::StreamId;
 use solicit::http::HttpScheme;
@@ -80,16 +78,6 @@ impl ClientInner {
         self.session_state.next_stream_id += 2;
         id
     }
-
-    fn dump_state(&self) -> ClientConnectionStateSnapshot {
-        ClientConnectionStateSnapshot {
-            streams: self.common.streams.iter().map(|(&k, s)| (k, s.common.state)).collect(),
-        }
-    }
-
-    fn _get_stream_ref(&self, stream_id: StreamId) -> Option<&GrpcHttpClientStream> {
-        self.common.streams.get(&stream_id)
-    }
 }
 
 impl LoopInner for ClientInner {
@@ -162,7 +150,7 @@ enum ClientToWriteMessage {
 }
 
 enum ClientCommandMessage {
-    DumpState(futures::sync::oneshot::Sender<ClientConnectionStateSnapshot>),
+    DumpState(futures::sync::oneshot::Sender<ConnectionStateSnapshot>),
 }
 
 
@@ -264,10 +252,6 @@ type ClientReadLoop<I> = ReadLoopData<I, ClientInner>;
 type ClientWriteLoop<I> = WriteLoopData<I, ClientInner>;
 type ClientCommandLoop = CommandLoopData<ClientInner>;
 
-#[derive(Debug)]
-pub struct ClientConnectionStateSnapshot {
-    pub streams: HashMap<StreamId, StreamState>,
-}
 
 impl HttpClientConnectionAsync {
     fn connected<I : Io + Send + 'static>(lh: reactor::Handle, connect: HttpFutureSend<I>) -> (Self, HttpFuture<()>) {
@@ -369,7 +353,7 @@ impl HttpClientConnectionAsync {
     }
 
     /// For tests
-    pub fn dump_state(&self) -> HttpFutureSend<ClientConnectionStateSnapshot> {
+    pub fn dump_state(&self) -> HttpFutureSend<ConnectionStateSnapshot> {
         let (tx, rx) = futures::oneshot();
 
         self.command_tx.clone().send(ClientCommandMessage::DumpState(tx))
@@ -382,9 +366,9 @@ impl HttpClientConnectionAsync {
 }
 
 impl ClientCommandLoop {
-    fn process_dump_state(self, sender: futures::sync::oneshot::Sender<ClientConnectionStateSnapshot>) -> HttpFuture<Self> {
+    fn process_dump_state(self, sender: futures::sync::oneshot::Sender<ConnectionStateSnapshot>) -> HttpFuture<Self> {
         // ignore send error, client might be already dead
-        drop(sender.complete(self.inner.with(|inner| inner.dump_state())));
+        drop(sender.complete(self.inner.with(|inner| inner.common.dump_state())));
         Box::new(futures::finished(self))
     }
 

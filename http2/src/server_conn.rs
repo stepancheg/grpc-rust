@@ -1,7 +1,6 @@
 use std::marker;
 use std::io;
 use std::sync::Arc;
-use std::collections::HashMap;
 
 use solicit::http::frame::*;
 use solicit::http::StreamId;
@@ -9,7 +8,6 @@ use solicit::http::HttpScheme;
 use solicit::http::HttpError;
 use solicit::http::Header;
 use solicit::http::StaticHeader;
-use solicit::http::session::StreamState;
 
 use futures;
 use futures::Future;
@@ -151,12 +149,6 @@ impl<F : HttpService> ServerInner<F> {
             self.new_stream(stream_id, headers)
         }
     }
-
-    fn dump_state(&self) -> ServerConnectionStateSnapshot {
-        ServerConnectionStateSnapshot {
-            streams: self.common.streams.iter().map(|(&k, s)| (k, s.common.state)).collect(),
-        }
-    }
 }
 
 impl<F : HttpService> LoopInner for ServerInner<F> {
@@ -191,11 +183,6 @@ type ServerReadLoop<F, I> = ReadLoopData<I, ServerInner<F>>;
 type ServerWriteLoop<F, I> = WriteLoopData<I, ServerInner<F>>;
 type ServerCommandLoop<F> = CommandLoopData<ServerInner<F>>;
 
-#[derive(Debug)]
-pub struct ServerConnectionStateSnapshot {
-    pub streams: HashMap<StreamId, StreamState>,
-}
-
 
 enum ServerToWriteMessage<F : HttpService> {
     _Dummy(F),
@@ -205,7 +192,7 @@ enum ServerToWriteMessage<F : HttpService> {
 }
 
 enum ServerCommandMessage {
-    DumpState(futures::sync::oneshot::Sender<ServerConnectionStateSnapshot>),
+    DumpState(futures::sync::oneshot::Sender<ConnectionStateSnapshot>),
 }
 
 
@@ -287,9 +274,9 @@ impl<F : HttpService, I : Io + Send> ServerWriteLoop<F, I> {
 }
 
 impl<F : HttpService> ServerCommandLoop<F> {
-    fn process_dump_state(self, sender: futures::sync::oneshot::Sender<ServerConnectionStateSnapshot>) -> HttpFuture<Self> {
+    fn process_dump_state(self, sender: futures::sync::oneshot::Sender<ConnectionStateSnapshot>) -> HttpFuture<Self> {
         // ignore send error, client might be already dead
-        drop(sender.complete(self.inner.with(|inner| inner.dump_state())));
+        drop(sender.complete(self.inner.with(|inner| inner.common.dump_state())));
         Box::new(futures::finished(self))
     }
 
@@ -416,7 +403,7 @@ impl HttpServerConnectionAsync {
     */
 
     /// For tests
-    pub fn dump_state(&self) -> HttpFutureSend<ServerConnectionStateSnapshot> {
+    pub fn dump_state(&self) -> HttpFutureSend<ConnectionStateSnapshot> {
         let (tx, rx) = futures::oneshot();
 
         self.command_tx.clone().send(ServerCommandMessage::DumpState(tx))

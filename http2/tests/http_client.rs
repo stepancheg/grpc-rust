@@ -28,7 +28,7 @@ fn stream_count() {
 
     let client: Http2Client = Http2Client::new("::1", server.port, false).expect("connect");
 
-    let state: ClientConnectionStateSnapshot = client.dump_state().wait().expect("state");
+    let state: ConnectionStateSnapshot = client.dump_state().wait().expect("state");
     assert_eq!(0, state.streams.len());
 
     let parts = client.start_post("/foobar", (b"xxyy"[..]).to_owned())
@@ -37,6 +37,6 @@ fn stream_count() {
     let message = SimpleHttpMessage::from_parts(parts);
     assert_eq!((b"xxyy"[..]).to_owned(), message.body);
 
-    let state: ClientConnectionStateSnapshot = client.dump_state().wait().expect("state");
+    let state: ConnectionStateSnapshot = client.dump_state().wait().expect("state");
     assert_eq!(0, state.streams.len(), "{:?}", state);
 }

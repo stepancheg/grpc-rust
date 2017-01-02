@@ -213,6 +213,15 @@ pub struct LoopInnerCommon<S>
     pub streams: HashMap<StreamId, S>,
 }
 
+
+#[derive(Debug)]
+pub struct ConnectionStateSnapshot {
+    pub streams: HashMap<StreamId, StreamState>,
+}
+
+
+
+
 impl<S> LoopInnerCommon<S>
     where S : GrpcHttpStream,
 {
@@ -356,6 +365,12 @@ impl<S> LoopInnerCommon<S>
             self.write_part(&mut send, stream_id, part);
         }
         send.0
+    }
+
+    pub fn dump_state(&self) -> ConnectionStateSnapshot {
+        ConnectionStateSnapshot {
+            streams: self.streams.iter().map(|(&k, s)| (k, s.common().state)).collect(),
+        }
     }
 }
 
