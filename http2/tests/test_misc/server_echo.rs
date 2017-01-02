@@ -21,7 +21,7 @@ struct EchoService {
 }
 
 impl HttpService for EchoService {
-    fn new_request(&mut self, headers: Vec<StaticHeader>, req: HttpStreamStreamSend) -> HttpStreamStreamSend {
+    fn new_request(&self, headers: Vec<StaticHeader>, req: HttpStreamStreamSend) -> HttpStreamStreamSend {
         Box::new(stream_concat(
             stream::once(Ok(HttpStreamPart::intermediate_headers(vec![
                 Header::new(":status", "200"),

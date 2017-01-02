@@ -289,7 +289,7 @@ fn stream_500(message: &str) -> HttpStreamStreamSend {
 }
 
 impl HttpService for GrpcHttpServerHandlerFactory {
-    fn new_request(&mut self, headers: Vec<StaticHeader>, req: HttpStreamStreamSend) -> HttpStreamStreamSend {
+    fn new_request(&self, headers: Vec<StaticHeader>, req: HttpStreamStreamSend) -> HttpStreamStreamSend {
 
         let path = match slice_get_header(&headers, ":path") {
             Some(path) => path.to_owned(),

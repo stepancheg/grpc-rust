@@ -362,7 +362,7 @@ impl HttpServerConnectionAsync {
         impl<F> HttpService for HttpServiceFn<F>
             where F : Fn(Vec<StaticHeader>, HttpStreamStreamSend) -> HttpStreamStreamSend + Send + 'static
         {
-            fn new_request(&mut self, headers: Vec<StaticHeader>, req: HttpStreamStreamSend) -> HttpStreamStreamSend {
+            fn new_request(&self, headers: Vec<StaticHeader>, req: HttpStreamStreamSend) -> HttpStreamStreamSend {
                 (self.0)(headers, req)
             }
         }
