@@ -41,12 +41,6 @@ fn stream_count() {
     let message = SimpleHttpMessage::from_parts(parts);
     assert_eq!((b"xxyy"[..]).to_owned(), message.body);
 
-    for _ in 0..10000 {
-        let state: ConnectionState = client.dump_state().wait().expect("state");
-        if state.streams.len() == 0 {
-            break;
-        }
-    }
     let state: ConnectionState = client.dump_state().wait().expect("state");
     assert_eq!(0, state.streams.len(), "{:?}", state);
 }
