@@ -2,6 +2,7 @@ use std::thread;
 use std::net::SocketAddr;
 use std::net::ToSocketAddrs;
 use std::sync::mpsc;
+use std::sync::Arc;
 use std::io;
 
 use tokio_core::reactor;
@@ -33,14 +34,14 @@ pub struct Http2Server {
     thread_join_handle: Option<thread::JoinHandle<()>>,
 }
 
-fn run_server_event_loop<S, F>(
+fn run_server_event_loop<S>(
     listen_addr: SocketAddr,
-    serivce: F,
+    service: S,
     send_to_back: mpsc::Sender<LoopToServer>)
-where
-    S : HttpService,
-    F : Fn() -> S + Send + 'static,
+        where S : HttpService,
 {
+    let service = Arc::new(service);
+
     let mut lp = reactor::Core::new().expect("http2server");
 
     let (shutdown_tx, shutdown_rx) = futures::sync::mpsc::unbounded();
@@ -49,16 +50,17 @@ where
 
     let listen = TcpListener::bind(&listen_addr, &lp.handle()).unwrap();
 
-    let stuff = stream_repeat(lp.handle());
+    let stuff = stream_repeat((lp.handle(), service));
 
     let local_addr = listen.local_addr().unwrap();
     send_to_back
         .send(LoopToServer { shutdown_tx: shutdown_tx, local_addr: local_addr })
         .expect("send back");
 
-    let loop_run = listen.incoming().map_err(HttpError::from).zip(stuff).for_each(move |((socket, peer_addr), loop_handle)| {
+    let loop_run = listen.incoming().map_err(HttpError::from).zip(stuff).for_each(move |((socket, peer_addr), (loop_handle, service))| {
         info!("accepted connection from {}", peer_addr);
-        loop_handle.spawn(HttpServerConnectionAsync::new_plain(&loop_handle, socket, serivce()).map_err(|e| { warn!("connection end: {:?}", e); () }));
+        loop_handle.spawn(HttpServerConnectionAsync::new_plain(&loop_handle, socket, service)
+            .map_err(|e| { warn!("connection end: {:?}", e); () }));
         Ok(())
     });
 
@@ -77,10 +79,8 @@ where
 }
 
 impl Http2Server {
-    pub fn new<S, F>(port: u16, service: F) -> Http2Server
-        where
-            S : HttpService,
-            F : Fn() -> S + Send + 'static,
+    pub fn new<S>(port: u16, service: S) -> Http2Server
+        where S : HttpService
     {
         let listen_addr = ("::", port).to_socket_addrs().unwrap().next().unwrap();
 

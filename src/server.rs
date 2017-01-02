@@ -265,7 +265,7 @@ impl GrpcServer {
     pub fn new(port: u16, service_definition: ServerServiceDefinition) -> GrpcServer {
         let service_definition = Arc::new(service_definition);
         GrpcServer {
-            server: Http2Server::new(port, move || GrpcHttpServerHandlerFactory {
+            server: Http2Server::new(port, GrpcHttpServerHandlerFactory {
                 service_definition: service_definition.clone(),
             })
         }

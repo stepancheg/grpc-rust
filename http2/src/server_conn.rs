@@ -1,5 +1,6 @@
 use std::marker;
 use std::io;
+use std::sync::Arc;
 
 use solicit::http::frame::*;
 use solicit::http::StreamId;
@@ -77,7 +78,7 @@ impl<F : HttpService> GrpcHttpServerStream<F> {
 }
 
 struct GrpcHttpServerSessionState<F : HttpService> {
-    factory: F,
+    factory: Arc<F>,
     to_write_tx: futures::sync::mpsc::UnboundedSender<ServerToWriteMessage<F>>,
     loop_handle: reactor::Handle,
 }
@@ -301,7 +302,7 @@ pub struct HttpServerConnectionAsync {
 }
 
 impl HttpServerConnectionAsync {
-    fn connected<F, I>(lh: &reactor::Handle, socket: HttpFutureSend<I>, factory : F) -> HttpFuture<()>
+    fn connected<F, I>(lh: &reactor::Handle, socket: HttpFutureSend<I>, service: Arc<F>) -> HttpFuture<()>
         where
             F : HttpService,
             I : Io + Send + 'static,
@@ -318,7 +319,7 @@ impl HttpServerConnectionAsync {
             let inner = TaskRcMut::new(ServerInner {
                 common: LoopInnerCommon::new(HttpScheme::Http),
                 session_state: GrpcHttpServerSessionState {
-                    factory: factory,
+                    factory: service,
                     to_write_tx: to_write_tx.clone(),
                     loop_handle: lh,
                 },
@@ -335,11 +336,11 @@ impl HttpServerConnectionAsync {
         Box::new(run.then(|x| { info!("connection end: {:?}", x); x }))
     }
 
-    pub fn new_plain<F>(lh: &reactor::Handle, socket: TcpStream, factory: F) -> HttpFuture<()>
+    pub fn new_plain<S>(lh: &reactor::Handle, socket: TcpStream, service: Arc<S>) -> HttpFuture<()>
         where
-            F : HttpService,
+            S : HttpService,
     {
-        HttpServerConnectionAsync::connected(lh, Box::new(futures::finished(socket)), factory)
+        HttpServerConnectionAsync::connected(lh, Box::new(futures::finished(socket)), service)
     }
 
     /*
@@ -367,7 +368,7 @@ impl HttpServerConnectionAsync {
             }
         }
 
-        HttpServerConnectionAsync::new_plain(lh, socket, HttpServiceFn(f))
+        HttpServerConnectionAsync::new_plain(lh, socket, Arc::new(HttpServiceFn(f)))
     }
 
     /*
