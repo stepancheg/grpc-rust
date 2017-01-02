@@ -13,6 +13,6 @@ export RUST_BACKTRACE=1
 
 sleep 0.1 # give server some time to start
 
-../target/debug/long_tests_client echo 1000
+../target/debug/long_tests_client echo 10000
 
 kill $go_server_pid
