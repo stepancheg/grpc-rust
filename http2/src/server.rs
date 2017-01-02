@@ -1,8 +1,10 @@
 use std::thread;
 use std::net::SocketAddr;
 use std::net::ToSocketAddrs;
+use std::collections::HashMap;
 use std::sync::mpsc;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::io;
 
 use tokio_core::reactor;
@@ -15,6 +17,7 @@ use futures::Future;
 use solicit::http::HttpError;
 
 use futures_misc::*;
+use solicit_async::*;
 
 use super::server_conn::*;
 use super::http_common::*;
@@ -30,12 +33,35 @@ struct LoopToServer {
 
 
 pub struct Http2Server {
+    state: Arc<Mutex<HttpServerState>>,
     loop_to_server: LoopToServer,
     thread_join_handle: Option<thread::JoinHandle<()>>,
 }
 
+struct ConnHandle {
+}
+
+#[derive(Default)]
+struct HttpServerState {
+    last_conn_id: u64,
+    conns: HashMap<u64, ConnHandle>,
+}
+
+impl HttpServerState {
+    fn snapshot(&self) -> HttpFutureSend<HttpServerStateSnapshot> {
+        Box::new(futures::finished(HttpServerStateSnapshot {
+            conns: self.conns.iter().map(|(&id, _h)| (id, ())).collect()
+        }))
+    }
+}
+
+pub struct HttpServerStateSnapshot {
+    pub conns: HashMap<u64, ()>,
+}
+
 fn run_server_event_loop<S>(
     listen_addr: SocketAddr,
+    state: Arc<Mutex<HttpServerState>>,
     service: S,
     send_to_back: mpsc::Sender<LoopToServer>)
         where S : HttpService,
@@ -50,16 +76,31 @@ fn run_server_event_loop<S>(
 
     let listen = TcpListener::bind(&listen_addr, &lp.handle()).unwrap();
 
-    let stuff = stream_repeat((lp.handle(), service));
+    let stuff = stream_repeat((lp.handle(), service, state));
 
     let local_addr = listen.local_addr().unwrap();
     send_to_back
         .send(LoopToServer { shutdown_tx: shutdown_tx, local_addr: local_addr })
         .expect("send back");
 
-    let loop_run = listen.incoming().map_err(HttpError::from).zip(stuff).for_each(move |((socket, peer_addr), (loop_handle, service))| {
+    let loop_run = listen.incoming().map_err(HttpError::from).zip(stuff).for_each(move |((socket, peer_addr), (loop_handle, service, state))| {
+        let conn_id = {
+            let mut g = state.lock().expect("lock");
+            g.last_conn_id += 1;
+            let conn_id = g.last_conn_id;
+            let prev = g.conns.insert(conn_id, ConnHandle {
+            });
+            assert!(prev.is_none());
+            conn_id
+        };
         info!("accepted connection from {}", peer_addr);
         loop_handle.spawn(HttpServerConnectionAsync::new_plain(&loop_handle, socket, service)
+            .then(move |r| {
+                let mut g = state.lock().expect("lock");
+                let removed = g.conns.remove(&conn_id);
+                assert!(removed.is_some());
+                r
+            })
             .map_err(|e| { warn!("connection end: {:?}", e); () }));
         Ok(())
     });
@@ -86,13 +127,18 @@ impl Http2Server {
 
         let (get_from_loop_tx, get_from_loop_rx) = mpsc::channel();
 
+        let state: Arc<Mutex<HttpServerState>> = Default::default();
+
+        let state_copy = state.clone();
+
         let join_handle = thread::spawn(move || {
-            run_server_event_loop(listen_addr, service, get_from_loop_tx);
+            run_server_event_loop(listen_addr, state_copy, service, get_from_loop_tx);
         });
 
         let loop_to_server = get_from_loop_rx.recv().unwrap();
 
         Http2Server {
+            state: state,
             loop_to_server: loop_to_server,
             thread_join_handle: Some(join_handle),
         }
@@ -100,6 +146,12 @@ impl Http2Server {
 
     pub fn local_addr(&self) -> &SocketAddr {
         &self.loop_to_server.local_addr
+    }
+
+    // for tests
+    pub fn dump_state(&self) -> HttpFutureSend<HttpServerStateSnapshot> {
+        let g = self.state.lock().expect("lock");
+        g.snapshot()
     }
 }
 

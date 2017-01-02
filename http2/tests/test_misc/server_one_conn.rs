@@ -11,7 +11,7 @@ use futures::stream::Stream;
 use tokio_core;
 use tokio_core::reactor;
 
-use tokio_tls;
+//use tokio_tls;
 
 use solicit::http::StaticHeader;
 use solicit::http::HttpError;
@@ -74,7 +74,7 @@ impl HttpServerOneConn {
                     // close listening port
                     drop(listener);
 
-                    if let Some(server_context) = server_context {
+                    if let Some(_server_context) = server_context {
                         //HttpServerConnectionAsync::new_tls_fn(&handle, conn, server_context, service)
                         unimplemented!()
                     } else {

@@ -29,14 +29,7 @@ use test_misc::*;
 fn test() {
     let server = HttpServerOneConn::new_fn(0, |_headers, req| {
         Box::new(req
-            .fold(Vec::new(), |mut v, message| {
-                match message.content {
-                    HttpStreamPartContent::Headers(..) => (),
-                    HttpStreamPartContent::Data(d) => v.extend(d),
-                }
-
-                futures::finished::<_, HttpError>(v)
-            })
+            .collect()
             .and_then(|v| {
                 let mut r = Vec::new();
                 r.push(HttpStreamPart::intermediate_headers(
@@ -44,7 +37,7 @@ fn test() {
                         Header::new(":status", "200"),
                     ]
                 ));
-                r.push(HttpStreamPart::last_data(v));
+                r.push(HttpStreamPart::last_data(SimpleHttpMessage::from_parts(v).body));
                 Ok(stream::iter(r.into_iter().map(Ok)))
             })
             .flatten_stream())

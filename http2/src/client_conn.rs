@@ -83,8 +83,8 @@ impl ClientInner {
         id
     }
 
-    fn dump_state(&self) -> ConnectionState {
-        ConnectionState {
+    fn dump_state(&self) -> ConnectionStateSnapshot {
+        ConnectionStateSnapshot {
             streams: self.common.streams.iter().map(|(&k, s)| (k, s.common.state)).collect(),
         }
     }
@@ -160,7 +160,7 @@ enum ClientToWriteMessage {
     BodyChunk(BodyChunkMessage),
     End(EndRequestMessage),
     Common(CommonToWriteMessage),
-    DumpState(futures::sync::oneshot::Sender<ConnectionState>),
+    DumpState(futures::sync::oneshot::Sender<ConnectionStateSnapshot>),
 }
 
 struct ClientWriteLoop<I : Io + Send + 'static> {
@@ -261,7 +261,7 @@ impl<I : Io + Send + 'static> ClientWriteLoop<I> {
         self.send_outg_stream(stream_id)
     }
 
-    fn process_dump_state(self, sender: futures::sync::oneshot::Sender<ConnectionState>) -> HttpFuture<Self> {
+    fn process_dump_state(self, sender: futures::sync::oneshot::Sender<ConnectionStateSnapshot>) -> HttpFuture<Self> {
         // ignore send error, client might be already dead
         drop(sender.complete(self.inner.with(|inner| inner.dump_state())));
         Box::new(futures::finished(self))
@@ -290,7 +290,7 @@ impl<I : Io + Send + 'static> ClientWriteLoop<I> {
 type ClientReadLoop<I> = HttpReadLoopData<I, ClientInner>;
 
 #[derive(Debug)]
-pub struct ConnectionState {
+pub struct ConnectionStateSnapshot {
     pub streams: HashMap<StreamId, StreamState>,
 }
 
@@ -391,7 +391,7 @@ impl HttpClientConnectionAsync {
     }
 
     /// For tests
-    pub fn dump_state(&self) -> HttpFutureSend<ConnectionState> {
+    pub fn dump_state(&self) -> HttpFutureSend<ConnectionStateSnapshot> {
         let (tx, rx) = futures::oneshot();
 
         self.call_tx.clone().send(ClientToWriteMessage::DumpState(tx))
