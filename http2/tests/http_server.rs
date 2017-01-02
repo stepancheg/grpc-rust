@@ -45,4 +45,6 @@ fn test() {
 
     let client: Http2Client = Http2Client::new("::1", server.port(), false).expect("connect");
     client.start_post_simple_response("/foobar", (&b"abcd"[..]).to_owned()).wait();
+
+    assert_eq!(0, server.dump_state().streams.len());
 }

@@ -3,6 +3,8 @@
 use std::net::ToSocketAddrs;
 use std::thread;
 use std::io;
+use std::sync::Arc;
+use std::sync::Mutex;
 
 use futures;
 use futures::Future;
@@ -25,6 +27,7 @@ pub struct HttpServerOneConn {
     from_loop: FromLoop,
     join_handle: Option<thread::JoinHandle<()>>,
     shutdown_tx: Option<futures::Complete<()>>,
+    conn: Arc<Mutex<Option<HttpServerConnectionAsync>>>,
 }
 
 struct FromLoop {
@@ -53,6 +56,10 @@ impl HttpServerOneConn {
         let (from_loop_tx, from_loop_rx) = futures::oneshot();
         let (shutdown_tx, shutdown_rx) = futures::oneshot::<()>();
 
+        let conn: Arc<Mutex<Option<HttpServerConnectionAsync>>> = Default::default();
+
+        let conn_for_thread = conn.clone();
+
         let join_handle = thread::spawn(move || {
             let mut lp = reactor::Core::new().unwrap();
 
@@ -78,7 +85,9 @@ impl HttpServerOneConn {
                         //HttpServerConnectionAsync::new_tls_fn(&handle, conn, server_context, service)
                         unimplemented!()
                     } else {
-                        HttpServerConnectionAsync::new_plain_fn(&handle, conn, service).1
+                        let (conn, future) = HttpServerConnectionAsync::new_plain_fn(&handle, conn, service);
+                        *conn_for_thread.lock().unwrap() = Some(conn);
+                        future
                     }
                 });
 
@@ -92,6 +101,7 @@ impl HttpServerOneConn {
             from_loop: from_loop_rx.wait().unwrap(),
             join_handle: Some(join_handle),
             shutdown_tx: Some(shutdown_tx),
+            conn: conn,
         }
     }
 }
@@ -100,6 +110,12 @@ impl HttpServerOneConn {
 impl HttpServerOneConn {
     pub fn port(&self) -> u16 {
         self.from_loop.port
+    }
+
+    pub fn dump_state(&self) -> ConnectionStateSnapshot {
+        let g = self.conn.lock().expect("lock");
+        let conn = g.as_ref().expect("conn");
+        conn.dump_state().wait().expect("dump_status")
     }
 }
 
