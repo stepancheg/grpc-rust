@@ -13,6 +13,7 @@ use tokio_core::net::TcpListener;
 use futures;
 use futures::Stream;
 use futures::Future;
+use futures::future::join_all;
 
 use solicit::http::HttpError;
 
@@ -38,25 +39,27 @@ pub struct Http2Server {
     thread_join_handle: Option<thread::JoinHandle<()>>,
 }
 
-struct ConnHandle {
-}
-
 #[derive(Default)]
 struct HttpServerState {
     last_conn_id: u64,
-    conns: HashMap<u64, ConnHandle>,
+    conns: HashMap<u64, HttpServerConnectionAsync>,
 }
 
 impl HttpServerState {
     fn snapshot(&self) -> HttpFutureSend<HttpServerStateSnapshot> {
-        Box::new(futures::finished(HttpServerStateSnapshot {
-            conns: self.conns.iter().map(|(&id, _h)| (id, ())).collect()
-        }))
+        let futures: Vec<_> = self.conns.iter()
+            .map(|(&id, conn)| conn.dump_state().map(move |state| (id, state)))
+            .collect();
+
+        Box::new(join_all(futures)
+            .map(|states| HttpServerStateSnapshot {
+                conns: states.into_iter().collect(),
+            }))
     }
 }
 
 pub struct HttpServerStateSnapshot {
-    pub conns: HashMap<u64, ()>,
+    pub conns: HashMap<u64, ConnectionStateSnapshot>,
 }
 
 fn run_server_event_loop<S>(
@@ -84,17 +87,20 @@ fn run_server_event_loop<S>(
         .expect("send back");
 
     let loop_run = listen.incoming().map_err(HttpError::from).zip(stuff).for_each(move |((socket, peer_addr), (loop_handle, service, state))| {
+        info!("accepted connection from {}", peer_addr);
+
+        let (conn, future) = HttpServerConnectionAsync::new_plain(&loop_handle, socket, service);
+
         let conn_id = {
             let mut g = state.lock().expect("lock");
             g.last_conn_id += 1;
             let conn_id = g.last_conn_id;
-            let prev = g.conns.insert(conn_id, ConnHandle {
-            });
+            let prev = g.conns.insert(conn_id, conn);
             assert!(prev.is_none());
             conn_id
         };
-        info!("accepted connection from {}", peer_addr);
-        loop_handle.spawn(HttpServerConnectionAsync::new_plain(&loop_handle, socket, service).1
+
+        loop_handle.spawn(future
             .then(move |r| {
                 let mut g = state.lock().expect("lock");
                 let removed = g.conns.remove(&conn_id);
