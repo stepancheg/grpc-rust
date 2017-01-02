@@ -94,7 +94,7 @@ fn run_server_event_loop<S>(
             conn_id
         };
         info!("accepted connection from {}", peer_addr);
-        loop_handle.spawn(HttpServerConnectionAsync::new_plain(&loop_handle, socket, service)
+        loop_handle.spawn(HttpServerConnectionAsync::new_plain(&loop_handle, socket, service).1
             .then(move |r| {
                 let mut g = state.lock().expect("lock");
                 let removed = g.conns.remove(&conn_id);

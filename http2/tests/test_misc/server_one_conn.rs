@@ -78,7 +78,7 @@ impl HttpServerOneConn {
                         //HttpServerConnectionAsync::new_tls_fn(&handle, conn, server_context, service)
                         unimplemented!()
                     } else {
-                        HttpServerConnectionAsync::new_plain_fn(&handle, conn, service)
+                        HttpServerConnectionAsync::new_plain_fn(&handle, conn, service).1
                     }
                 });
 

@@ -360,51 +360,6 @@ impl<S> LoopInnerCommon<S>
 }
 
 
-impl<I, N> WriteLoopData<I, N>
-    where
-        I : Io + Send + 'static,
-        N : LoopInner,
-{
-    pub fn write_all(self, buf: Vec<u8>) -> HttpFuture<Self> {
-        let WriteLoopData { write, inner } = self;
-
-        Box::new(tokio_io::write_all(write, buf)
-            .map(move |(write, _)| WriteLoopData { write: write, inner: inner })
-            .map_err(HttpError::from))
-    }
-
-    fn with_inner<G, R>(&self, f: G) -> R
-        where G: FnOnce(&mut N) -> R
-    {
-        self.inner.with(f)
-    }
-
-    pub fn send_outg_stream(self, stream_id: StreamId) -> HttpFuture<Self> {
-        let bytes = self.with_inner(|inner| {
-            inner.common().pop_outg_all_for_stream_bytes(stream_id)
-        });
-
-        self.write_all(bytes)
-    }
-
-    fn send_outg_conn(self) -> HttpFuture<Self> {
-        let bytes = self.with_inner(|inner| {
-            inner.common().pop_outg_all_for_conn_bytes()
-        });
-
-        self.write_all(bytes)
-    }
-
-    pub fn process_common(self, common: CommonToWriteMessage) -> HttpFuture<Self> {
-        match common {
-            CommonToWriteMessage::TryFlushStream(None) => self.send_outg_conn(),
-            CommonToWriteMessage::TryFlushStream(Some(stream_id)) => self.send_outg_stream(stream_id),
-            CommonToWriteMessage::Write(buf) => self.write_all(buf),
-        }
-    }
-}
-
-
 pub trait LoopInner: 'static {
     type LoopHttpStream : GrpcHttpStream;
 
@@ -587,6 +542,13 @@ pub struct WriteLoopData<I, N>
     pub inner: TaskRcMut<N>,
 }
 
+pub struct CommandLoopData<N>
+    where
+        N : LoopInner,
+{
+    pub inner: TaskRcMut<N>,
+}
+
 
 impl<I, N> ReadLoopData<I, N>
     where
@@ -623,4 +585,54 @@ impl<I, N> ReadLoopData<I, N>
         Box::new(futures::finished(self))
     }
 
+}
+
+impl<I, N> WriteLoopData<I, N>
+    where
+        I : Io + Send + 'static,
+        N : LoopInner,
+{
+    pub fn write_all(self, buf: Vec<u8>) -> HttpFuture<Self> {
+        let WriteLoopData { write, inner } = self;
+
+        Box::new(tokio_io::write_all(write, buf)
+            .map(move |(write, _)| WriteLoopData { write: write, inner: inner })
+            .map_err(HttpError::from))
+    }
+
+    fn with_inner<G, R>(&self, f: G) -> R
+        where G: FnOnce(&mut N) -> R
+    {
+        self.inner.with(f)
+    }
+
+    pub fn send_outg_stream(self, stream_id: StreamId) -> HttpFuture<Self> {
+        let bytes = self.with_inner(|inner| {
+            inner.common().pop_outg_all_for_stream_bytes(stream_id)
+        });
+
+        self.write_all(bytes)
+    }
+
+    fn send_outg_conn(self) -> HttpFuture<Self> {
+        let bytes = self.with_inner(|inner| {
+            inner.common().pop_outg_all_for_conn_bytes()
+        });
+
+        self.write_all(bytes)
+    }
+
+    pub fn process_common(self, common: CommonToWriteMessage) -> HttpFuture<Self> {
+        match common {
+            CommonToWriteMessage::TryFlushStream(None) => self.send_outg_conn(),
+            CommonToWriteMessage::TryFlushStream(Some(stream_id)) => self.send_outg_stream(stream_id),
+            CommonToWriteMessage::Write(buf) => self.write_all(buf),
+        }
+    }
+}
+
+impl<N> CommandLoopData<N>
+    where
+        N : LoopInner,
+{
 }

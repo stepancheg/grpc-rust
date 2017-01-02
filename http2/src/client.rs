@@ -103,7 +103,7 @@ impl Http2Client {
         self.start_request_simple(headers, body)
     }
 
-    pub fn dump_state(&self) -> HttpFutureSend<ConnectionStateSnapshot> {
+    pub fn dump_state(&self) -> HttpFutureSend<ClientConnectionStateSnapshot> {
         self.loop_to_client.http_conn.dump_state()
     }
 }

@@ -81,8 +81,8 @@ impl ClientInner {
         id
     }
 
-    fn dump_state(&self) -> ConnectionStateSnapshot {
-        ConnectionStateSnapshot {
+    fn dump_state(&self) -> ClientConnectionStateSnapshot {
+        ClientConnectionStateSnapshot {
             streams: self.common.streams.iter().map(|(&k, s)| (k, s.common.state)).collect(),
         }
     }
@@ -133,6 +133,7 @@ impl LoopInner for ClientInner {
 
 pub struct HttpClientConnectionAsync {
     call_tx: futures::sync::mpsc::UnboundedSender<ClientToWriteMessage>,
+    command_tx: futures::sync::mpsc::UnboundedSender<ClientCommandMessage>,
     _remote: reactor::Remote,
 }
 
@@ -158,7 +159,10 @@ enum ClientToWriteMessage {
     BodyChunk(BodyChunkMessage),
     End(EndRequestMessage),
     Common(CommonToWriteMessage),
-    DumpState(futures::sync::oneshot::Sender<ConnectionStateSnapshot>),
+}
+
+enum ClientCommandMessage {
+    DumpState(futures::sync::oneshot::Sender<ClientConnectionStateSnapshot>),
 }
 
 
@@ -237,19 +241,12 @@ impl<I : Io + Send + 'static> ClientWriteLoop<I> {
         self.send_outg_stream(stream_id)
     }
 
-    fn process_dump_state(self, sender: futures::sync::oneshot::Sender<ConnectionStateSnapshot>) -> HttpFuture<Self> {
-        // ignore send error, client might be already dead
-        drop(sender.complete(self.inner.with(|inner| inner.dump_state())));
-        Box::new(futures::finished(self))
-    }
-
     fn process_message(self, message: ClientToWriteMessage) -> HttpFuture<Self> {
         match message {
             ClientToWriteMessage::Start(start) => self.process_start(start),
             ClientToWriteMessage::BodyChunk(body_chunk) => self.process_body_chunk(body_chunk),
             ClientToWriteMessage::End(end) => self.process_end(end),
             ClientToWriteMessage::Common(common) => self.process_common(common),
-            ClientToWriteMessage::DumpState(sender) => self.process_dump_state(sender),
         }
     }
 
@@ -265,21 +262,25 @@ impl<I : Io + Send + 'static> ClientWriteLoop<I> {
 
 type ClientReadLoop<I> = ReadLoopData<I, ClientInner>;
 type ClientWriteLoop<I> = WriteLoopData<I, ClientInner>;
+type ClientCommandLoop = CommandLoopData<ClientInner>;
 
 #[derive(Debug)]
-pub struct ConnectionStateSnapshot {
+pub struct ClientConnectionStateSnapshot {
     pub streams: HashMap<StreamId, StreamState>,
 }
 
 impl HttpClientConnectionAsync {
     fn connected<I : Io + Send + 'static>(lh: reactor::Handle, connect: HttpFutureSend<I>) -> (Self, HttpFuture<()>) {
         let (to_write_tx, to_write_rx) = futures::sync::mpsc::unbounded();
+        let (command_tx, command_rx) = futures::sync::mpsc::unbounded();
 
         let to_write_rx = Box::new(to_write_rx.map_err(|()| HttpError::IoError(io::Error::new(io::ErrorKind::Other, "to_write"))));
+        let command_rx = Box::new(command_rx.map_err(|()| HttpError::IoError(io::Error::new(io::ErrorKind::Other, "to_write"))));
 
         let c = HttpClientConnectionAsync {
             _remote: lh.remote().clone(),
             call_tx: to_write_tx.clone(),
+            command_tx: command_tx,
         };
 
         let handshake = connect.and_then(client_handshake);
@@ -298,11 +299,11 @@ impl HttpClientConnectionAsync {
                 }
             });
 
-            let write_inner = inner.clone();
-            let run_write = ClientWriteLoop { write: write, inner: write_inner }.run(to_write_rx);
+            let run_write = ClientWriteLoop { write: write, inner: inner.clone() }.run(to_write_rx);
             let run_read = ClientReadLoop { read: read, inner: inner.clone() }.run();
+            let run_command = ClientCommandLoop { inner: inner.clone() }.run(command_rx);
 
-            run_write.join(run_read).map(|_| ())
+            run_write.join(run_read).join(run_command).map(|_| ())
         });
 
         (c, Box::new(future))
@@ -368,14 +369,37 @@ impl HttpClientConnectionAsync {
     }
 
     /// For tests
-    pub fn dump_state(&self) -> HttpFutureSend<ConnectionStateSnapshot> {
+    pub fn dump_state(&self) -> HttpFutureSend<ClientConnectionStateSnapshot> {
         let (tx, rx) = futures::oneshot();
 
-        self.call_tx.clone().send(ClientToWriteMessage::DumpState(tx))
+        self.command_tx.clone().send(ClientCommandMessage::DumpState(tx))
             .expect("send request to dump state");
 
         let rx = rx.map_err(|_| HttpError::from(io::Error::new(io::ErrorKind::Other, "oneshot canceled")));
 
         Box::new(rx)
+    }
+}
+
+impl ClientCommandLoop {
+    fn process_dump_state(self, sender: futures::sync::oneshot::Sender<ClientConnectionStateSnapshot>) -> HttpFuture<Self> {
+        // ignore send error, client might be already dead
+        drop(sender.complete(self.inner.with(|inner| inner.dump_state())));
+        Box::new(futures::finished(self))
+    }
+
+    fn process_message(self, message: ClientCommandMessage) -> HttpFuture<Self> {
+        match message {
+            ClientCommandMessage::DumpState(sender) => self.process_dump_state(sender),
+        }
+    }
+
+    fn run(self, requests: HttpStreamSend<ClientCommandMessage>) -> HttpFuture<()> {
+        let requests = requests.map_err(HttpError::from);
+        Box::new(requests
+            .fold(self, move |l, message: ClientCommandMessage| {
+                l.process_message(message)
+            })
+            .map(|_| ()))
     }
 }

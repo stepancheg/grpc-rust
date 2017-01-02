@@ -1,6 +1,7 @@
 use std::marker;
 use std::io;
 use std::sync::Arc;
+use std::collections::HashMap;
 
 use solicit::http::frame::*;
 use solicit::http::StreamId;
@@ -8,6 +9,7 @@ use solicit::http::HttpScheme;
 use solicit::http::HttpError;
 use solicit::http::Header;
 use solicit::http::StaticHeader;
+use solicit::http::session::StreamState;
 
 use futures;
 use futures::Future;
@@ -149,6 +151,12 @@ impl<F : HttpService> ServerInner<F> {
             self.new_stream(stream_id, headers)
         }
     }
+
+    fn dump_state(&self) -> ServerConnectionStateSnapshot {
+        ServerConnectionStateSnapshot {
+            streams: self.common.streams.iter().map(|(&k, s)| (k, s.common.state)).collect(),
+        }
+    }
 }
 
 impl<F : HttpService> LoopInner for ServerInner<F> {
@@ -181,6 +189,12 @@ impl<F : HttpService> LoopInner for ServerInner<F> {
 
 type ServerReadLoop<F, I> = ReadLoopData<I, ServerInner<F>>;
 type ServerWriteLoop<F, I> = WriteLoopData<I, ServerInner<F>>;
+type ServerCommandLoop<F> = CommandLoopData<ServerInner<F>>;
+
+#[derive(Debug)]
+pub struct ServerConnectionStateSnapshot {
+    pub streams: HashMap<StreamId, StreamState>,
+}
 
 
 enum ServerToWriteMessage<F : HttpService> {
@@ -188,6 +202,10 @@ enum ServerToWriteMessage<F : HttpService> {
     ResponsePart(StreamId, HttpStreamPart),
     ResponseStreamEnd(StreamId),
     Common(CommonToWriteMessage),
+}
+
+enum ServerCommandMessage {
+    DumpState(futures::sync::oneshot::Sender<ServerConnectionStateSnapshot>),
 }
 
 
@@ -268,14 +286,37 @@ impl<F : HttpService, I : Io + Send> ServerWriteLoop<F, I> {
     }
 }
 
+impl<F : HttpService> ServerCommandLoop<F> {
+    fn process_dump_state(self, sender: futures::sync::oneshot::Sender<ServerConnectionStateSnapshot>) -> HttpFuture<Self> {
+        // ignore send error, client might be already dead
+        drop(sender.complete(self.inner.with(|inner| inner.dump_state())));
+        Box::new(futures::finished(self))
+    }
+
+    fn process_message(self, message: ServerCommandMessage) -> HttpFuture<Self> {
+        match message {
+            ServerCommandMessage::DumpState(sender) => self.process_dump_state(sender),
+        }
+    }
+
+    fn run(self, requests: HttpStreamSend<ServerCommandMessage>) -> HttpFuture<()> {
+        let requests = requests.map_err(HttpError::from);
+        Box::new(requests
+            .fold(self, move |l, message: ServerCommandMessage| {
+                l.process_message(message)
+            })
+            .map(|_| ()))
+    }}
 
 
 
 pub struct HttpServerConnectionAsync {
+    command_tx: futures::sync::mpsc::UnboundedSender<ServerCommandMessage>,
 }
 
 impl HttpServerConnectionAsync {
-    fn connected<F, I>(lh: &reactor::Handle, socket: HttpFutureSend<I>, service: Arc<F>) -> HttpFuture<()>
+    fn connected<F, I>(lh: &reactor::Handle, socket: HttpFutureSend<I>, service: Arc<F>)
+            -> (HttpServerConnectionAsync, HttpFuture<()>)
         where
             F : HttpService,
             I : Io + Send + 'static,
@@ -283,6 +324,10 @@ impl HttpServerConnectionAsync {
         let lh = lh.clone();
 
         let (to_write_tx, to_write_rx) = futures::sync::mpsc::unbounded::<ServerToWriteMessage<F>>();
+        let (command_tx, command_rx) = futures::sync::mpsc::unbounded::<ServerCommandMessage>();
+
+        let to_write_rx = to_write_rx.map_err(|()| HttpError::IoError(io::Error::new(io::ErrorKind::Other, "to_write")));
+        let command_rx = Box::new(command_rx.map_err(|()| HttpError::IoError(io::Error::new(io::ErrorKind::Other, "command"))));
 
         let handshake = socket.and_then(server_handshake);
 
@@ -298,18 +343,22 @@ impl HttpServerConnectionAsync {
                 },
             });
 
-            let to_write_rx = to_write_rx.map_err(|()| HttpError::IoError(io::Error::new(io::ErrorKind::Other, "to_write")));
-
             let run_write = ServerWriteLoop { write: write, inner: inner.clone() }.run(Box::new(to_write_rx));
             let run_read = ServerReadLoop { read: read, inner: inner.clone() }.run();
+            let run_command = ServerCommandLoop { inner: inner.clone() }.run(command_rx);
 
-            run_write.join(run_read).map(|_| ())
+            run_write.join(run_read).join(run_command).map(|_| ())
         });
 
-        Box::new(run.then(|x| { info!("connection end: {:?}", x); x }))
+        let future = Box::new(run.then(|x| { info!("connection end: {:?}", x); x }));
+
+        (HttpServerConnectionAsync {
+            command_tx: command_tx,
+        }, future)
     }
 
-    pub fn new_plain<S>(lh: &reactor::Handle, socket: TcpStream, service: Arc<S>) -> HttpFuture<()>
+    pub fn new_plain<S>(lh: &reactor::Handle, socket: TcpStream, service: Arc<S>)
+            -> (HttpServerConnectionAsync, HttpFuture<()>)
         where
             S : HttpService,
     {
@@ -317,7 +366,8 @@ impl HttpServerConnectionAsync {
     }
 
     /*
-    pub fn new_tls<F>(lh: &reactor::Handle, socket: TcpStream, server_context: tokio_tls::ServerContext, factory: F) -> HttpFuture<()>
+    pub fn new_tls<F>(lh: &reactor::Handle, socket: TcpStream, server_context: tokio_tls::ServerContext, factory: F)
+            -> (HttpServerConnectionAsync, HttpFuture<()>)
         where
             F : HttpService,
     {
@@ -327,7 +377,8 @@ impl HttpServerConnectionAsync {
     }
     */
 
-    pub fn new_plain_fn<F>(lh: &reactor::Handle, socket: TcpStream, f: F) -> HttpFuture<()>
+    pub fn new_plain_fn<F>(lh: &reactor::Handle, socket: TcpStream, f: F)
+            -> (HttpServerConnectionAsync, HttpFuture<()>)
         where
             F : Fn(Vec<StaticHeader>, HttpStreamStreamSend) -> HttpStreamStreamSend + Send + 'static,
     {
@@ -345,7 +396,8 @@ impl HttpServerConnectionAsync {
     }
 
     /*
-    pub fn new_tls_fn<F>(lh: &reactor::Handle, socket: TcpStream, server_context: tokio_tls::ServerContext, f: F) -> HttpFuture<()>
+    pub fn new_tls_fn<F>(lh: &reactor::Handle, socket: TcpStream, server_context: tokio_tls::ServerContext, f: F)
+            -> (HttpServerConnectionAsync, HttpFuture<()>)
         where
             F : Fn(Vec<StaticHeader>, HttpStreamStreamSend) -> HttpStreamStreamSend + Send + 'static,
     {
@@ -362,4 +414,17 @@ impl HttpServerConnectionAsync {
         HttpServerConnectionAsync::new_tls(lh, socket, server_context, HttpServiceFn(f))
     }
     */
+
+    /// For tests
+    pub fn dump_state(&self) -> HttpFutureSend<ServerConnectionStateSnapshot> {
+        let (tx, rx) = futures::oneshot();
+
+        self.command_tx.clone().send(ServerCommandMessage::DumpState(tx))
+            .expect("send request to dump state");
+
+        let rx = rx.map_err(|_| HttpError::from(io::Error::new(io::ErrorKind::Other, "oneshot canceled")));
+
+        Box::new(rx)
+    }
+
 }
