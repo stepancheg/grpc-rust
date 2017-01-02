@@ -1,7 +1,6 @@
 use std::marker;
 use std::io;
 
-use solicit::http::session::StreamState;
 use solicit::http::frame::*;
 use solicit::http::StreamId;
 use solicit::http::HttpScheme;
@@ -54,42 +53,15 @@ impl<F : HttpService> GrpcHttpStream for GrpcHttpServerStream<F> {
         }
     }
 
-    fn close_remote(&mut self) {
-        let next = match self.state() {
-            StreamState::HalfClosedLocal => StreamState::Closed,
-            _ => StreamState::HalfClosedRemote,
-        };
-        self.set_state(next);
+    fn closed_remote(&mut self) {
+        if let Some(mut sender) = self.request_handler.take() {
+            // ignore error
+            sender.send(ResultOrEof::Eof).ok();
+        }
     }
 }
 
 impl<F : HttpService> GrpcHttpServerStream<F> {
-    fn _close(&mut self) {
-        self.set_state(StreamState::Closed);
-    }
-
-    fn close_local(&mut self) {
-        let next = match self.state() {
-            StreamState::HalfClosedRemote => StreamState::Closed,
-            _ => StreamState::HalfClosedLocal,
-        };
-        self.set_state(next);
-    }
-
-    fn is_closed_local(&self) -> bool {
-        match self.state() {
-            StreamState::HalfClosedLocal | StreamState::Closed => true,
-            _ => false,
-        }
-    }
-
-    fn is_closed_remote(&self) -> bool {
-        match self.state() {
-            StreamState::HalfClosedRemote | StreamState::Closed => true,
-            _ => false,
-        }
-    }
-
     fn set_headers<'n, 'v>(&mut self, headers: Vec<Header<'n, 'v>>, last: bool) {
         let headers = headers.into_iter().map(|h| Header::new(h.name().to_owned(), h.value().to_owned())).collect();
         if let Some(ref mut sender) = self.request_handler {
@@ -100,20 +72,6 @@ impl<F : HttpService> GrpcHttpServerStream<F> {
             // ignore error
             sender.send(ResultOrEof::Item(part)).ok();
         }
-    }
-
-    fn set_state(&mut self, state: StreamState) {
-        self.common.state = state;
-        if self.is_closed_remote() {
-            if let Some(mut sender) = self.request_handler.take() {
-                // ignore error
-                sender.send(ResultOrEof::Eof).ok();
-            }
-        }
-    }
-
-    fn state(&self) -> StreamState {
-        self.common.state
     }
 
 }
@@ -268,7 +226,7 @@ impl<F : HttpService, I : Io> ServerWriteLoop<F, I> {
         let stream_id = self.inner.with(move |inner: &mut ServerInner<F>| {
             let stream = inner.common.get_stream_mut(stream_id);
             if let Some(stream) = stream {
-                if !stream.is_closed_local() {
+                if !stream.common.state.is_closed_local() {
                     stream.common.outgoing.push_back(part.content);
                     if part.last {
                         stream.common.outgoing_end = true;
@@ -293,8 +251,8 @@ impl<F : HttpService, I : Io> ServerWriteLoop<F, I> {
             let (send, close) = {
                 let stream = inner.common.get_stream_mut(stream_id);
                 if let Some(stream) = stream {
-                    if !stream.is_closed_local() {
-                        stream.close_local();
+                    if !stream.common.state.is_closed_local() {
+                        stream.common.close_local();
                         (true, true)
                     } else {
                         (false, false)

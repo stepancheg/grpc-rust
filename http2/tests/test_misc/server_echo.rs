@@ -2,7 +2,6 @@
 
 use std::net::ToSocketAddrs;
 use std::sync::mpsc;
-use std::thread;
 
 use futures::stream;
 

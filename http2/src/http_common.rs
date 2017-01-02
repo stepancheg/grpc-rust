@@ -103,10 +103,17 @@ impl GrpcHttpStreamCommon {
         }
     }
 
-    fn close_local(&mut self) {
+    pub fn close_local(&mut self) {
         self.state = match self.state {
             StreamState::Closed | StreamState::HalfClosedRemote => StreamState::Closed,
             _ => StreamState::HalfClosedLocal,
+        };
+    }
+
+    pub fn close_remote(&mut self) {
+        self.state = match self.state {
+            StreamState::Closed | StreamState::HalfClosedLocal => StreamState::Closed,
+            _ => StreamState::HalfClosedRemote,
         };
     }
 
@@ -193,7 +200,7 @@ pub trait GrpcHttpStream {
     fn common(&self) -> &GrpcHttpStreamCommon;
     fn common_mut(&mut self) -> &mut GrpcHttpStreamCommon;
     fn new_data_chunk(&mut self, data: &[u8], last: bool);
-    fn close_remote(&mut self);
+    fn closed_remote(&mut self);
 }
 
 
@@ -233,7 +240,6 @@ impl<S> LoopInnerCommon<S>
 
 
     pub fn pop_outg_for_stream(&mut self, stream_id: StreamId) -> Option<HttpStreamPart> {
-        // TODO: remove closed streams
         let r = {
             if let Some(stream) = self.streams.get_mut(&stream_id) {
                 stream.common_mut().pop_outg(&mut self.conn.out_window_size)
@@ -283,6 +289,9 @@ impl<S> LoopInnerCommon<S>
                 if part.last && data.len() == 0 {
                     let mut frame = DataFrame::with_data(stream_id, Vec::new());
                     frame.set_flag(DataFlag::EndStream);
+
+                    debug!("sending frame {:?}", frame);
+
                     return target.send_frame(frame).unwrap();
                 }
 
@@ -302,6 +311,9 @@ impl<S> LoopInnerCommon<S>
                     if end_stream == EndStream::Yes {
                         frame.set_flag(DataFlag::EndStream);
                     }
+
+                    debug!("sending frame {:?}", frame);
+
                     target.send_frame(frame).unwrap();
 
                     pos = end;
@@ -320,6 +332,8 @@ impl<S> LoopInnerCommon<S>
                 if part.last {
                     frame.set_flag(HeadersFlag::EndStream);
                 }
+
+                debug!("sending frame {:?}", frame);
 
                 target.send_frame(frame).unwrap();
             }
@@ -475,13 +489,6 @@ pub trait LoopInner: 'static {
 
             stream.new_data_chunk(&frame.data.as_ref(), frame.is_end_of_stream());
 
-            if frame.is_end_of_stream() {
-                stream.close_remote();
-                // TODO: GC streams
-            }
-
-            // TODO: drop stream if closed on both ends
-
             increment_stream
         };
 
@@ -538,15 +545,14 @@ pub trait LoopInner: 'static {
     fn close_remote(&mut self, stream_id: StreamId) {
         debug!("close remote: {}", stream_id);
 
-        let remove = {
-            let mut stream = self.common().get_stream_mut(stream_id)
+        {
+            let mut stream: &mut Self::LoopHttpStream = self.common().get_stream_mut(stream_id)
                 .expect(&format!("stream not found: {}", stream_id));
-            stream.close_remote();
-            stream.common().state == StreamState::Closed
+            stream.common_mut().close_remote();
+            stream.closed_remote();
         };
-        if remove {
-            self.common().remove_stream(stream_id);
-        }
+
+        self.common().remove_stream_if_closed(stream_id);
     }
 }
 

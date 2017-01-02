@@ -109,8 +109,9 @@ impl Drop for Http2Server {
         // ignore error because even loop may be already dead
         self.loop_to_server.shutdown_tx.send(()).ok();
 
-        // do not ignore errors because we own event loop thread
-        self.thread_join_handle.take().unwrap().join().unwrap();
+        // do not ignore errors of take
+        // ignore errors of join, it means that server event loop crashed
+        drop(self.thread_join_handle.take().unwrap().join());
     }
 }
 

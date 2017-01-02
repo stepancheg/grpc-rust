@@ -50,12 +50,7 @@ impl GrpcHttpStream for GrpcHttpClientStream {
         }
     }
 
-    fn close_remote(&mut self) {
-        let next = match self.state() {
-            StreamState::HalfClosedLocal => StreamState::Closed,
-            _ => StreamState::HalfClosedRemote,
-        };
-        self.set_state(next);
+    fn closed_remote(&mut self) {
         if let Some(mut response_handler) = self.response_handler.take() {
             // it is OK to ignore error: handler may be already dead
             drop(response_handler.send(ResultOrEof::Eof));
@@ -64,44 +59,6 @@ impl GrpcHttpStream for GrpcHttpClientStream {
 }
 
 impl GrpcHttpClientStream {
-
-    fn _close(&mut self) {
-        self.set_state(StreamState::Closed);
-    }
-
-    fn _close_local(&mut self) {
-        let next = match self.state() {
-            StreamState::HalfClosedRemote => StreamState::Closed,
-            _ => StreamState::HalfClosedLocal,
-        };
-        self.set_state(next);
-    }
-
-    fn _is_closed(&self) -> bool {
-        self.state() == StreamState::Closed
-    }
-
-    fn _is_closed_local(&self) -> bool {
-        match self.state() {
-            StreamState::HalfClosedLocal | StreamState::Closed => true,
-            _ => false,
-        }
-    }
-
-    fn _is_closed_remote(&self) -> bool {
-        match self.state() {
-            StreamState::HalfClosedRemote | StreamState::Closed => true,
-            _ => false,
-        }
-    }
-
-    fn set_state(&mut self, state: StreamState) {
-        self.common.state = state;
-    }
-
-    fn state(&self) -> StreamState {
-        self.common.state
-    }
 }
 
 struct GrpcHttpClientSessionState {
