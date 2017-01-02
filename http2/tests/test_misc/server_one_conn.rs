@@ -59,9 +59,9 @@ impl HttpServerOneConn {
             let listener = tokio_core::net::TcpListener::bind(&("::1", port).to_socket_addrs().unwrap().next().unwrap(), &lp.handle()).unwrap();
 
             let actual_port = listener.local_addr().unwrap().port();
-            from_loop_tx.complete({FromLoop {
+            from_loop_tx.complete(FromLoop {
                 port: actual_port,
-            }});
+            });
 
             let handle = lp.handle();
 
