@@ -22,6 +22,7 @@ use solicit_async::*;
 
 use client_conn::*;
 use http_common::*;
+use message::*;
 
 
 // Data sent from event loop to GrpcClient
@@ -101,6 +102,16 @@ impl Http2Client {
             Header::new(":scheme", self.http_scheme.as_bytes()),
         ];
         self.start_request_simple(headers, body)
+    }
+
+    pub fn start_post_simple_response(
+        &self,
+        path: &str,
+        body: Vec<u8>)
+            -> HttpFutureSend<SimpleHttpMessage>
+    {
+        Box::new(self.start_post(path, body).collect()
+            .map(SimpleHttpMessage::from_parts))
     }
 
     pub fn dump_state(&self) -> HttpFutureSend<ConnectionStateSnapshot> {

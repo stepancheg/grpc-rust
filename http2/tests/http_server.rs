@@ -43,32 +43,6 @@ fn test() {
             .flatten_stream())
     });
 
-    let port = server.port();
-
-    let (client_complete_tx, client_complete_rx) = mpsc::channel();
-
-    thread::spawn(move || {
-        let mut client_lp = reactor::Core::new().expect("core");
-
-        let (client, future) = HttpClientConnectionAsync::new_plain(client_lp.handle(), &("::1", port).to_socket_addrs().unwrap().next().unwrap());
-
-        let resp = client.start_request(
-            Vec::new(),
-            Box::new(stream::once(Ok((&b"abcd"[..]).to_owned()))));
-
-        let request_future = resp.fold(Vec::new(), move |mut v, part| {
-            match part.content {
-                HttpStreamPartContent::Headers(..) => (),
-                HttpStreamPartContent::Data(data) => v.extend(data),
-            }
-            if part.last {
-                client_complete_tx.send(v.clone()).unwrap()
-            }
-            futures::finished::<_, HttpError>(v)
-        }).map(|_| ());
-
-        client_lp.run(future.select(request_future)).ok();
-    });
-
-    assert_eq!(&b"abcd"[..], &client_complete_rx.recv().expect("client complete recv")[..]);
+    let client: Http2Client = Http2Client::new("::1", server.port(), false).expect("connect");
+    client.start_post_simple_response("/foobar", (&b"abcd"[..]).to_owned()).wait();
 }

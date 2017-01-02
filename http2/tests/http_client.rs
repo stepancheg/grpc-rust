@@ -14,7 +14,6 @@ mod test_misc;
 
 use test_misc::*;
 
-use http2::client::*;
 use http2::for_test::*;
 
 
@@ -31,10 +30,9 @@ fn stream_count() {
     let state: ConnectionStateSnapshot = client.dump_state().wait().expect("state");
     assert_eq!(0, state.streams.len());
 
-    let parts = client.start_post("/foobar", (b"xxyy"[..]).to_owned())
+    let message = client.start_post_simple_response("/foobar", (b"xxyy"[..]).to_owned())
         .wait()
-        .map(|r| r.unwrap());
-    let message = SimpleHttpMessage::from_parts(parts);
+        .expect("r");
     assert_eq!((b"xxyy"[..]).to_owned(), message.body);
 
     let state: ConnectionStateSnapshot = client.dump_state().wait().expect("state");

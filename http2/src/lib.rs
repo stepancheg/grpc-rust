@@ -33,7 +33,9 @@ pub use solicit::http::StaticHeader;
 
 pub mod for_test {
     pub use server_conn::*;
+    pub use server::*;
     pub use client_conn::*;
+    pub use client::*;
     pub use http_common::*;
     pub use solicit_async::*;
     pub use futures_misc::*;
