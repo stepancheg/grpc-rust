@@ -7,7 +7,9 @@ use futures::Future;
 use futures;
 
 use tokio_core::io::ReadHalf;
+use tokio_core::io::WriteHalf;
 use tokio_core::io::Io;
+use tokio_core::io as tokio_io;
 
 use solicit::http::session::StreamState;
 use solicit::http::frame::*;
@@ -358,15 +360,26 @@ impl<S> LoopInnerCommon<S>
 }
 
 
-pub trait WriteLoop : Sized + 'static {
-    type Inner : LoopInner;
+impl<I, N> WriteLoopData<I, N>
+    where
+        I : Io + Send + 'static,
+        N : LoopInner,
+{
+    pub fn write_all(self, buf: Vec<u8>) -> HttpFuture<Self> {
+        let WriteLoopData { write, inner } = self;
+
+        Box::new(tokio_io::write_all(write, buf)
+            .map(move |(write, _)| WriteLoopData { write: write, inner: inner })
+            .map_err(HttpError::from))
+    }
 
     fn with_inner<G, R>(&self, f: G) -> R
-        where G: FnOnce(&mut Self::Inner) -> R;
+        where G: FnOnce(&mut N) -> R
+    {
+        self.inner.with(f)
+    }
 
-    fn write_all(self, buf: Vec<u8>) -> HttpFuture<Self>;
-
-    fn send_outg_stream(self, stream_id: StreamId) -> HttpFuture<Self> {
+    pub fn send_outg_stream(self, stream_id: StreamId) -> HttpFuture<Self> {
         let bytes = self.with_inner(|inner| {
             inner.common().pop_outg_all_for_stream_bytes(stream_id)
         });
@@ -382,14 +395,13 @@ pub trait WriteLoop : Sized + 'static {
         self.write_all(bytes)
     }
 
-    fn process_common(self, common: CommonToWriteMessage) -> HttpFuture<Self> {
+    pub fn process_common(self, common: CommonToWriteMessage) -> HttpFuture<Self> {
         match common {
             CommonToWriteMessage::TryFlushStream(None) => self.send_outg_conn(),
             CommonToWriteMessage::TryFlushStream(Some(stream_id)) => self.send_outg_stream(stream_id),
             CommonToWriteMessage::Write(buf) => self.write_all(buf),
         }
     }
-
 }
 
 
@@ -557,7 +569,7 @@ pub trait LoopInner: 'static {
 }
 
 
-pub struct HttpReadLoopData<I, N>
+pub struct ReadLoopData<I, N>
     where
         I : Io + 'static,
         N : LoopInner,
@@ -566,16 +578,26 @@ pub struct HttpReadLoopData<I, N>
     pub inner: TaskRcMut<N>,
 }
 
-impl<I, N> HttpReadLoopData<I, N>
+pub struct WriteLoopData<I, N>
+    where
+        I : Io + 'static,
+        N : LoopInner,
+{
+    pub write: WriteHalf<I>,
+    pub inner: TaskRcMut<N>,
+}
+
+
+impl<I, N> ReadLoopData<I, N>
     where
         I : Io + Send + 'static,
         N : LoopInner,
 {
     /// Recv a frame from the network
     fn recv_raw_frame(self) -> HttpFuture<(Self, RawFrame<'static>)> {
-        let HttpReadLoopData { read, inner } = self;
+        let ReadLoopData { read, inner } = self;
         Box::new(recv_raw_frame(read)
-            .map(|(read, frame)| (HttpReadLoopData { read: read, inner: inner }, frame))
+            .map(|(read, frame)| (ReadLoopData { read: read, inner: inner }, frame))
             .map_err(HttpError::from))
     }
 

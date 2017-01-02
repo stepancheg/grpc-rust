@@ -13,9 +13,7 @@ use futures;
 use futures::Future;
 use futures::stream::Stream;
 
-use tokio_core::io as tokio_io;
 use tokio_core::io::Io;
-use tokio_core::io::WriteHalf;
 use tokio_core::net::TcpStream;
 use tokio_core::reactor;
 
@@ -181,7 +179,8 @@ impl<F : HttpService> LoopInner for ServerInner<F> {
 
 }
 
-type ServerReadLoop<F, I> = HttpReadLoopData<I, ServerInner<F>>;
+type ServerReadLoop<F, I> = ReadLoopData<I, ServerInner<F>>;
+type ServerWriteLoop<F, I> = WriteLoopData<I, ServerInner<F>>;
 
 
 enum ServerToWriteMessage<F : HttpService> {
@@ -191,34 +190,8 @@ enum ServerToWriteMessage<F : HttpService> {
     Common(CommonToWriteMessage),
 }
 
-struct ServerWriteLoop<F, I>
-    where
-        F : HttpService,
-        I : Io + 'static,
-{
-    write: WriteHalf<I>,
-    inner: TaskRcMut<ServerInner<F>>,
-}
 
-impl<F : HttpService, I : Io> WriteLoop for ServerWriteLoop<F, I> {
-    type Inner = ServerInner<F>;
-
-    fn with_inner<G, R>(&self, f: G) -> R
-        where G: FnOnce(&mut Self::Inner) -> R
-    {
-        self.inner.with(f)
-    }
-
-    fn write_all(self, buf: Vec<u8>) -> HttpFuture<Self> {
-        let ServerWriteLoop { write, inner } = self;
-
-        Box::new(tokio_io::write_all(write, buf)
-            .map(move |(write, _)| ServerWriteLoop { write: write, inner: inner })
-            .map_err(HttpError::from))
-    }
-}
-
-impl<F : HttpService, I : Io> ServerWriteLoop<F, I> {
+impl<F : HttpService, I : Io + Send> ServerWriteLoop<F, I> {
     fn _loop_handle(&self) -> reactor::Handle {
         self.inner.with(move |inner: &mut ServerInner<F>| inner.session_state.loop_handle.clone())
     }

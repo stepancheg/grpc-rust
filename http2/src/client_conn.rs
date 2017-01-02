@@ -15,9 +15,7 @@ use futures::Future;
 use futures::stream::Stream;
 
 use tokio_core::net::TcpStream;
-use tokio_core::io as tokio_io;
 use tokio_core::io::Io;
-use tokio_core::io::WriteHalf;
 use tokio_core::reactor;
 
 use futures_misc::*;
@@ -138,7 +136,7 @@ pub struct HttpClientConnectionAsync {
     _remote: reactor::Remote,
 }
 
-unsafe impl  Sync for HttpClientConnectionAsync {}
+unsafe impl Sync for HttpClientConnectionAsync {}
 
 struct StartRequestMessage {
     headers: Vec<StaticHeader>,
@@ -163,28 +161,6 @@ enum ClientToWriteMessage {
     DumpState(futures::sync::oneshot::Sender<ConnectionStateSnapshot>),
 }
 
-struct ClientWriteLoop<I : Io + Send + 'static> {
-    write: WriteHalf<I>,
-    inner: TaskRcMut<ClientInner>,
-}
-
-impl<I : Io + Send + 'static> WriteLoop for ClientWriteLoop<I> {
-    type Inner = ClientInner;
-
-    fn with_inner<G, R>(&self, f: G) -> R
-        where G: FnOnce(&mut Self::Inner) -> R
-    {
-        self.inner.with(f)
-    }
-
-    fn write_all(self, buf: Vec<u8>) -> HttpFuture<Self> {
-        let ClientWriteLoop { write, inner } = self;
-
-        Box::new(tokio_io::write_all(write, buf)
-            .map(move |(write, _)| ClientWriteLoop { write: write, inner: inner })
-            .map_err(HttpError::from))
-    }
-}
 
 impl<I : Io + Send + 'static> ClientWriteLoop<I> {
     fn process_start(self, start: StartRequestMessage) -> HttpFuture<Self> {
@@ -287,7 +263,8 @@ impl<I : Io + Send + 'static> ClientWriteLoop<I> {
     }
 }
 
-type ClientReadLoop<I> = HttpReadLoopData<I, ClientInner>;
+type ClientReadLoop<I> = ReadLoopData<I, ClientInner>;
+type ClientWriteLoop<I> = WriteLoopData<I, ClientInner>;
 
 #[derive(Debug)]
 pub struct ConnectionStateSnapshot {
