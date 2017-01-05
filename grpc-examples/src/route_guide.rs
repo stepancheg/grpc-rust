@@ -20,14 +20,14 @@
 use protobuf::Message as Message_imported_for_functions;
 use protobuf::ProtobufEnum as ProtobufEnum_imported_for_functions;
 
-#[derive(Clone,Default)]
+#[derive(PartialEq,Clone,Default)]
 pub struct Point {
     // message fields
     pub latitude: i32,
     pub longitude: i32,
     // special fields
     unknown_fields: ::protobuf::UnknownFields,
-    cached_size: ::std::cell::Cell<u32>,
+    cached_size: ::protobuf::CachedSize,
 }
 
 // see codegen.rs for the explanation why impl Sync explicitly
@@ -164,10 +164,6 @@ impl ::protobuf::Message for Point {
         &mut self.unknown_fields
     }
 
-    fn type_id(&self) -> ::std::any::TypeId {
-        ::std::any::TypeId::of::<Point>()
-    }
-
     fn as_any(&self) -> &::std::any::Any {
         self as &::std::any::Any
     }
@@ -218,14 +214,6 @@ impl ::protobuf::Clear for Point {
     }
 }
 
-impl ::std::cmp::PartialEq for Point {
-    fn eq(&self, other: &Point) -> bool {
-        self.latitude == other.latitude &&
-        self.longitude == other.longitude &&
-        self.unknown_fields == other.unknown_fields
-    }
-}
-
 impl ::std::fmt::Debug for Point {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         ::protobuf::text_format::fmt(self, f)
@@ -238,14 +226,14 @@ impl ::protobuf::reflect::ProtobufValue for Point {
     }
 }
 
-#[derive(Clone,Default)]
+#[derive(PartialEq,Clone,Default)]
 pub struct Rectangle {
     // message fields
     lo: ::protobuf::SingularPtrField<Point>,
     hi: ::protobuf::SingularPtrField<Point>,
     // special fields
     unknown_fields: ::protobuf::UnknownFields,
-    cached_size: ::std::cell::Cell<u32>,
+    cached_size: ::protobuf::CachedSize,
 }
 
 // see codegen.rs for the explanation why impl Sync explicitly
@@ -416,10 +404,6 @@ impl ::protobuf::Message for Rectangle {
         &mut self.unknown_fields
     }
 
-    fn type_id(&self) -> ::std::any::TypeId {
-        ::std::any::TypeId::of::<Rectangle>()
-    }
-
     fn as_any(&self) -> &::std::any::Any {
         self as &::std::any::Any
     }
@@ -470,14 +454,6 @@ impl ::protobuf::Clear for Rectangle {
     }
 }
 
-impl ::std::cmp::PartialEq for Rectangle {
-    fn eq(&self, other: &Rectangle) -> bool {
-        self.lo == other.lo &&
-        self.hi == other.hi &&
-        self.unknown_fields == other.unknown_fields
-    }
-}
-
 impl ::std::fmt::Debug for Rectangle {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         ::protobuf::text_format::fmt(self, f)
@@ -490,14 +466,14 @@ impl ::protobuf::reflect::ProtobufValue for Rectangle {
     }
 }
 
-#[derive(Clone,Default)]
+#[derive(PartialEq,Clone,Default)]
 pub struct Feature {
     // message fields
     pub name: ::std::string::String,
     location: ::protobuf::SingularPtrField<Point>,
     // special fields
     unknown_fields: ::protobuf::UnknownFields,
-    cached_size: ::std::cell::Cell<u32>,
+    cached_size: ::protobuf::CachedSize,
 }
 
 // see codegen.rs for the explanation why impl Sync explicitly
@@ -658,10 +634,6 @@ impl ::protobuf::Message for Feature {
         &mut self.unknown_fields
     }
 
-    fn type_id(&self) -> ::std::any::TypeId {
-        ::std::any::TypeId::of::<Feature>()
-    }
-
     fn as_any(&self) -> &::std::any::Any {
         self as &::std::any::Any
     }
@@ -712,14 +684,6 @@ impl ::protobuf::Clear for Feature {
     }
 }
 
-impl ::std::cmp::PartialEq for Feature {
-    fn eq(&self, other: &Feature) -> bool {
-        self.name == other.name &&
-        self.location == other.location &&
-        self.unknown_fields == other.unknown_fields
-    }
-}
-
 impl ::std::fmt::Debug for Feature {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         ::protobuf::text_format::fmt(self, f)
@@ -732,14 +696,14 @@ impl ::protobuf::reflect::ProtobufValue for Feature {
     }
 }
 
-#[derive(Clone,Default)]
+#[derive(PartialEq,Clone,Default)]
 pub struct RouteNote {
     // message fields
     location: ::protobuf::SingularPtrField<Point>,
     pub message: ::std::string::String,
     // special fields
     unknown_fields: ::protobuf::UnknownFields,
-    cached_size: ::std::cell::Cell<u32>,
+    cached_size: ::protobuf::CachedSize,
 }
 
 // see codegen.rs for the explanation why impl Sync explicitly
@@ -900,10 +864,6 @@ impl ::protobuf::Message for RouteNote {
         &mut self.unknown_fields
     }
 
-    fn type_id(&self) -> ::std::any::TypeId {
-        ::std::any::TypeId::of::<RouteNote>()
-    }
-
     fn as_any(&self) -> &::std::any::Any {
         self as &::std::any::Any
     }
@@ -954,14 +914,6 @@ impl ::protobuf::Clear for RouteNote {
     }
 }
 
-impl ::std::cmp::PartialEq for RouteNote {
-    fn eq(&self, other: &RouteNote) -> bool {
-        self.location == other.location &&
-        self.message == other.message &&
-        self.unknown_fields == other.unknown_fields
-    }
-}
-
 impl ::std::fmt::Debug for RouteNote {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         ::protobuf::text_format::fmt(self, f)
@@ -974,7 +926,7 @@ impl ::protobuf::reflect::ProtobufValue for RouteNote {
     }
 }
 
-#[derive(Clone,Default)]
+#[derive(PartialEq,Clone,Default)]
 pub struct RouteSummary {
     // message fields
     pub point_count: i32,
@@ -983,7 +935,7 @@ pub struct RouteSummary {
     pub elapsed_time: i32,
     // special fields
     unknown_fields: ::protobuf::UnknownFields,
-    cached_size: ::std::cell::Cell<u32>,
+    cached_size: ::protobuf::CachedSize,
 }
 
 // see codegen.rs for the explanation why impl Sync explicitly
@@ -1192,10 +1144,6 @@ impl ::protobuf::Message for RouteSummary {
         &mut self.unknown_fields
     }
 
-    fn type_id(&self) -> ::std::any::TypeId {
-        ::std::any::TypeId::of::<RouteSummary>()
-    }
-
     fn as_any(&self) -> &::std::any::Any {
         self as &::std::any::Any
     }
@@ -1255,16 +1203,6 @@ impl ::protobuf::Clear for RouteSummary {
         self.clear_distance();
         self.clear_elapsed_time();
         self.unknown_fields.clear();
-    }
-}
-
-impl ::std::cmp::PartialEq for RouteSummary {
-    fn eq(&self, other: &RouteSummary) -> bool {
-        self.point_count == other.point_count &&
-        self.feature_count == other.feature_count &&
-        self.distance == other.distance &&
-        self.elapsed_time == other.elapsed_time &&
-        self.unknown_fields == other.unknown_fields
     }
 }
 
