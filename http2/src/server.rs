@@ -126,10 +126,10 @@ fn run_server_event_loop<S>(
 }
 
 impl Http2Server {
-    pub fn new<S>(port: u16, service: S) -> Http2Server
+    pub fn new<A: ToSocketAddrs, S>(addr: A, service: S) -> Http2Server
         where S : HttpService
     {
-        let listen_addr = ("::", port).to_socket_addrs().unwrap().next().unwrap();
+        let listen_addr = addr.to_socket_addrs().unwrap().next().unwrap();
 
         let (get_from_loop_tx, get_from_loop_rx) = mpsc::channel();
 
