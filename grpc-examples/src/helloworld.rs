@@ -20,13 +20,13 @@
 use protobuf::Message as Message_imported_for_functions;
 use protobuf::ProtobufEnum as ProtobufEnum_imported_for_functions;
 
-#[derive(Clone,Default)]
+#[derive(PartialEq,Clone,Default)]
 pub struct HelloRequest {
     // message fields
     pub name: ::std::string::String,
     // special fields
     unknown_fields: ::protobuf::UnknownFields,
-    cached_size: ::std::cell::Cell<u32>,
+    cached_size: ::protobuf::CachedSize,
 }
 
 // see codegen.rs for the explanation why impl Sync explicitly
@@ -134,10 +134,6 @@ impl ::protobuf::Message for HelloRequest {
         &mut self.unknown_fields
     }
 
-    fn type_id(&self) -> ::std::any::TypeId {
-        ::std::any::TypeId::of::<HelloRequest>()
-    }
-
     fn as_any(&self) -> &::std::any::Any {
         self as &::std::any::Any
     }
@@ -182,13 +178,6 @@ impl ::protobuf::Clear for HelloRequest {
     }
 }
 
-impl ::std::cmp::PartialEq for HelloRequest {
-    fn eq(&self, other: &HelloRequest) -> bool {
-        self.name == other.name &&
-        self.unknown_fields == other.unknown_fields
-    }
-}
-
 impl ::std::fmt::Debug for HelloRequest {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         ::protobuf::text_format::fmt(self, f)
@@ -201,13 +190,13 @@ impl ::protobuf::reflect::ProtobufValue for HelloRequest {
     }
 }
 
-#[derive(Clone,Default)]
+#[derive(PartialEq,Clone,Default)]
 pub struct HelloReply {
     // message fields
     pub message: ::std::string::String,
     // special fields
     unknown_fields: ::protobuf::UnknownFields,
-    cached_size: ::std::cell::Cell<u32>,
+    cached_size: ::protobuf::CachedSize,
 }
 
 // see codegen.rs for the explanation why impl Sync explicitly
@@ -315,10 +304,6 @@ impl ::protobuf::Message for HelloReply {
         &mut self.unknown_fields
     }
 
-    fn type_id(&self) -> ::std::any::TypeId {
-        ::std::any::TypeId::of::<HelloReply>()
-    }
-
     fn as_any(&self) -> &::std::any::Any {
         self as &::std::any::Any
     }
@@ -360,13 +345,6 @@ impl ::protobuf::Clear for HelloReply {
     fn clear(&mut self) {
         self.clear_message();
         self.unknown_fields.clear();
-    }
-}
-
-impl ::std::cmp::PartialEq for HelloReply {
-    fn eq(&self, other: &HelloReply) -> bool {
-        self.message == other.message &&
-        self.unknown_fields == other.unknown_fields
     }
 }
 

@@ -153,13 +153,13 @@ impl LongTestsAsync for LongTestsServerHandlerToAsync {
 }
 
 impl LongTestsServer {
-    pub fn new<H : LongTests + Send + Sync + 'static>(port: u16, h: H) -> Self {
+    pub fn new<A : ::std::net::ToSocketAddrs, H : LongTests + Send + Sync + 'static>(addr: A, h: H) -> Self {
         let h = LongTestsServerHandlerToAsync {
             cpupool: ::futures_cpupool::CpuPool::new_num_cpus(),
             handler: ::std::sync::Arc::new(h),
         };
         LongTestsServer {
-            async_server: LongTestsAsyncServer::new(port, h),
+            async_server: LongTestsAsyncServer::new(addr, h),
         }
     }
 }
@@ -171,7 +171,7 @@ pub struct LongTestsAsyncServer {
 }
 
 impl LongTestsAsyncServer {
-    pub fn new<H : LongTestsAsync + 'static + Sync + Send + 'static>(port: u16, h: H) -> Self {
+    pub fn new<A : ::std::net::ToSocketAddrs, H : LongTestsAsync + 'static + Sync + Send + 'static>(addr: A, h: H) -> Self {
         let handler_arc = ::std::sync::Arc::new(h);
         let service_definition = ::grpc::server::ServerServiceDefinition::new(
             vec![
@@ -214,7 +214,7 @@ impl LongTestsAsyncServer {
             ],
         );
         LongTestsAsyncServer {
-            grpc_server: ::grpc::server::GrpcServer::new(port, service_definition),
+            grpc_server: ::grpc::server::GrpcServer::new(addr, service_definition),
         }
     }
 }

@@ -46,7 +46,7 @@ fn new_server<H>(name: &str, handler: H) -> GrpcServer
         string_string_method(name, <H as GrpcStreamingFlavor>::streaming()),
         handler,
     ));
-    GrpcServer::new(0, ServerServiceDefinition::new(methods))
+    GrpcServer::new("::1:0", ServerServiceDefinition::new(methods))
 }
 
 /// Single unary method server

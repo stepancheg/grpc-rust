@@ -180,13 +180,13 @@ impl RouteGuideAsync for RouteGuideServerHandlerToAsync {
 }
 
 impl RouteGuideServer {
-    pub fn new<H : RouteGuide + Send + Sync + 'static>(port: u16, h: H) -> Self {
+    pub fn new<A : ::std::net::ToSocketAddrs, H : RouteGuide + Send + Sync + 'static>(addr: A, h: H) -> Self {
         let h = RouteGuideServerHandlerToAsync {
             cpupool: ::futures_cpupool::CpuPool::new_num_cpus(),
             handler: ::std::sync::Arc::new(h),
         };
         RouteGuideServer {
-            async_server: RouteGuideAsyncServer::new(port, h),
+            async_server: RouteGuideAsyncServer::new(addr, h),
         }
     }
 }
@@ -198,7 +198,7 @@ pub struct RouteGuideAsyncServer {
 }
 
 impl RouteGuideAsyncServer {
-    pub fn new<H : RouteGuideAsync + 'static + Sync + Send + 'static>(port: u16, h: H) -> Self {
+    pub fn new<A : ::std::net::ToSocketAddrs, H : RouteGuideAsync + 'static + Sync + Send + 'static>(addr: A, h: H) -> Self {
         let handler_arc = ::std::sync::Arc::new(h);
         let service_definition = ::grpc::server::ServerServiceDefinition::new(
             vec![
@@ -253,7 +253,7 @@ impl RouteGuideAsyncServer {
             ],
         );
         RouteGuideAsyncServer {
-            grpc_server: ::grpc::server::GrpcServer::new(port, service_definition),
+            grpc_server: ::grpc::server::GrpcServer::new(addr, service_definition),
         }
     }
 }

@@ -100,13 +100,13 @@ impl GreeterAsync for GreeterServerHandlerToAsync {
 }
 
 impl GreeterServer {
-    pub fn new<H : Greeter + Send + Sync + 'static>(port: u16, h: H) -> Self {
+    pub fn new<A : ::std::net::ToSocketAddrs, H : Greeter + Send + Sync + 'static>(addr: A, h: H) -> Self {
         let h = GreeterServerHandlerToAsync {
             cpupool: ::futures_cpupool::CpuPool::new_num_cpus(),
             handler: ::std::sync::Arc::new(h),
         };
         GreeterServer {
-            async_server: GreeterAsyncServer::new(port, h),
+            async_server: GreeterAsyncServer::new(addr, h),
         }
     }
 }
@@ -118,7 +118,7 @@ pub struct GreeterAsyncServer {
 }
 
 impl GreeterAsyncServer {
-    pub fn new<H : GreeterAsync + 'static + Sync + Send + 'static>(port: u16, h: H) -> Self {
+    pub fn new<A : ::std::net::ToSocketAddrs, H : GreeterAsync + 'static + Sync + Send + 'static>(addr: A, h: H) -> Self {
         let handler_arc = ::std::sync::Arc::new(h);
         let service_definition = ::grpc::server::ServerServiceDefinition::new(
             vec![
@@ -137,7 +137,7 @@ impl GreeterAsyncServer {
             ],
         );
         GreeterAsyncServer {
-            grpc_server: ::grpc::server::GrpcServer::new(port, service_definition),
+            grpc_server: ::grpc::server::GrpcServer::new(addr, service_definition),
         }
     }
 }
