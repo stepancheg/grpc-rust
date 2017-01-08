@@ -109,5 +109,4 @@ https://github.com/dwrensha/capnpc-rust for more details.
 * Tests
 * Proper error handling
 * Upload to crates
-* Streaming
 * Performance
