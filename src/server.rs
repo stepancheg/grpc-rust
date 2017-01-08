@@ -245,6 +245,15 @@ impl ServerServiceDefinition {
         }
     }
 
+    /// Join multiple service definitions into one
+    pub fn join<I>(iter: I) -> ServerServiceDefinition
+        where I : IntoIterator<Item=ServerServiceDefinition>
+    {
+        ServerServiceDefinition {
+            methods: iter.into_iter().flat_map(|s| s.methods).collect()
+        }
+    }
+
     pub fn find_method(&self, name: &str) -> &ServerMethod {
         self.methods.iter()
             .filter(|m| m.name == name)

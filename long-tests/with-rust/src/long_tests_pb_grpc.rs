@@ -172,8 +172,15 @@ pub struct LongTestsAsyncServer {
 
 impl LongTestsAsyncServer {
     pub fn new<A : ::std::net::ToSocketAddrs, H : LongTestsAsync + 'static + Sync + Send + 'static>(addr: A, h: H) -> Self {
-        let handler_arc = ::std::sync::Arc::new(h);
-        let service_definition = ::grpc::server::ServerServiceDefinition::new(
+        let service_definition = LongTestsAsyncServer::new_service_def(h);
+        LongTestsAsyncServer {
+            grpc_server: ::grpc::server::GrpcServer::new(addr, service_definition),
+        }
+    }
+
+    pub fn new_service_def<H : LongTestsAsync + 'static + Sync + Send + 'static>(handler: H) -> ::grpc::server::ServerServiceDefinition {
+        let handler_arc = ::std::sync::Arc::new(handler);
+        ::grpc::server::ServerServiceDefinition::new(
             vec![
                 ::grpc::server::ServerMethod::new(
                     ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
@@ -212,9 +219,6 @@ impl LongTestsAsyncServer {
                     },
                 ),
             ],
-        );
-        LongTestsAsyncServer {
-            grpc_server: ::grpc::server::GrpcServer::new(addr, service_definition),
-        }
+        )
     }
 }

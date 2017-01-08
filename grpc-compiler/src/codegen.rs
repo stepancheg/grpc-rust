@@ -338,6 +338,27 @@ impl<'a> ServiceGen<'a> {
         });
     }
 
+    fn write_service_definition(&self, before: &str, after: &str, handler: &str, w: &mut CodeWriter) {
+        w.block(
+            &format!("{}::grpc::server::ServerServiceDefinition::new(", before),
+            &format!("){}", after),
+            |w| {
+                w.block("vec![", "],", |w| {
+                    for method in &self.methods {
+                        w.block("::grpc::server::ServerMethod::new(", "),", |w| {
+                            method.write_descriptor(w, "::std::sync::Arc::new(", "),");
+                            w.block("{", "},", |w| {
+                                w.write_line(&format!("let handler_copy = {}.clone();", handler));
+                                w.write_line(&format!("::grpc::server::MethodHandler{}::new(move |p| handler_copy.{}(p))",
+                                    method.streaming_upper(),
+                                    method.proto.get_name()));
+                            });
+                        });
+                    }
+                });
+            });
+    }
+
     fn write_async_server(&self, w: &mut CodeWriter) {
         w.pub_struct(&self.async_server_name(), |w| {
             w.field_decl("grpc_server", "::grpc::server::GrpcServer");
@@ -347,26 +368,17 @@ impl<'a> ServiceGen<'a> {
 
         w.impl_self_block(&self.async_server_name(), |w| {
             w.pub_fn(&format!("new<A : ::std::net::ToSocketAddrs, H : {} + 'static + Sync + Send + 'static>(addr: A, h: H) -> Self", self.async_intf_name()), |w| {
-                w.write_line("let handler_arc = ::std::sync::Arc::new(h);");
-                w.block("let service_definition = ::grpc::server::ServerServiceDefinition::new(", ");", |w| {
-                    w.block("vec![", "],", |w| {
-                        for method in &self.methods {
-                            w.block("::grpc::server::ServerMethod::new(", "),", |w| {
-                                method.write_descriptor(w, "::std::sync::Arc::new(", "),");
-                                w.block("{", "},", |w| {
-                                    w.write_line("let handler_copy = handler_arc.clone();");
-                                    w.write_line(format!("::grpc::server::MethodHandler{}::new(move |p| handler_copy.{}(p))",
-                                        method.streaming_upper(),
-                                        method.proto.get_name()));
-                                });
-                            });
-                        }
-                    });
-                });
+                w.write_line(format!("let service_definition = {}::new_service_def(h);", self.async_server_name()));
 
                 w.expr_block(&self.async_server_name(), |w| {
                     w.field_entry("grpc_server", "::grpc::server::GrpcServer::new(addr, service_definition)");
                 });
+            });
+            w.write_line("");
+            w.pub_fn(&format!("new_service_def<H : {} + 'static + Sync + Send + 'static>(handler: H) -> ::grpc::server::ServerServiceDefinition", self.async_intf_name()), |w| {
+                w.write_line("let handler_arc = ::std::sync::Arc::new(handler);");
+
+                self.write_service_definition("", "", "handler_arc", w);
             });
         });
     }

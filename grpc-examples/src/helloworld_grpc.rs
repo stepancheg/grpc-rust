@@ -119,8 +119,15 @@ pub struct GreeterAsyncServer {
 
 impl GreeterAsyncServer {
     pub fn new<A : ::std::net::ToSocketAddrs, H : GreeterAsync + 'static + Sync + Send + 'static>(addr: A, h: H) -> Self {
-        let handler_arc = ::std::sync::Arc::new(h);
-        let service_definition = ::grpc::server::ServerServiceDefinition::new(
+        let service_definition = GreeterAsyncServer::new_service_def(h);
+        GreeterAsyncServer {
+            grpc_server: ::grpc::server::GrpcServer::new(addr, service_definition),
+        }
+    }
+
+    pub fn new_service_def<H : GreeterAsync + 'static + Sync + Send + 'static>(handler: H) -> ::grpc::server::ServerServiceDefinition {
+        let handler_arc = ::std::sync::Arc::new(handler);
+        ::grpc::server::ServerServiceDefinition::new(
             vec![
                 ::grpc::server::ServerMethod::new(
                     ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
@@ -135,9 +142,6 @@ impl GreeterAsyncServer {
                     },
                 ),
             ],
-        );
-        GreeterAsyncServer {
-            grpc_server: ::grpc::server::GrpcServer::new(addr, service_definition),
-        }
+        )
     }
 }

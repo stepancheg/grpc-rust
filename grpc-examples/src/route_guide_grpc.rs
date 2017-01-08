@@ -199,8 +199,15 @@ pub struct RouteGuideAsyncServer {
 
 impl RouteGuideAsyncServer {
     pub fn new<A : ::std::net::ToSocketAddrs, H : RouteGuideAsync + 'static + Sync + Send + 'static>(addr: A, h: H) -> Self {
-        let handler_arc = ::std::sync::Arc::new(h);
-        let service_definition = ::grpc::server::ServerServiceDefinition::new(
+        let service_definition = RouteGuideAsyncServer::new_service_def(h);
+        RouteGuideAsyncServer {
+            grpc_server: ::grpc::server::GrpcServer::new(addr, service_definition),
+        }
+    }
+
+    pub fn new_service_def<H : RouteGuideAsync + 'static + Sync + Send + 'static>(handler: H) -> ::grpc::server::ServerServiceDefinition {
+        let handler_arc = ::std::sync::Arc::new(handler);
+        ::grpc::server::ServerServiceDefinition::new(
             vec![
                 ::grpc::server::ServerMethod::new(
                     ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
@@ -251,9 +258,6 @@ impl RouteGuideAsyncServer {
                     },
                 ),
             ],
-        );
-        RouteGuideAsyncServer {
-            grpc_server: ::grpc::server::GrpcServer::new(addr, service_definition),
-        }
+        )
     }
 }
