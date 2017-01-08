@@ -44,25 +44,15 @@ Client and server are implemented asynchronously, and sync versions are thin wra
 
 ## How to use gRPC compiler
 
-### Build & install Rust protobuf compiler:
+### Build & install Rust protobuf and gRPC compiler:
 
 ```bash
 cargo install protobuf
+cargo install grpc-compiler
 ```
 
-This command installs `protoc-gen-rust` to `~/.cargo/bin`, which
-should be added to `$PATH`.
-
-### Build & install gRPC compiler:
-
-```bash
-git clone https://github.com/stepancheg/grpc-rust.git
-cd grpc-rust
-cd grpc-compiler
-cargo install
-```
-
-Installs `protoc-gen-rust-grpc` to `~/.cargo/bin`.
+These commands install `protoc-gen-rust` and `protoc-gen-rust-grpc`
+to `~/.cargo/bin`, which should be added to `$PATH`.
 
 ### Compile your proto & gRPC to Rust:
 
@@ -79,8 +69,8 @@ In Cargo.toml:
 
 ```ini
 [dependencies]
-grpc = { git = "https://github.com/stepancheg/grpc-rust" }
-protobuf = { git = "http://github.com/stepancheg/rust-protobuf" }
+grpc            = "0.*"
+protobuf        = "1.*"
 futures         = "0.1"
 futures-cpupool = "0.1"
 ```
