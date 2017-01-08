@@ -11,17 +11,17 @@ use tokio_core::io::WriteHalf;
 use tokio_core::io::Io;
 use tokio_core::io as tokio_io;
 
-use solicit::http::session::StreamState;
-use solicit::http::frame::*;
-use solicit::http::StaticHeader;
-use solicit::http::StreamId;
-use solicit::http::HttpError;
-use solicit::http::WindowSize;
-use solicit::http::HttpScheme;
-use solicit::http::INITIAL_CONNECTION_WINDOW_SIZE;
-use solicit::http::connection::EndStream;
-use solicit::http::connection::HttpConnection;
-use solicit::http::connection::SendFrame;
+use solicit::session::StreamState;
+use solicit::frame::*;
+use solicit::StaticHeader;
+use solicit::StreamId;
+use solicit::HttpError;
+use solicit::WindowSize;
+use solicit::HttpScheme;
+use solicit::INITIAL_CONNECTION_WINDOW_SIZE;
+use solicit::connection::EndStream;
+use solicit::connection::HttpConnection;
+use solicit::connection::SendFrame;
 
 use futures_misc::*;
 

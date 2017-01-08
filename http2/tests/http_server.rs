@@ -1,4 +1,3 @@
-extern crate solicit_fork as solicit;
 extern crate futures;
 extern crate tokio_core;
 extern crate tokio_tls;
@@ -17,8 +16,8 @@ use futures::stream;
 use futures::stream::Stream;
 use tokio_core::reactor;
 
-use solicit::http::Header;
-use solicit::http::HttpError;
+use http2::solicit::Header;
+use http2::solicit::HttpError;
 
 use http2::for_test::*;
 

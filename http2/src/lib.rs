@@ -5,9 +5,9 @@ extern crate futures;
 extern crate tokio_core;
 extern crate tokio_tls;
 
-//extern crate solicit;
-extern crate solicit_fork as solicit;
 extern crate hpack;
+
+pub mod solicit;
 
 pub mod client_conn;
 pub mod client;
@@ -26,10 +26,10 @@ pub mod solicit_misc;
 
 mod misc;
 
-pub use solicit::http::HttpScheme;
-pub use solicit::http::HttpError;
-pub use solicit::http::Header;
-pub use solicit::http::StaticHeader;
+pub use solicit::HttpScheme;
+pub use solicit::HttpError;
+pub use solicit::Header;
+pub use solicit::StaticHeader;
 
 pub mod for_test {
     pub use server_conn::*;

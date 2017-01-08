@@ -15,8 +15,8 @@ use tokio_core::reactor;
 
 //use tokio_tls;
 
-use solicit::http::StaticHeader;
-use solicit::http::HttpError;
+use http2::solicit::StaticHeader;
+use http2::solicit::HttpError;
 
 use http2::for_test::*;
 

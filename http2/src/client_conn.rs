@@ -1,11 +1,11 @@
 use std::net::SocketAddr;
 use std::io;
 
-use solicit::http::frame::*;
-use solicit::http::StreamId;
-use solicit::http::HttpScheme;
-use solicit::http::HttpError;
-use solicit::http::StaticHeader;
+use solicit::frame::*;
+use solicit::StreamId;
+use solicit::HttpScheme;
+use solicit::HttpError;
+use solicit::StaticHeader;
 use hpack;
 
 use futures;

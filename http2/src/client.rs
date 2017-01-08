@@ -12,11 +12,11 @@ use futures::stream;
 
 use tokio_core::reactor;
 
-use solicit::http::Header;
-use solicit::http::HttpResult;
-use solicit::http::HttpError;
-use solicit::http::HttpScheme;
-use solicit::http::StaticHeader;
+use solicit::Header;
+use solicit::HttpResult;
+use solicit::HttpError;
+use solicit::HttpScheme;
+use solicit::StaticHeader;
 
 use solicit_async::*;
 

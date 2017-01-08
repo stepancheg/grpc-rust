@@ -13,13 +13,13 @@ use tokio_core::io::Io;
 use tokio_core::net::TcpStream;
 use tokio_core::reactor;
 
-use solicit::http::HttpError;
-use solicit::http::frame::RawFrame;
-use solicit::http::frame::FrameIR;
-use solicit::http::frame::unpack_header;
-use solicit::http::frame::settings::SettingsFrame;
-use solicit::http::frame::settings::HttpSetting;
-use solicit::http::connection::HttpFrame;
+use solicit::HttpError;
+use solicit::frame::RawFrame;
+use solicit::frame::FrameIR;
+use solicit::frame::unpack_header;
+use solicit::frame::settings::SettingsFrame;
+use solicit::frame::settings::HttpSetting;
+use solicit::connection::HttpFrame;
 
 
 pub type HttpFuture<T> = Box<Future<Item=T, Error=HttpError>>;

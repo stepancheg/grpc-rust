@@ -1,4 +1,4 @@
-use solicit::http::StaticHeader;
+use solicit::StaticHeader;
 
 use http_common::*;
 

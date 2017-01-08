@@ -15,7 +15,7 @@ use futures::Stream;
 use futures::Future;
 use futures::future::join_all;
 
-use solicit::http::HttpError;
+use solicit::HttpError;
 
 use futures_misc::*;
 use solicit_async::*;

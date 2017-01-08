@@ -4,17 +4,17 @@ use std::mem;
 use std::cmp;
 use std::str;
 
-use solicit::http::Header;
-use solicit::http::StreamId;
-use solicit::http::StaticHeader;
-use solicit::http::HttpResult;
-use solicit::http::frame::*;
-use solicit::http::connection::ReceiveFrame;
-use solicit::http::connection::HttpFrame;
-use solicit::http::connection::SendFrame;
-use solicit::http::connection::HttpConnection;
-use solicit::http::connection::EndStream;
-use solicit::http::connection::DataChunk;
+use solicit::Header;
+use solicit::StreamId;
+use solicit::StaticHeader;
+use solicit::HttpResult;
+use solicit::frame::*;
+use solicit::connection::ReceiveFrame;
+use solicit::connection::HttpFrame;
+use solicit::connection::SendFrame;
+use solicit::connection::HttpConnection;
+use solicit::connection::EndStream;
+use solicit::connection::DataChunk;
 
 use misc::*;
 use http_common::*;

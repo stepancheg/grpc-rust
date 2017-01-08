@@ -10,8 +10,6 @@ keywords = ["http2"]
 [dependencies]
 
 log            = "0.*"
-#solicit         = { git = "http://github.com/mlalic/solicit.git" }
-solicit-fork   = { git = "http://github.com/stepancheg/solicit.git" }
 hpack          = "0.3"
 futures         = "0.*"
 #futures-cpupool = { git = "https://github.com/alexcrichton/futures-rs" }

@@ -2,12 +2,12 @@ use std::marker;
 use std::io;
 use std::sync::Arc;
 
-use solicit::http::frame::*;
-use solicit::http::StreamId;
-use solicit::http::HttpScheme;
-use solicit::http::HttpError;
-use solicit::http::Header;
-use solicit::http::StaticHeader;
+use solicit::frame::*;
+use solicit::StreamId;
+use solicit::HttpScheme;
+use solicit::HttpError;
+use solicit::Header;
+use solicit::StaticHeader;
 
 use futures;
 use futures::Future;

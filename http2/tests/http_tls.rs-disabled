@@ -1,4 +1,3 @@
-extern crate solicit_fork as solicit;
 extern crate futures;
 extern crate tokio_core;
 extern crate tokio_tls;
@@ -38,8 +37,8 @@ mod test_with_openssl {
     use futures::stream;
     use futures::stream::Stream;
 
-    use solicit::http::Header;
-    use solicit::http::HttpError;
+    use solicit::Header;
+    use solicit::HttpError;
 
     use self::openssl::crypto::hash::Type;
     use self::openssl::crypto::pkey::PKey;

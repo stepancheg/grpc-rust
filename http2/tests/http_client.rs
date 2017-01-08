@@ -2,7 +2,6 @@ extern crate http2;
 extern crate futures;
 extern crate tokio_core;
 extern crate tokio_tls;
-extern crate solicit_fork as solicit;
 #[macro_use]
 extern crate log;
 extern crate env_logger;
