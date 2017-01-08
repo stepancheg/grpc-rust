@@ -11,8 +11,7 @@ Some development questions in [FAQ](/docs/FAQ.md).
 
 ## Current status
 
-Client and server without streaming can be done with rust-grpc,
-see `grpc-examples/src/bin/greeter_{client,server}{,_async}.rs`. It can be tested
+It basially works. See `grpc-examples/src/bin/greeter_{client,server}{,_async}.rs`. It can be tested
 for example with [go client](https://github.com/grpc/grpc-go/tree/master/examples/helloworld):
 
 ```
