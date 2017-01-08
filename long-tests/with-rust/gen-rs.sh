@@ -11,7 +11,7 @@ cd $(dirname $0)
 
 (
     cd ../../grpc-compiler
-    cargo build
+    ../cargo.sh build
 )
 (
     cd ../../../rust-protobuf

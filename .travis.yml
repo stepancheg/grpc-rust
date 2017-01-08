@@ -13,6 +13,6 @@ rust:
 
 script:
   - rustc --version
-  - cargo build
+  - ./cargo.sh build
   - ./test.sh
   - ./build-all.sh
