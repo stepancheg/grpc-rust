@@ -5,10 +5,10 @@ use futures::stream::Stream;
 use error::*;
 use result::*;
 use grpc::*;
-use http2::futures_misc::*;
+use httpbis::futures_misc::*;
 
-use http2::http_common::*;
-use http2::solicit_misc::*;
+use httpbis::http_common::*;
+use httpbis::solicit_misc::*;
 
 
 

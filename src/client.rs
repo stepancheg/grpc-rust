@@ -4,10 +4,10 @@ use futures;
 use futures::stream;
 use futures::stream::Stream;
 
-use http2::HttpScheme;
-use http2::HttpError;
-use http2::Header;
-use http2::client::Http2Client;
+use httpbis::HttpScheme;
+use httpbis::HttpError;
+use httpbis::Header;
+use httpbis::client::Http2Client;
 
 
 use method::MethodDescriptor;
@@ -15,7 +15,7 @@ use method::MethodDescriptor;
 use error::*;
 use result::*;
 
-use http2::futures_misc::*;
+use httpbis::futures_misc::*;
 use futures_grpc::*;
 
 use grpc_frame::*;

@@ -5,10 +5,10 @@ use std::panic::catch_unwind;
 use std::panic::AssertUnwindSafe;
 use std::any::Any;
 
-use http2::HttpError;
-use http2::Header;
-use http2::StaticHeader;
-use http2::server::Http2Server;
+use httpbis::HttpError;
+use httpbis::Header;
+use httpbis::StaticHeader;
+use httpbis::server::Http2Server;
 
 use futures;
 use futures::Future;
@@ -18,11 +18,11 @@ use futures::stream::Stream;
 use method::*;
 use error::*;
 use futures_grpc::*;
-use http2::futures_misc::*;
-use http2::solicit_misc::*;
+use httpbis::futures_misc::*;
+use httpbis::solicit_misc::*;
 use grpc::*;
 use grpc_frame::*;
-use http2::http_common::*;
+use httpbis::http_common::*;
 
 
 pub trait MethodHandler<Req, Resp> {

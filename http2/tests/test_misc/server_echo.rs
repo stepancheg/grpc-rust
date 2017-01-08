@@ -2,11 +2,11 @@
 
 use futures::stream;
 
-use http2::server::Http2Server;
-use http2::http_common::*;
-use http2::Header;
-use http2::StaticHeader;
-use http2::futures_misc::*;
+use httpbis::server::Http2Server;
+use httpbis::http_common::*;
+use httpbis::Header;
+use httpbis::StaticHeader;
+use httpbis::futures_misc::*;
 
 
 pub struct HttpServerEcho {

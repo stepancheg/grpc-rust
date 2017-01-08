@@ -1,7 +1,7 @@
 [package]
 
 name = "grpc"
-version = "0.0.2"
+version = "0.1.1"
 authors = ["Stepan Koltsov <stepan.koltsov@gmail.com>"]
 license = "MIT/Apache-2.0"
 description = "Rust implementation of gRPC"
@@ -12,15 +12,17 @@ keywords = ["grpc"]
 [dependencies]
 log             = "0.*"
 #protobuf       = { path = "../rust-protobuf" }
-protobuf        = { git = "http://github.com/stepancheg/rust-protobuf" }
+#protobuf        = { git = "http://github.com/stepancheg/rust-protobuf" }
+protobuf         = "1.*"
 #futures         = { git = "https://github.com/alexcrichton/futures-rs" }
 futures         = "0.*"
 #futures-cpupool = { git = "https://github.com/alexcrichton/futures-rs" }
 futures-cpupool = "0.*"
 tokio-core      = "0.*"
 #tokio-tls       = { git = "https://github.com/tokio-rs/tokio-tls/", features = ["force-openssl"] }
-tokio-tls       = { git = "https://github.com/tokio-rs/tokio-tls/" }
-http2           = { path = "http2" }
+#tokio-tls       = { git = "https://github.com/tokio-rs/tokio-tls/" }
+tokio-tls       = "0.*"
+httpbis         = { path = "http2", version = "0.1.1" }
 
 openssl = { version = "0.8", optional = true }
 

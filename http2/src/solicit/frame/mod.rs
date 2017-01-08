@@ -211,7 +211,7 @@ impl<'a> RawFrame<'a> {
     /// # Examples
     ///
     /// ```rust
-    /// use http2::solicit::frame::RawFrame;
+    /// use httpbis::solicit::frame::RawFrame;
     ///
     /// let buf = b"123";
     /// // Not enough bytes for even the header of the frame
@@ -219,7 +219,7 @@ impl<'a> RawFrame<'a> {
     /// ```
     ///
     /// ```rust
-    /// use http2::solicit::frame::RawFrame;
+    /// use httpbis::solicit::frame::RawFrame;
     ///
     /// let buf = vec![0, 0, 1, 0, 0, 0, 0, 0, 0];
     /// // Full header, but not enough bytes for the payload
@@ -227,7 +227,7 @@ impl<'a> RawFrame<'a> {
     /// ```
     ///
     /// ```rust
-    /// use http2::solicit::frame::RawFrame;
+    /// use httpbis::solicit::frame::RawFrame;
     ///
     /// let buf = vec![0, 0, 1, 0, 0, 0, 0, 0, 0, 1];
     /// // A full frame is extracted, even if in this case the frame itself is not valid (a DATA

@@ -15,10 +15,10 @@ use tokio_core::reactor;
 
 //use tokio_tls;
 
-use http2::solicit::StaticHeader;
-use http2::solicit::HttpError;
+use httpbis::solicit::StaticHeader;
+use httpbis::solicit::HttpError;
 
-use http2::for_test::*;
+use httpbis::for_test::*;
 
 
 /// Single connection HTTP/server.

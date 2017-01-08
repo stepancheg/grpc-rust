@@ -1,4 +1,4 @@
-extern crate http2;
+extern crate httpbis;
 extern crate futures;
 extern crate tokio_core;
 extern crate tokio_tls;
@@ -13,7 +13,7 @@ mod test_misc;
 
 use test_misc::*;
 
-use http2::for_test::*;
+use httpbis::for_test::*;
 
 
 #[test]

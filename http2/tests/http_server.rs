@@ -1,7 +1,7 @@
 extern crate futures;
 extern crate tokio_core;
 extern crate tokio_tls;
-extern crate http2;
+extern crate httpbis;
 #[macro_use]
 extern crate log;
 
@@ -16,10 +16,10 @@ use futures::stream;
 use futures::stream::Stream;
 use tokio_core::reactor;
 
-use http2::solicit::Header;
-use http2::solicit::HttpError;
+use httpbis::solicit::Header;
+use httpbis::solicit::HttpError;
 
-use http2::for_test::*;
+use httpbis::for_test::*;
 
 use test_misc::*;
 

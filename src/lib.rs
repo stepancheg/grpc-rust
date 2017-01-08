@@ -8,7 +8,7 @@ extern crate tokio_tls;
 
 extern crate protobuf;
 
-extern crate http2;
+extern crate httpbis;
 
 pub mod client;
 pub mod server;
@@ -24,9 +24,9 @@ pub mod iter;
 pub mod rt;
 
 pub mod for_test {
-    pub use http2::server_conn::*;
-    pub use http2::client_conn::*;
-    pub use http2::http_common::*;
-    pub use http2::solicit_async::*;
-    pub use http2::futures_misc::*;
+    pub use httpbis::server_conn::*;
+    pub use httpbis::client_conn::*;
+    pub use httpbis::http_common::*;
+    pub use httpbis::solicit_async::*;
+    pub use httpbis::futures_misc::*;
 }
