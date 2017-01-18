@@ -1,0 +1,17 @@
+[package]
+name = "grpc-interop"
+description = "Implementation of the grpc-interop service."
+repository = "http://github.com/stephancheg/grpc-rust/interop"
+version = "0.1.0"
+authors = ["Steve Jenson <stevej@buoyant.io>"]
+
+[dependencies.grpc]
+path = ".."
+
+[dependencies]
+log             = "0.3"
+env_logger      = "0.3"
+protobuf        = "1.*"
+futures         = "0.1.2"
+futures-cpupool = "0.1.2"
+
