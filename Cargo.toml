@@ -34,5 +34,6 @@ members = [
     "grpc-examples",
     "grpc-compiler",
     "long-tests/with-rust",
+    "interop",
 ]
 
