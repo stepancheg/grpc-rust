@@ -23,6 +23,8 @@ use solicit_async::*;
 use super::server_conn::*;
 use super::http_common::*;
 
+use server_conf::*;
+
 
 
 struct LoopToServer {
@@ -65,6 +67,7 @@ pub struct HttpServerStateSnapshot {
 fn run_server_event_loop<S>(
     listen_addr: SocketAddr,
     state: Arc<Mutex<HttpServerState>>,
+    conf: HttpServerConf,
     service: S,
     send_to_back: mpsc::Sender<LoopToServer>)
         where S : HttpService,
@@ -79,17 +82,17 @@ fn run_server_event_loop<S>(
 
     let listen = TcpListener::bind(&listen_addr, &lp.handle()).unwrap();
 
-    let stuff = stream_repeat((lp.handle(), service, state));
+    let stuff = stream_repeat((lp.handle(), service, state, conf));
 
     let local_addr = listen.local_addr().unwrap();
     send_to_back
         .send(LoopToServer { shutdown_tx: shutdown_tx, local_addr: local_addr })
         .expect("send back");
 
-    let loop_run = listen.incoming().map_err(HttpError::from).zip(stuff).for_each(move |((socket, peer_addr), (loop_handle, service, state))| {
+    let loop_run = listen.incoming().map_err(HttpError::from).zip(stuff).for_each(move |((socket, peer_addr), (loop_handle, service, state, conf))| {
         info!("accepted connection from {}", peer_addr);
 
-        let (conn, future) = HttpServerConnectionAsync::new_plain(&loop_handle, socket, service);
+        let (conn, future) = HttpServerConnectionAsync::new_plain(&loop_handle, socket, conf, service);
 
         let conn_id = {
             let mut g = state.lock().expect("lock");
@@ -126,7 +129,7 @@ fn run_server_event_loop<S>(
 }
 
 impl HttpServer {
-    pub fn new<A: ToSocketAddrs, S>(addr: A, service: S) -> HttpServer
+    pub fn new<A: ToSocketAddrs, S>(addr: A, conf: HttpServerConf, service: S) -> HttpServer
         where S : HttpService
     {
         let listen_addr = addr.to_socket_addrs().unwrap().next().unwrap();
@@ -138,7 +141,7 @@ impl HttpServer {
         let state_copy = state.clone();
 
         let join_handle = thread::spawn(move || {
-            run_server_event_loop(listen_addr, state_copy, service, get_from_loop_tx);
+            run_server_event_loop(listen_addr, state_copy, conf, service, get_from_loop_tx);
         });
 
         let loop_to_server = get_from_loop_rx.recv().unwrap();

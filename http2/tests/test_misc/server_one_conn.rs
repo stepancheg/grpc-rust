@@ -85,7 +85,8 @@ impl HttpServerOneConn {
                         //HttpServerConnectionAsync::new_tls_fn(&handle, conn, server_context, service)
                         unimplemented!()
                     } else {
-                        let (conn, future) = HttpServerConnectionAsync::new_plain_fn(&handle, conn, service);
+                        let (conn, future) = HttpServerConnectionAsync::new_plain_fn(
+                            &handle, conn, Default::default(), service);
                         *conn_for_thread.lock().unwrap() = Some(conn);
                         future
                     }

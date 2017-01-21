@@ -25,7 +25,7 @@ impl GreeterAsync for GreeterImpl {
 }
 
 fn main() {
-    let _server = GreeterAsyncServer::new("[::]:50051", GreeterImpl);
+    let _server = GreeterAsyncServer::new("[::]:50051", Default::default(), GreeterImpl);
 
     loop {
         thread::park();

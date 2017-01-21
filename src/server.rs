@@ -23,6 +23,7 @@ use httpbis::solicit_misc::*;
 use grpc::*;
 use grpc_frame::*;
 use httpbis::http_common::*;
+use httpbis::server_conf::*;
 
 
 pub trait MethodHandler<Req, Resp> {
@@ -266,16 +267,21 @@ impl ServerServiceDefinition {
     }
 }
 
+#[derive(Default, Debug, Clone)]
+pub struct GrpcServerConf {
+    http: HttpServerConf,
+}
+
 
 pub struct GrpcServer {
     server: HttpServer,
 }
 
 impl GrpcServer {
-    pub fn new<A: ToSocketAddrs>(addr: A, service_definition: ServerServiceDefinition) -> GrpcServer {
+    pub fn new<A: ToSocketAddrs>(addr: A, conf: GrpcServerConf, service_definition: ServerServiceDefinition) -> GrpcServer {
         let service_definition = Arc::new(service_definition);
         GrpcServer {
-            server: HttpServer::new(addr, GrpcHttpServerHandlerFactory {
+            server: HttpServer::new(addr, conf.http, GrpcHttpServerHandlerFactory {
                 service_definition: service_definition.clone(),
             })
         }

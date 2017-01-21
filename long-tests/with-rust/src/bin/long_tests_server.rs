@@ -62,7 +62,7 @@ impl LongTestsAsync for LongTestsServerImpl {
 fn main() {
     env_logger::init().unwrap();
 
-    let _server = LongTestsAsyncServer::new(long_tests::TEST_HOST, LongTestsServerImpl {});
+    let _server = LongTestsAsyncServer::new(long_tests::TEST_HOST, Default::default(), LongTestsServerImpl {});
 
     loop {
         thread::park();

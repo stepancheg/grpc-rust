@@ -45,7 +45,7 @@ fn new_server<H>(name: &str, handler: H) -> GrpcServer
         string_string_method(name, <H as GrpcStreamingFlavor>::streaming()),
         handler,
     ));
-    GrpcServer::new("[::1]:0", ServerServiceDefinition::new(methods))
+    GrpcServer::new("[::1]:0", Default::default(), ServerServiceDefinition::new(methods))
 }
 
 /// Single unary method server
@@ -87,7 +87,7 @@ impl TesterUnary {
         TesterUnary {
             name: name.to_owned(),
             _server: server,
-            client: GrpcClient::new("::1", port, false).unwrap()
+            client: GrpcClient::new("::1", port, false, Default::default()).unwrap()
         }
     }
 
@@ -134,7 +134,7 @@ impl TesterServerStreaming {
         TesterServerStreaming {
             name: name.to_owned(),
             _server: server,
-            client: GrpcClient::new("::1", port, false).unwrap()
+            client: GrpcClient::new("::1", port, false, Default::default()).unwrap()
         }
     }
 
@@ -160,7 +160,7 @@ impl TesterClientStreaming {
         TesterClientStreaming {
             name: name.to_owned(),
             _server: server,
-            client: GrpcClient::new("::1", port, false).unwrap()
+            client: GrpcClient::new("::1", port, false, Default::default()).unwrap()
         }
     }
 
@@ -180,7 +180,7 @@ fn unary() {
 
 #[test]
 fn server_is_not_running() {
-    let client = GrpcClient::new("::1", 2, false).unwrap();
+    let client = GrpcClient::new("::1", 2, false, Default::default()).unwrap();
 
     // TODO: https://github.com/tokio-rs/tokio-core/issues/12
     if false {

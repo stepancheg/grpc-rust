@@ -16,9 +16,15 @@ use error::*;
 use result::*;
 
 use httpbis::futures_misc::*;
+use httpbis::client_conf::*;
 use futures_grpc::*;
 
 use grpc_frame::*;
+
+#[derive(Default, Debug, Clone)]
+pub struct GrpcClientConf {
+    pub http: HttpClientConf,
+}
 
 
 /// gRPC client implementation.
@@ -31,8 +37,10 @@ pub struct GrpcClient {
 
 impl GrpcClient {
     /// Create a client connected to specified host and port.
-    pub fn new(host: &str, port: u16, tls: bool) -> GrpcResult<GrpcClient> {
-        HttpClient::new(host, port, tls)
+    pub fn new(host: &str, port: u16, tls: bool, conf: GrpcClientConf)
+        -> GrpcResult<GrpcClient>
+    {
+        HttpClient::new(host, port, tls, conf.http)
             .map(|client| {
                 GrpcClient {
                     client: client,

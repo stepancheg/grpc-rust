@@ -21,6 +21,7 @@ use solicit::StaticHeader;
 use solicit_async::*;
 
 use client_conn::*;
+use client_conf::*;
 use http_common::*;
 use message::*;
 
@@ -33,7 +34,6 @@ struct LoopToClient {
     http_conn: Arc<HttpClientConnectionAsync>,
 }
 
-
 pub struct HttpClient {
     loop_to_client: LoopToClient,
     thread_join_handle: Option<thread::JoinHandle<()>>,
@@ -42,7 +42,7 @@ pub struct HttpClient {
 }
 
 impl HttpClient {
-    pub fn new(host: &str, port: u16, tls: bool) -> HttpResult<HttpClient> {
+    pub fn new(host: &str, port: u16, tls: bool, conf: HttpClientConf) -> HttpResult<HttpClient> {
 
         // TODO: sync
         // TODO: try connect to all addrs
@@ -54,7 +54,7 @@ impl HttpClient {
 
         // Start event loop.
         let join_handle = thread::spawn(move || {
-            run_client_event_loop(socket_addr, tls, get_from_loop_tx);
+            run_client_event_loop(socket_addr, tls, conf, get_from_loop_tx);
         });
 
         // Get back call channel and shutdown channel.
@@ -123,6 +123,7 @@ impl HttpClient {
 fn run_client_event_loop(
     socket_addr: SocketAddr,
     tls: bool,
+    conf: HttpClientConf,
     send_to_back: mpsc::Sender<LoopToClient>)
 {
     // Create an event loop.
@@ -133,9 +134,9 @@ fn run_client_event_loop(
 
     let (http_conn, http_conn_future) =
         if tls {
-            HttpClientConnectionAsync::new_tls(lp.handle(), &socket_addr)
+            HttpClientConnectionAsync::new_tls(lp.handle(), &socket_addr, conf)
         } else {
-            HttpClientConnectionAsync::new_plain(lp.handle(), &socket_addr)
+            HttpClientConnectionAsync::new_plain(lp.handle(), &socket_addr, conf)
         };
     let http_conn_future: HttpFuture<_> = Box::new(http_conn_future.map_err(HttpError::from));
 

@@ -7,7 +7,6 @@ extern crate log;
 extern crate env_logger;
 
 use futures::Future;
-use futures::Stream;
 
 mod test_misc;
 
@@ -24,7 +23,8 @@ fn stream_count() {
 
     debug!("started server on {}", server.port);
 
-    let client: HttpClient = HttpClient::new("::1", server.port, false).expect("connect");
+    let client: HttpClient =
+        HttpClient::new("::1", server.port, false, Default::default()).expect("connect");
 
     let state: ConnectionStateSnapshot = client.dump_state().wait().expect("state");
     assert_eq!(0, state.streams.len());

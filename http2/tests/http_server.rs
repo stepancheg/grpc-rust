@@ -42,7 +42,7 @@ fn test() {
             .flatten_stream())
     });
 
-    let client: HttpClient = HttpClient::new("::1", server.port(), false).expect("connect");
+    let client = HttpClient::new("::1", server.port(), false, Default::default()).expect("connect");
     client.start_post_simple_response("/foobar", (&b"abcd"[..]).to_owned()).wait();
 
     assert_eq!(0, server.dump_state().streams.len());

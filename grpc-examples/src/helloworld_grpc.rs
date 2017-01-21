@@ -35,8 +35,8 @@ pub struct GreeterClient {
 }
 
 impl GreeterClient {
-    pub fn new(host: &str, port: u16, tls: bool) -> ::grpc::result::GrpcResult<Self> {
-        GreeterAsyncClient::new(host, port, tls).map(|c| {
+    pub fn new(host: &str, port: u16, tls: bool, conf: ::grpc::client::GrpcClientConf) -> ::grpc::result::GrpcResult<Self> {
+        GreeterAsyncClient::new(host, port, tls, conf).map(|c| {
             GreeterClient {
                 async_client: c,
             }
@@ -58,8 +58,8 @@ pub struct GreeterAsyncClient {
 }
 
 impl GreeterAsyncClient {
-    pub fn new(host: &str, port: u16, tls: bool) -> ::grpc::result::GrpcResult<Self> {
-        ::grpc::client::GrpcClient::new(host, port, tls).map(|c| {
+    pub fn new(host: &str, port: u16, tls: bool, conf: ::grpc::client::GrpcClientConf) -> ::grpc::result::GrpcResult<Self> {
+        ::grpc::client::GrpcClient::new(host, port, tls, conf).map(|c| {
             GreeterAsyncClient {
                 grpc_client: c,
                 method_SayHello: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
@@ -100,13 +100,13 @@ impl GreeterAsync for GreeterServerHandlerToAsync {
 }
 
 impl GreeterServer {
-    pub fn new<A : ::std::net::ToSocketAddrs, H : Greeter + Send + Sync + 'static>(addr: A, h: H) -> Self {
+    pub fn new<A : ::std::net::ToSocketAddrs, H : Greeter + Send + Sync + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self {
         let h = GreeterServerHandlerToAsync {
             cpupool: ::futures_cpupool::CpuPool::new_num_cpus(),
             handler: ::std::sync::Arc::new(h),
         };
         GreeterServer {
-            async_server: GreeterAsyncServer::new(addr, h),
+            async_server: GreeterAsyncServer::new(addr, conf, h),
         }
     }
 }
@@ -118,10 +118,10 @@ pub struct GreeterAsyncServer {
 }
 
 impl GreeterAsyncServer {
-    pub fn new<A : ::std::net::ToSocketAddrs, H : GreeterAsync + 'static + Sync + Send + 'static>(addr: A, h: H) -> Self {
+    pub fn new<A : ::std::net::ToSocketAddrs, H : GreeterAsync + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self {
         let service_definition = GreeterAsyncServer::new_service_def(h);
         GreeterAsyncServer {
-            grpc_server: ::grpc::server::GrpcServer::new(addr, service_definition),
+            grpc_server: ::grpc::server::GrpcServer::new(addr, conf, service_definition),
         }
     }
 

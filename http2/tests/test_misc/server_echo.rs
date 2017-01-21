@@ -30,7 +30,7 @@ impl HttpService for EchoService {
 
 impl HttpServerEcho {
     pub fn new() -> HttpServerEcho {
-        let http_server = HttpServer::new("::1:0", EchoService {});
+        let http_server = HttpServer::new("::1:0", Default::default(), EchoService {});
         let port = http_server.local_addr().port();
         HttpServerEcho {
             server: http_server,

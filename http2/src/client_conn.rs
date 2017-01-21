@@ -21,6 +21,7 @@ use futures_misc::*;
 use solicit_async::*;
 
 use http_common::*;
+use client_conf::*;
 
 
 struct HttpClientStream {
@@ -254,7 +255,10 @@ type ClientCommandLoop = CommandLoopData<ClientInner>;
 
 
 impl HttpClientConnectionAsync {
-    fn connected<I : Io + Send + 'static>(lh: reactor::Handle, connect: HttpFutureSend<I>) -> (Self, HttpFuture<()>) {
+    fn connected<I : Io + Send + 'static>(
+        lh: reactor::Handle, connect: HttpFutureSend<I>, _conf: HttpClientConf)
+            -> (Self, HttpFuture<()>)
+    {
         let (to_write_tx, to_write_rx) = futures::sync::mpsc::unbounded();
         let (command_tx, command_rx) = futures::sync::mpsc::unbounded();
 
@@ -293,17 +297,17 @@ impl HttpClientConnectionAsync {
         (c, Box::new(future))
     }
 
-    pub fn new_plain(lh: reactor::Handle, addr: &SocketAddr) -> (Self, HttpFuture<()>) {
+    pub fn new_plain(lh: reactor::Handle, addr: &SocketAddr, conf: HttpClientConf) -> (Self, HttpFuture<()>) {
         let addr = addr.clone();
 
         let connect = TcpStream::connect(&addr, &lh)
             .map(move |c| { info!("connected to {}", addr); c })
             .map_err(|e| e.into());
 
-        HttpClientConnectionAsync::connected(lh, Box::new(connect))
+        HttpClientConnectionAsync::connected(lh, Box::new(connect), conf)
     }
 
-    pub fn new_tls(_lh: reactor::Handle, _addr: &SocketAddr) -> (Self, HttpFuture<()>) {
+    pub fn new_tls(_lh: reactor::Handle, _addr: &SocketAddr, _conf: HttpClientConf) -> (Self, HttpFuture<()>) {
         unimplemented!()
         /*
         let addr = addr.clone();

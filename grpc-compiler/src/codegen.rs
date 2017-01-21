@@ -232,8 +232,8 @@ impl<'a> ServiceGen<'a> {
         w.write_line("");
 
         w.impl_self_block(&self.sync_client_name(), |w| {
-            w.pub_fn("new(host: &str, port: u16, tls: bool) -> ::grpc::result::GrpcResult<Self>", |w| {
-                w.write_line(format!("{}::new(host, port, tls).map(|c| {{", &self.async_client_name()));
+            w.pub_fn("new(host: &str, port: u16, tls: bool, conf: ::grpc::client::GrpcClientConf) -> ::grpc::result::GrpcResult<Self>", |w| {
+                w.write_line(format!("{}::new(host, port, tls, conf).map(|c| {{", &self.async_client_name()));
                 w.indented(|w| {
                     w.expr_block(&self.sync_client_name(), |w| {
                         w.field_entry("async_client", "c");
@@ -269,8 +269,9 @@ impl<'a> ServiceGen<'a> {
         w.write_line("");
 
         w.impl_self_block(&self.async_client_name(), |w| {
-            w.pub_fn("new(host: &str, port: u16, tls: bool) -> ::grpc::result::GrpcResult<Self>", |w| {
-                w.write_line("::grpc::client::GrpcClient::new(host, port, tls).map(|c| {");
+            let sig = "new(host: &str, port: u16, tls: bool, conf: ::grpc::client::GrpcClientConf) -> ::grpc::result::GrpcResult<Self>";
+            w.pub_fn(sig, |w| {
+                w.write_line("::grpc::client::GrpcClient::new(host, port, tls, conf).map(|c| {");
                 w.indented(|w| {
                     w.expr_block(&self.async_client_name(), |w| {
                         w.field_entry("grpc_client", "c");
@@ -325,14 +326,17 @@ impl<'a> ServiceGen<'a> {
         w.write_line("");
 
         w.impl_self_block(&self.sync_server_name(), |w| {
-            w.pub_fn(&format!("new<A : ::std::net::ToSocketAddrs, H : {} + Send + Sync + 'static>(addr: A, h: H) -> Self", self.sync_intf_name()), |w| {
+            let sig = &format!(
+                "new<A : ::std::net::ToSocketAddrs, H : {} + Send + Sync + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self",
+                self.sync_intf_name());
+            w.pub_fn(sig, |w| {
                 w.stmt_block(&format!("let h = {}", self.sync_handler_to_async_name()), |w| {
                     w.field_entry("cpupool", "::futures_cpupool::CpuPool::new_num_cpus()");
                     w.field_entry("handler", "::std::sync::Arc::new(h)");
                 });
 
                 w.expr_block(&self.sync_server_name(), |w| {
-                    w.field_entry("async_server", &format!("{}::new(addr, h)", self.async_server_name()));
+                    w.field_entry("async_server", &format!("{}::new(addr, conf, h)", self.async_server_name()));
                 });
             });
         });
@@ -367,11 +371,14 @@ impl<'a> ServiceGen<'a> {
         w.write_line("");
 
         w.impl_self_block(&self.async_server_name(), |w| {
-            w.pub_fn(&format!("new<A : ::std::net::ToSocketAddrs, H : {} + 'static + Sync + Send + 'static>(addr: A, h: H) -> Self", self.async_intf_name()), |w| {
+            let sig = format!(
+                "new<A : ::std::net::ToSocketAddrs, H : {} + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self",
+                self.async_intf_name());
+            w.pub_fn(&sig, |w| {
                 w.write_line(format!("let service_definition = {}::new_service_def(h);", self.async_server_name()));
 
                 w.expr_block(&self.async_server_name(), |w| {
-                    w.field_entry("grpc_server", "::grpc::server::GrpcServer::new(addr, service_definition)");
+                    w.field_entry("grpc_server", "::grpc::server::GrpcServer::new(addr, conf, service_definition)");
                 });
             });
             w.write_line("");

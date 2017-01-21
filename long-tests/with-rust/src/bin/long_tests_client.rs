@@ -60,7 +60,7 @@ fn main() {
         panic!("too few args")
     }
 
-    let client = LongTestsAsyncClient::new("localhost", 23432, false).expect("init");
+    let client = LongTestsAsyncClient::new("localhost", 23432, false, Default::default()).expect("init");
 
     let cmd = &args[1];
     let cmd_args = &args[2..];

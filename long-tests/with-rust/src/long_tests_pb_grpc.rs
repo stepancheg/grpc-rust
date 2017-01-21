@@ -43,8 +43,8 @@ pub struct LongTestsClient {
 }
 
 impl LongTestsClient {
-    pub fn new(host: &str, port: u16, tls: bool) -> ::grpc::result::GrpcResult<Self> {
-        LongTestsAsyncClient::new(host, port, tls).map(|c| {
+    pub fn new(host: &str, port: u16, tls: bool, conf: ::grpc::client::GrpcClientConf) -> ::grpc::result::GrpcResult<Self> {
+        LongTestsAsyncClient::new(host, port, tls, conf).map(|c| {
             LongTestsClient {
                 async_client: c,
             }
@@ -77,8 +77,8 @@ pub struct LongTestsAsyncClient {
 }
 
 impl LongTestsAsyncClient {
-    pub fn new(host: &str, port: u16, tls: bool) -> ::grpc::result::GrpcResult<Self> {
-        ::grpc::client::GrpcClient::new(host, port, tls).map(|c| {
+    pub fn new(host: &str, port: u16, tls: bool, conf: ::grpc::client::GrpcClientConf) -> ::grpc::result::GrpcResult<Self> {
+        ::grpc::client::GrpcClient::new(host, port, tls, conf).map(|c| {
             LongTestsAsyncClient {
                 grpc_client: c,
                 method_echo: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
@@ -153,13 +153,13 @@ impl LongTestsAsync for LongTestsServerHandlerToAsync {
 }
 
 impl LongTestsServer {
-    pub fn new<A : ::std::net::ToSocketAddrs, H : LongTests + Send + Sync + 'static>(addr: A, h: H) -> Self {
+    pub fn new<A : ::std::net::ToSocketAddrs, H : LongTests + Send + Sync + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self {
         let h = LongTestsServerHandlerToAsync {
             cpupool: ::futures_cpupool::CpuPool::new_num_cpus(),
             handler: ::std::sync::Arc::new(h),
         };
         LongTestsServer {
-            async_server: LongTestsAsyncServer::new(addr, h),
+            async_server: LongTestsAsyncServer::new(addr, conf, h),
         }
     }
 }
@@ -171,10 +171,10 @@ pub struct LongTestsAsyncServer {
 }
 
 impl LongTestsAsyncServer {
-    pub fn new<A : ::std::net::ToSocketAddrs, H : LongTestsAsync + 'static + Sync + Send + 'static>(addr: A, h: H) -> Self {
+    pub fn new<A : ::std::net::ToSocketAddrs, H : LongTestsAsync + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self {
         let service_definition = LongTestsAsyncServer::new_service_def(h);
         LongTestsAsyncServer {
-            grpc_server: ::grpc::server::GrpcServer::new(addr, service_definition),
+            grpc_server: ::grpc::server::GrpcServer::new(addr, conf, service_definition),
         }
     }
 

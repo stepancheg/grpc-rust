@@ -9,8 +9,10 @@ extern crate hpack;
 
 pub mod solicit;
 
+pub mod client_conf;
 pub mod client_conn;
 pub mod client;
+pub mod server_conf;
 pub mod server_conn;
 pub mod server;
 pub mod http_common;
@@ -32,8 +34,10 @@ pub use solicit::Header;
 pub use solicit::StaticHeader;
 
 pub mod for_test {
+    pub use server_conf::*;
     pub use server_conn::*;
     pub use server::*;
+    pub use client_conf::*;
     pub use client_conn::*;
     pub use client::*;
     pub use http_common::*;

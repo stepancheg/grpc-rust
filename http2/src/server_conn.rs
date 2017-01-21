@@ -25,6 +25,8 @@ use solicit_async::*;
 use solicit_misc::*;
 use http_common::*;
 
+use server_conf::*;
+
 
 struct HttpServerStream<F : HttpService> {
     common: HttpStreamCommon,
@@ -302,7 +304,7 @@ pub struct HttpServerConnectionAsync {
 }
 
 impl HttpServerConnectionAsync {
-    fn connected<F, I>(lh: &reactor::Handle, socket: HttpFutureSend<I>, service: Arc<F>)
+    fn connected<F, I>(lh: &reactor::Handle, socket: HttpFutureSend<I>, _conf: HttpServerConf, service: Arc<F>)
                        -> (HttpServerConnectionAsync, HttpFuture<()>)
         where
             F : HttpService,
@@ -344,12 +346,12 @@ impl HttpServerConnectionAsync {
         }, future)
     }
 
-    pub fn new_plain<S>(lh: &reactor::Handle, socket: TcpStream, service: Arc<S>)
+    pub fn new_plain<S>(lh: &reactor::Handle, socket: TcpStream, conf: HttpServerConf, service: Arc<S>)
             -> (HttpServerConnectionAsync, HttpFuture<()>)
         where
             S : HttpService,
     {
-        HttpServerConnectionAsync::connected(lh, Box::new(futures::finished(socket)), service)
+        HttpServerConnectionAsync::connected(lh, Box::new(futures::finished(socket)), conf, service)
     }
 
     /*
@@ -364,7 +366,7 @@ impl HttpServerConnectionAsync {
     }
     */
 
-    pub fn new_plain_fn<F>(lh: &reactor::Handle, socket: TcpStream, f: F)
+    pub fn new_plain_fn<F>(lh: &reactor::Handle, socket: TcpStream, conf: HttpServerConf, f: F)
             -> (HttpServerConnectionAsync, HttpFuture<()>)
         where
             F : Fn(Vec<StaticHeader>, HttpPartFutureStreamSend) -> HttpPartFutureStreamSend + Send + 'static,
@@ -379,7 +381,7 @@ impl HttpServerConnectionAsync {
             }
         }
 
-        HttpServerConnectionAsync::new_plain(lh, socket, Arc::new(HttpServiceFn(f)))
+        HttpServerConnectionAsync::new_plain(lh, socket, conf, Arc::new(HttpServiceFn(f)))
     }
 
     /*
