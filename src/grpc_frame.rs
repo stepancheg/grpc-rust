@@ -1,11 +1,11 @@
 use futures::Async;
 use futures::Poll;
+use futures::stream;
 use futures::stream::Stream;
 
 use error::*;
 use result::*;
 use grpc::*;
-use httpbis::futures_misc::*;
 
 use httpbis::http_common::*;
 use httpbis::solicit_misc::*;
@@ -100,14 +100,14 @@ trait RequestOrResponse {
 pub struct GrpcFrameFromHttpFramesStreamRequest {
     http_stream_stream: HttpPartFutureStreamSend,
     buf: Vec<u8>,
-    error: Option<StreamErr<Vec<u8>, GrpcError>>,
+    error: Option<stream::Once<Vec<u8>, GrpcError>>,
 }
 
 pub struct GrpcFrameFromHttpFramesStreamResponse {
     http_stream_stream: HttpPartFutureStreamSend,
     buf: Vec<u8>,
     seen_headers: bool,
-    error: Option<StreamErr<Vec<u8>, GrpcError>>,
+    error: Option<stream::Once<Vec<u8>, GrpcError>>,
 }
 
 impl GrpcFrameFromHttpFramesStreamResponse {
@@ -153,7 +153,7 @@ impl Stream for GrpcFrameFromHttpFramesStreamRequest {
                     if self.buf.is_empty() {
                         return Ok(Async::Ready(None));
                     } else {
-                        self.error = Some(stream_err(GrpcError::Other("partial frame")));
+                        self.error = Some(stream::once(Err(GrpcError::Other("partial frame"))));
                         continue;
                     }
                 },
@@ -189,16 +189,16 @@ impl Stream for GrpcFrameFromHttpFramesStreamResponse {
                     HttpStreamPartContent::Headers(headers) => {
                         let status = slice_get_header(&headers, ":status");
                         if status != Some("200") {
-                            self.error = Some(stream_err(if let Some(message) = slice_get_header(&headers, HEADER_GRPC_MESSAGE) {
+                            self.error = Some(stream::once(Err(if let Some(message) = slice_get_header(&headers, HEADER_GRPC_MESSAGE) {
                                 GrpcError::GrpcMessage(GrpcMessageError { grpc_message: message.to_owned() })
                             } else {
                                 GrpcError::Other("not 200")
-                            }));
+                            })));
                             continue;
                         }
                     }
                     HttpStreamPartContent::Data(..) => {
-                        self.error = Some(stream_err(GrpcError::Other("data before headers")));
+                        self.error = Some(stream::once(Err(GrpcError::Other("data before headers"))));
                         continue;
                     }
                 };
@@ -216,7 +216,7 @@ impl Stream for GrpcFrameFromHttpFramesStreamResponse {
                     if self.buf.is_empty() {
                         return Ok(Async::Ready(None));
                     } else {
-                        self.error = Some(stream_err(GrpcError::Other("partial frame")));
+                        self.error = Some(stream::once(Err(GrpcError::Other("partial frame"))));
                         continue;
                     }
                 },
@@ -227,17 +227,17 @@ impl Stream for GrpcFrameFromHttpFramesStreamResponse {
                 HttpStreamPartContent::Headers(headers) => {
                     if part.last {
                         if !self.buf.is_empty() {
-                            self.error = Some(stream_err(GrpcError::Other("partial frame")));
+                            self.error = Some(stream::once(Err(GrpcError::Other("partial frame"))));
                         } else {
                             let grpc_status_0 = slice_get_header(&headers, HEADER_GRPC_STATUS) == Some("0");
                             if grpc_status_0 {
                                 return Ok(Async::Ready(None));
                             } else {
-                                self.error = Some(stream_err(if let Some(message) = slice_get_header(&headers, HEADER_GRPC_MESSAGE) {
+                                self.error = Some(stream::once(Err(if let Some(message) = slice_get_header(&headers, HEADER_GRPC_MESSAGE) {
                                     GrpcError::GrpcMessage(GrpcMessageError { grpc_message: message.to_owned() })
                                 } else {
                                     GrpcError::Other("not xxx")
-                                }));
+                                })));
                             }
                         }
                         continue;
