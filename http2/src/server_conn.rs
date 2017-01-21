@@ -55,7 +55,7 @@ impl<F : HttpService> HttpStream for HttpServerStream<F> {
     }
 
     fn closed_remote(&mut self) {
-        if let Some(mut sender) = self.request_handler.take() {
+        if let Some(sender) = self.request_handler.take() {
             // ignore error
             sender.send(ResultOrEof::Eof).ok();
         }
@@ -101,8 +101,8 @@ impl<F : HttpService> ServerInner<F> {
         let response = self.session_state.factory.new_request(headers, Box::new(req_rx));
 
         {
-            let mut to_write_tx = self.session_state.to_write_tx.clone();
-            let mut to_write_tx2 = to_write_tx.clone();
+            let to_write_tx = self.session_state.to_write_tx.clone();
+            let to_write_tx2 = to_write_tx.clone();
 
             let process_response = response.for_each(move |part: HttpStreamPart| {
                 // drop error if connection is closed

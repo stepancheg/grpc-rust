@@ -11,13 +11,13 @@ use tokio_core::reactor;
 use tokio_core::net::TcpListener;
 
 use futures;
+use futures::stream;
 use futures::Stream;
 use futures::Future;
 use futures::future::join_all;
 
 use solicit::HttpError;
 
-use futures_misc::*;
 use solicit_async::*;
 
 use super::server_conn::*;
@@ -82,7 +82,7 @@ fn run_server_event_loop<S>(
 
     let listen = TcpListener::bind(&listen_addr, &lp.handle()).unwrap();
 
-    let stuff = stream_repeat((lp.handle(), service, state, conf));
+    let stuff = stream::repeat((lp.handle(), service, state, conf));
 
     let local_addr = listen.local_addr().unwrap();
     send_to_back

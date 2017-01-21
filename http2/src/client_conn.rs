@@ -48,7 +48,7 @@ impl HttpStream for HttpClientStream {
     }
 
     fn closed_remote(&mut self) {
-        if let Some(mut response_handler) = self.response_handler.take() {
+        if let Some(response_handler) = self.response_handler.take() {
             // it is OK to ignore error: handler may be already dead
             drop(response_handler.send(ResultOrEof::Eof));
         }
@@ -171,8 +171,8 @@ impl<I : Io + Send + 'static> ClientWriteLoop<I> {
             inner.insert_stream(stream)
         });
 
-        let mut to_write_tx_1 = self.inner.with(|inner| inner.to_write_tx.clone());
-        let mut to_write_tx_2 = to_write_tx_1.clone();
+        let to_write_tx_1 = self.inner.with(|inner| inner.to_write_tx.clone());
+        let to_write_tx_2 = to_write_tx_1.clone();
 
         self.inner.with(|inner: &mut ClientInner| {
             let future = body
@@ -346,7 +346,7 @@ impl HttpClientConnectionAsync {
     {
         let (tx, rx) = futures::oneshot();
 
-        let mut call_tx = self.call_tx.clone();
+        let call_tx = self.call_tx.clone();
 
         let (req_tx, req_rx) = futures::sync::mpsc::unbounded();
 

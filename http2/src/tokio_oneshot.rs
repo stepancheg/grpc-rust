@@ -25,7 +25,7 @@ pub struct Receiver<T> {
 
 #[allow(dead_code)]
 impl<T> Sender<T> {
-    pub fn send(mut self, t: T) -> Result<(), futures::sync::mpsc::SendError<T>> {
+    pub fn send(self, t: T) -> Result<(), futures::sync::mpsc::SendError<T>> {
         self.sender.send(t)
     }
 }

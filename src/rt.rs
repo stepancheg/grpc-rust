@@ -52,7 +52,7 @@ pub fn sync_to_async_server_streaming<Req, Resp, H>(cpupool: &CpuPool, req: Req,
         Resp : Send + 'static,
         H : FnOnce(Req) -> GrpcIterator<Resp> + Send + 'static,
 {
-    let (mut sender, receiver) = futures::sync::mpsc::unbounded();
+    let (sender, receiver) = futures::sync::mpsc::unbounded();
     drop(cpupool
         .spawn(futures::lazy(move || {
             for result in sync_handler(req) {
@@ -79,7 +79,7 @@ pub fn sync_to_async_bidi<Req, Resp, H>(cpupool: &CpuPool, req: GrpcStreamSend<R
         Resp : Send + 'static,
         H : FnOnce(GrpcIterator<Req>) -> GrpcIterator<Resp> + Send + 'static,
 {
-    let (mut sender, receiver) = futures::sync::mpsc::unbounded();
+    let (sender, receiver) = futures::sync::mpsc::unbounded();
     drop(cpupool
         .spawn(futures::lazy(move || {
             for result in sync_handler(Box::new(req.wait())) {

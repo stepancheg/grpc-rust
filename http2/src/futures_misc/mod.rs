@@ -1,7 +1,6 @@
 mod task_data;
 
 mod stream_single;
-mod stream_repeat;
 mod stream_err;
 mod stream_merge2;
 mod stream_with_eof;
@@ -13,9 +12,6 @@ pub mod stream_concat3;
 pub use self::task_data::TaskRcMut;
 
 pub use self::stream_single::stream_single;
-
-pub use self::stream_repeat::stream_repeat;
-pub use self::stream_repeat::StreamRepeat;
 
 pub use self::stream_err::stream_err;
 pub use self::stream_err::StreamErr;

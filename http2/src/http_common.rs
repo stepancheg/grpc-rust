@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::cmp;
 
+use futures::stream;
 use futures::stream::Stream;
 use futures::Future;
 use futures;
@@ -584,7 +585,7 @@ impl<I, N> ReadLoopData<I, N>
     }
 
     pub fn run(self) -> HttpFuture<()> {
-        let stream = stream_repeat(());
+        let stream = stream::repeat(());
 
         let future = stream.fold(self, |lp, _| {
             lp.read_process_frame()
