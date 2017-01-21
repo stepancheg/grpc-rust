@@ -23,17 +23,17 @@ use solicit_async::*;
 use http_common::*;
 
 
-struct GrpcHttpClientStream {
-    common: GrpcHttpStreamCommon,
+struct HttpClientStream {
+    common: HttpStreamCommon,
     response_handler: Option<futures::sync::mpsc::UnboundedSender<ResultOrEof<HttpStreamPart, HttpError>>>,
 }
 
-impl GrpcHttpStream for GrpcHttpClientStream {
-    fn common(&self) -> &GrpcHttpStreamCommon {
+impl HttpStream for HttpClientStream {
+    fn common(&self) -> &HttpStreamCommon {
         &self.common
     }
 
-    fn common_mut(&mut self) -> &mut GrpcHttpStreamCommon {
+    fn common_mut(&mut self) -> &mut HttpStreamCommon {
         &mut self.common
     }
 
@@ -54,23 +54,23 @@ impl GrpcHttpStream for GrpcHttpClientStream {
     }
 }
 
-impl GrpcHttpClientStream {
+impl HttpClientStream {
 }
 
-struct GrpcHttpClientSessionState {
+struct HttpClientSessionState {
     next_stream_id: StreamId,
     decoder: hpack::Decoder<'static>,
     loop_handle: reactor::Handle,
 }
 
 struct ClientInner {
-    common: LoopInnerCommon<GrpcHttpClientStream>,
+    common: LoopInnerCommon<HttpClientStream>,
     to_write_tx: futures::sync::mpsc::UnboundedSender<ClientToWriteMessage>,
-    session_state: GrpcHttpClientSessionState,
+    session_state: HttpClientSessionState,
 }
 
 impl ClientInner {
-    fn insert_stream(&mut self, stream: GrpcHttpClientStream) -> StreamId {
+    fn insert_stream(&mut self, stream: HttpClientStream) -> StreamId {
         let id = self.session_state.next_stream_id;
         if let Some(..) = self.common.streams.insert(id, stream) {
             panic!("inserted stream that already existed");
@@ -81,9 +81,9 @@ impl ClientInner {
 }
 
 impl LoopInner for ClientInner {
-    type LoopHttpStream = GrpcHttpClientStream;
+    type LoopHttpStream = HttpClientStream;
 
-    fn common(&mut self) -> &mut LoopInnerCommon<GrpcHttpClientStream> {
+    fn common(&mut self) -> &mut LoopInnerCommon<HttpClientStream> {
         &mut self.common
     }
 
@@ -98,7 +98,7 @@ impl LoopInner for ClientInner {
                                .map_err(HttpError::CompressionError).unwrap();
         let headers: Vec<StaticHeader> = headers.into_iter().map(|h| h.into()).collect();
 
-        let mut stream: &mut GrpcHttpClientStream = match self.common.get_stream_mut(frame.get_stream_id()) {
+        let mut stream: &mut HttpClientStream = match self.common.get_stream_mut(frame.get_stream_id()) {
             None => {
                 // TODO(mlalic): This means that the server's header is not associated to any
                 //               request made by the client nor any server-initiated stream (pushed)
@@ -129,7 +129,7 @@ unsafe impl Sync for HttpClientConnectionAsync {}
 
 struct StartRequestMessage {
     headers: Vec<StaticHeader>,
-    body: HttpStreamSend<Vec<u8>>,
+    body: HttpFutureStreamSend<Vec<u8>>,
     response_handler: futures::sync::mpsc::UnboundedSender<ResultOrEof<HttpStreamPart, HttpError>>,
 }
 
@@ -160,8 +160,8 @@ impl<I : Io + Send + 'static> ClientWriteLoop<I> {
 
         let stream_id = self.inner.with(move |inner: &mut ClientInner| {
 
-            let mut stream = GrpcHttpClientStream {
-                common: GrpcHttpStreamCommon::new(),
+            let mut stream = HttpClientStream {
+                common: HttpStreamCommon::new(),
                 response_handler: Some(response_handler),
             };
 
@@ -238,7 +238,7 @@ impl<I : Io + Send + 'static> ClientWriteLoop<I> {
         }
     }
 
-    fn run(self, requests: HttpStreamSend<ClientToWriteMessage>) -> HttpFuture<()> {
+    fn run(self, requests: HttpFutureStreamSend<ClientToWriteMessage>) -> HttpFuture<()> {
         let requests = requests.map_err(HttpError::from);
         Box::new(requests
             .fold(self, move |wl, message: ClientToWriteMessage| {
@@ -276,7 +276,7 @@ impl HttpClientConnectionAsync {
             let inner = TaskRcMut::new(ClientInner {
                 common: LoopInnerCommon::new(HttpScheme::Http),
                 to_write_tx: to_write_tx.clone(),
-                session_state: GrpcHttpClientSessionState {
+                session_state: HttpClientSessionState {
                     next_stream_id: 1,
                     decoder: hpack::Decoder::new(),
                     loop_handle: lh,
@@ -327,8 +327,8 @@ impl HttpClientConnectionAsync {
     pub fn start_request(
         &self,
         headers: Vec<StaticHeader>,
-        body: HttpStreamSend<Vec<u8>>)
-            -> HttpStreamStreamSend
+        body: HttpFutureStreamSend<Vec<u8>>)
+            -> HttpPartFutureStreamSend
     {
         let (tx, rx) = futures::oneshot();
 
@@ -378,7 +378,7 @@ impl ClientCommandLoop {
         }
     }
 
-    fn run(self, requests: HttpStreamSend<ClientCommandMessage>) -> HttpFuture<()> {
+    fn run(self, requests: HttpFutureStreamSend<ClientCommandMessage>) -> HttpFuture<()> {
         let requests = requests.map_err(HttpError::from);
         Box::new(requests
             .fold(self, move |l, message: ClientCommandMessage| {

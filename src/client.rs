@@ -7,7 +7,7 @@ use futures::stream::Stream;
 use httpbis::HttpScheme;
 use httpbis::HttpError;
 use httpbis::Header;
-use httpbis::client::Http2Client;
+use httpbis::client::HttpClient;
 
 
 use method::MethodDescriptor;
@@ -24,7 +24,7 @@ use grpc_frame::*;
 /// gRPC client implementation.
 /// Used by generated code.
 pub struct GrpcClient {
-    client: Http2Client,
+    client: HttpClient,
     host: String,
     http_scheme: HttpScheme,
 }
@@ -32,7 +32,7 @@ pub struct GrpcClient {
 impl GrpcClient {
     /// Create a client connected to specified host and port.
     pub fn new(host: &str, port: u16, tls: bool) -> GrpcResult<GrpcClient> {
-        Http2Client::new(host, port, tls)
+        HttpClient::new(host, port, tls)
             .map(|client| {
                 GrpcClient {
                     client: client,

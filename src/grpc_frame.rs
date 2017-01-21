@@ -98,20 +98,20 @@ trait RequestOrResponse {
 }
 
 pub struct GrpcFrameFromHttpFramesStreamRequest {
-    http_stream_stream: HttpStreamStreamSend,
+    http_stream_stream: HttpPartFutureStreamSend,
     buf: Vec<u8>,
     error: Option<StreamErr<Vec<u8>, GrpcError>>,
 }
 
 pub struct GrpcFrameFromHttpFramesStreamResponse {
-    http_stream_stream: HttpStreamStreamSend,
+    http_stream_stream: HttpPartFutureStreamSend,
     buf: Vec<u8>,
     seen_headers: bool,
     error: Option<StreamErr<Vec<u8>, GrpcError>>,
 }
 
 impl GrpcFrameFromHttpFramesStreamResponse {
-    pub fn new(http_stream_stream: HttpStreamStreamSend) -> Self {
+    pub fn new(http_stream_stream: HttpPartFutureStreamSend) -> Self {
         GrpcFrameFromHttpFramesStreamResponse {
             http_stream_stream: http_stream_stream,
             buf: Vec::new(),
@@ -122,7 +122,7 @@ impl GrpcFrameFromHttpFramesStreamResponse {
 }
 
 impl GrpcFrameFromHttpFramesStreamRequest {
-    pub fn new(http_stream_stream: HttpStreamStreamSend) -> Self {
+    pub fn new(http_stream_stream: HttpPartFutureStreamSend) -> Self {
         GrpcFrameFromHttpFramesStreamRequest {
             http_stream_stream: http_stream_stream,
             buf: Vec::new(),

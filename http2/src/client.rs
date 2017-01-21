@@ -25,7 +25,7 @@ use http_common::*;
 use message::*;
 
 
-// Data sent from event loop to GrpcClient
+// Data sent from event loop to Http2Client
 struct LoopToClient {
     // used only once to send shutdown signal
     shutdown_tx: futures::sync::mpsc::UnboundedSender<()>,
@@ -34,15 +34,15 @@ struct LoopToClient {
 }
 
 
-pub struct Http2Client {
+pub struct HttpClient {
     loop_to_client: LoopToClient,
     thread_join_handle: Option<thread::JoinHandle<()>>,
     host: String,
     http_scheme: HttpScheme,
 }
 
-impl Http2Client {
-    pub fn new(host: &str, port: u16, tls: bool) -> HttpResult<Http2Client> {
+impl HttpClient {
+    pub fn new(host: &str, port: u16, tls: bool) -> HttpResult<HttpClient> {
 
         // TODO: sync
         // TODO: try connect to all addrs
@@ -61,7 +61,7 @@ impl Http2Client {
         let loop_to_client = get_from_loop_rx.recv()
             .map_err(|_| HttpError::IoError(io::Error::new(io::ErrorKind::Other, "get response from loop")))?;
 
-        Ok(Http2Client {
+        Ok(HttpClient {
             loop_to_client: loop_to_client,
             thread_join_handle: Some(join_handle),
             host: host.to_owned(),
@@ -72,8 +72,8 @@ impl Http2Client {
     pub fn start_request(
         &self,
         headers: Vec<StaticHeader>,
-        body: HttpStreamSend<Vec<u8>>)
-            -> HttpStreamStreamSend
+        body: HttpFutureStreamSend<Vec<u8>>)
+            -> HttpPartFutureStreamSend
     {
         self.loop_to_client.http_conn.start_request(headers, body)
     }
@@ -82,7 +82,7 @@ impl Http2Client {
         &self,
         headers: Vec<StaticHeader>,
         body: Vec<u8>)
-            -> HttpStreamStreamSend
+            -> HttpPartFutureStreamSend
     {
         self.start_request(
             headers,
@@ -93,7 +93,7 @@ impl Http2Client {
         &self,
         path: &str,
         body: Vec<u8>)
-            -> HttpStreamStreamSend
+            -> HttpPartFutureStreamSend
     {
         let headers = vec![
             Header::new(":method", "POST"),
@@ -139,7 +139,7 @@ fn run_client_event_loop(
         };
     let http_conn_future: HttpFuture<_> = Box::new(http_conn_future.map_err(HttpError::from));
 
-    // Send channels back to GrpcClient
+    // Send channels back to Http2Client
     send_to_back
         .send(LoopToClient {
             shutdown_tx: shutdown_tx,
@@ -165,7 +165,7 @@ fn run_client_event_loop(
 }
 
 // We shutdown the client in the destructor.
-impl Drop for Http2Client {
+impl Drop for HttpClient {
     fn drop(&mut self) {
         // ignore error because even loop may be already dead
         self.loop_to_client.shutdown_tx.send(()).ok();

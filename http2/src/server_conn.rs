@@ -26,18 +26,18 @@ use solicit_misc::*;
 use http_common::*;
 
 
-struct GrpcHttpServerStream<F : HttpService> {
-    common: GrpcHttpStreamCommon,
+struct HttpServerStream<F : HttpService> {
+    common: HttpStreamCommon,
     request_handler: Option<futures::sync::mpsc::UnboundedSender<ResultOrEof<HttpStreamPart, HttpError>>>,
     _marker: marker::PhantomData<F>,
 }
 
-impl<F : HttpService> GrpcHttpStream for GrpcHttpServerStream<F> {
-    fn common(&self) -> &GrpcHttpStreamCommon {
+impl<F : HttpService> HttpStream for HttpServerStream<F> {
+    fn common(&self) -> &HttpStreamCommon {
         &self.common
     }
 
-    fn common_mut(&mut self) -> &mut GrpcHttpStreamCommon {
+    fn common_mut(&mut self) -> &mut HttpStreamCommon {
         &mut self.common
     }
 
@@ -60,7 +60,7 @@ impl<F : HttpService> GrpcHttpStream for GrpcHttpServerStream<F> {
     }
 }
 
-impl<F : HttpService> GrpcHttpServerStream<F> {
+impl<F : HttpService> HttpServerStream<F> {
     fn set_headers<'n, 'v>(&mut self, headers: Vec<Header<'n, 'v>>, last: bool) {
         let headers = headers.into_iter().map(|h| Header::new(h.name().to_owned(), h.value().to_owned())).collect();
         if let Some(ref mut sender) = self.request_handler {
@@ -75,7 +75,7 @@ impl<F : HttpService> GrpcHttpServerStream<F> {
 
 }
 
-struct GrpcHttpServerSessionState<F : HttpService> {
+struct HttpServerSessionState<F : HttpService> {
     factory: Arc<F>,
     to_write_tx: futures::sync::mpsc::UnboundedSender<ServerToWriteMessage<F>>,
     loop_handle: reactor::Handle,
@@ -83,8 +83,8 @@ struct GrpcHttpServerSessionState<F : HttpService> {
 
 
 struct ServerInner<F : HttpService> {
-    common: LoopInnerCommon<GrpcHttpServerStream<F>>,
-    session_state: GrpcHttpServerSessionState<F>,
+    common: LoopInnerCommon<HttpServerStream<F>>,
+    session_state: HttpServerSessionState<F>,
 }
 
 impl<F : HttpService> ServerInner<F> {
@@ -122,14 +122,14 @@ impl<F : HttpService> ServerInner<F> {
         req_tx
     }
 
-    fn new_stream(&mut self, stream_id: StreamId, headers: Vec<StaticHeader>) -> &mut GrpcHttpServerStream<F> {
+    fn new_stream(&mut self, stream_id: StreamId, headers: Vec<StaticHeader>) -> &mut HttpServerStream<F> {
         debug!("new stream: {}", stream_id);
 
         let req_tx = self.new_request(stream_id, headers);
 
         // New stream initiated by the client
-        let stream = GrpcHttpServerStream {
-            common: GrpcHttpStreamCommon::new(),
+        let stream = HttpServerStream {
+            common: HttpStreamCommon::new(),
             request_handler: Some(req_tx),
             _marker: marker::PhantomData,
         };
@@ -139,7 +139,7 @@ impl<F : HttpService> ServerInner<F> {
         self.common.streams.get_mut(&stream_id).unwrap()
     }
 
-    fn get_or_create_stream(&mut self, stream_id: StreamId, headers: Vec<StaticHeader>, last: bool) -> &mut GrpcHttpServerStream<F> {
+    fn get_or_create_stream(&mut self, stream_id: StreamId, headers: Vec<StaticHeader>, last: bool) -> &mut HttpServerStream<F> {
         if self.common.get_stream_mut(stream_id).is_some() {
             // https://github.com/rust-lang/rust/issues/36403
             let stream = self.common.get_stream_mut(stream_id).unwrap();
@@ -152,9 +152,9 @@ impl<F : HttpService> ServerInner<F> {
 }
 
 impl<F : HttpService> LoopInner for ServerInner<F> {
-    type LoopHttpStream = GrpcHttpServerStream<F>;
+    type LoopHttpStream = HttpServerStream<F>;
 
-    fn common(&mut self) -> &mut LoopInnerCommon<GrpcHttpServerStream<F>> {
+    fn common(&mut self) -> &mut LoopInnerCommon<HttpServerStream<F>> {
         &mut self.common
     }
 
@@ -263,7 +263,7 @@ impl<F : HttpService, I : Io + Send> ServerWriteLoop<F, I> {
         }
     }
 
-    fn run(self, requests: HttpStream<ServerToWriteMessage<F>>) -> HttpFuture<()> {
+    fn run(self, requests: HttpFutureStream<ServerToWriteMessage<F>>) -> HttpFuture<()> {
         let requests = requests.map_err(HttpError::from);
         Box::new(requests
             .fold(self, move |wl, message: ServerToWriteMessage<F>| {
@@ -286,7 +286,7 @@ impl<F : HttpService> ServerCommandLoop<F> {
         }
     }
 
-    fn run(self, requests: HttpStreamSend<ServerCommandMessage>) -> HttpFuture<()> {
+    fn run(self, requests: HttpFutureStreamSend<ServerCommandMessage>) -> HttpFuture<()> {
         let requests = requests.map_err(HttpError::from);
         Box::new(requests
             .fold(self, move |l, message: ServerCommandMessage| {
@@ -303,7 +303,7 @@ pub struct HttpServerConnectionAsync {
 
 impl HttpServerConnectionAsync {
     fn connected<F, I>(lh: &reactor::Handle, socket: HttpFutureSend<I>, service: Arc<F>)
-            -> (HttpServerConnectionAsync, HttpFuture<()>)
+                       -> (HttpServerConnectionAsync, HttpFuture<()>)
         where
             F : HttpService,
             I : Io + Send + 'static,
@@ -323,7 +323,7 @@ impl HttpServerConnectionAsync {
 
             let inner = TaskRcMut::new(ServerInner {
                 common: LoopInnerCommon::new(HttpScheme::Http),
-                session_state: GrpcHttpServerSessionState {
+                session_state: HttpServerSessionState {
                     factory: service,
                     to_write_tx: to_write_tx.clone(),
                     loop_handle: lh,
@@ -367,14 +367,14 @@ impl HttpServerConnectionAsync {
     pub fn new_plain_fn<F>(lh: &reactor::Handle, socket: TcpStream, f: F)
             -> (HttpServerConnectionAsync, HttpFuture<()>)
         where
-            F : Fn(Vec<StaticHeader>, HttpStreamStreamSend) -> HttpStreamStreamSend + Send + 'static,
+            F : Fn(Vec<StaticHeader>, HttpPartFutureStreamSend) -> HttpPartFutureStreamSend + Send + 'static,
     {
         struct HttpServiceFn<F>(F);
 
         impl<F> HttpService for HttpServiceFn<F>
-            where F : Fn(Vec<StaticHeader>, HttpStreamStreamSend) -> HttpStreamStreamSend + Send + 'static
+            where F : Fn(Vec<StaticHeader>, HttpPartFutureStreamSend) -> HttpPartFutureStreamSend + Send + 'static
         {
-            fn new_request(&self, headers: Vec<StaticHeader>, req: HttpStreamStreamSend) -> HttpStreamStreamSend {
+            fn new_request(&self, headers: Vec<StaticHeader>, req: HttpPartFutureStreamSend) -> HttpPartFutureStreamSend {
                 (self.0)(headers, req)
             }
         }

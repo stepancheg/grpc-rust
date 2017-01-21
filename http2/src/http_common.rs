@@ -71,12 +71,12 @@ impl HttpStreamPart {
     }
 }
 
-pub type HttpStreamStream = Box<Stream<Item=HttpStreamPart, Error=HttpError>>;
-pub type HttpStreamStreamSend = Box<Stream<Item=HttpStreamPart, Error=HttpError> + Send>;
+pub type HttpPartFutureStream = Box<Stream<Item=HttpStreamPart, Error=HttpError>>;
+pub type HttpPartFutureStreamSend = Box<Stream<Item=HttpStreamPart, Error=HttpError> + Send>;
 
 
 pub trait HttpService: Send + 'static {
-    fn new_request(&self, headers: Vec<StaticHeader>, req: HttpStreamStreamSend) -> HttpStreamStreamSend;
+    fn new_request(&self, headers: Vec<StaticHeader>, req: HttpPartFutureStreamSend) -> HttpPartFutureStreamSend;
 }
 
 
@@ -86,7 +86,7 @@ pub enum CommonToWriteMessage {
 }
 
 
-pub struct GrpcHttpStreamCommon {
+pub struct HttpStreamCommon {
     pub state: StreamState,
     pub out_window_size: WindowSize,
     pub in_window_size: WindowSize,
@@ -94,9 +94,9 @@ pub struct GrpcHttpStreamCommon {
     pub outgoing_end: bool,
 }
 
-impl GrpcHttpStreamCommon {
-    pub fn new() -> GrpcHttpStreamCommon {
-        GrpcHttpStreamCommon {
+impl HttpStreamCommon {
+    pub fn new() -> HttpStreamCommon {
+        HttpStreamCommon {
             state: StreamState::Open,
             in_window_size: WindowSize::new(INITIAL_CONNECTION_WINDOW_SIZE),
             out_window_size: WindowSize::new(INITIAL_CONNECTION_WINDOW_SIZE),
@@ -198,16 +198,16 @@ impl GrpcHttpStreamCommon {
 }
 
 
-pub trait GrpcHttpStream {
-    fn common(&self) -> &GrpcHttpStreamCommon;
-    fn common_mut(&mut self) -> &mut GrpcHttpStreamCommon;
+pub trait HttpStream {
+    fn common(&self) -> &HttpStreamCommon;
+    fn common_mut(&mut self) -> &mut HttpStreamCommon;
     fn new_data_chunk(&mut self, data: &[u8], last: bool);
     fn closed_remote(&mut self);
 }
 
 
 pub struct LoopInnerCommon<S>
-    where S : GrpcHttpStream,
+    where S : HttpStream,
 {
     pub conn: HttpConnection,
     pub streams: HashMap<StreamId, S>,
@@ -223,7 +223,7 @@ pub struct ConnectionStateSnapshot {
 
 
 impl<S> LoopInnerCommon<S>
-    where S : GrpcHttpStream,
+    where S : HttpStream,
 {
     pub fn new(scheme: HttpScheme) -> LoopInnerCommon<S> {
         LoopInnerCommon {
@@ -376,7 +376,7 @@ impl<S> LoopInnerCommon<S>
 
 
 pub trait LoopInner: 'static {
-    type LoopHttpStream : GrpcHttpStream;
+    type LoopHttpStream : HttpStream;
 
     fn common(&mut self) -> &mut LoopInnerCommon<Self::LoopHttpStream>;
 

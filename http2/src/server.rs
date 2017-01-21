@@ -33,7 +33,7 @@ struct LoopToServer {
 
 
 
-pub struct Http2Server {
+pub struct HttpServer {
     state: Arc<Mutex<HttpServerState>>,
     loop_to_server: LoopToServer,
     thread_join_handle: Option<thread::JoinHandle<()>>,
@@ -125,8 +125,8 @@ fn run_server_event_loop<S>(
     lp.run(done).ok();
 }
 
-impl Http2Server {
-    pub fn new<A: ToSocketAddrs, S>(addr: A, service: S) -> Http2Server
+impl HttpServer {
+    pub fn new<A: ToSocketAddrs, S>(addr: A, service: S) -> HttpServer
         where S : HttpService
     {
         let listen_addr = addr.to_socket_addrs().unwrap().next().unwrap();
@@ -143,7 +143,7 @@ impl Http2Server {
 
         let loop_to_server = get_from_loop_rx.recv().unwrap();
 
-        Http2Server {
+        HttpServer {
             state: state,
             loop_to_server: loop_to_server,
             thread_join_handle: Some(join_handle),
@@ -162,7 +162,7 @@ impl Http2Server {
 }
 
 // We shutdown the server in the destructor.
-impl Drop for Http2Server {
+impl Drop for HttpServer {
     fn drop(&mut self) {
         // ignore error because even loop may be already dead
         self.loop_to_server.shutdown_tx.send(()).ok();

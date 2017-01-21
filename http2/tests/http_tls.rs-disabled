@@ -1,7 +1,7 @@
 extern crate futures;
 extern crate tokio_core;
 extern crate tokio_tls;
-extern crate grpc;
+extern crate httpbis;
 #[macro_use]
 extern crate log;
 
@@ -20,7 +20,7 @@ macro_rules! t {
 mod test_with_openssl {
     extern crate openssl;
 
-    use grpc::for_test::*;
+    use httpbis::for_test::*;
 
     use test_misc::*;
 

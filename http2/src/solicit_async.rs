@@ -23,10 +23,12 @@ use solicit::connection::HttpFrame;
 
 
 pub type HttpFuture<T> = Box<Future<Item=T, Error=HttpError>>;
-pub type HttpStream<T> = Box<Stream<Item=T, Error=HttpError>>;
+// Type is called `HttpFutureStream`, not just `HttpStream`
+// to avoid confusion with streams from HTTP/2 spec
+pub type HttpFutureStream<T> = Box<Stream<Item=T, Error=HttpError>>;
 
 pub type HttpFutureSend<T> = Box<Future<Item=T, Error=HttpError> + Send>;
-pub type HttpStreamSend<T> = Box<Stream<Item=T, Error=HttpError> + Send>;
+pub type HttpFutureStreamSend<T> = Box<Stream<Item=T, Error=HttpError> + Send>;
 
 
 struct VecWithPos<T> {
@@ -65,7 +67,7 @@ pub fn recv_raw_frame<R : Read + Send + 'static>(read: R) -> HttpFuture<(R, RawF
 }
 
 #[allow(dead_code)]
-pub fn recv_raw_frame_stream<R : Read + Send + 'static>(_read: R) -> HttpStream<RawFrame<'static>> {
+pub fn recv_raw_frame_stream<R : Read + Send + 'static>(_read: R) -> HttpFutureStream<RawFrame<'static>> {
     // https://users.rust-lang.org/t/futures-rs-how-to-generate-a-stream-from-futures/7020
     panic!();
 }

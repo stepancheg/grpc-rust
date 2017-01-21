@@ -8,7 +8,7 @@ use std::any::Any;
 use httpbis::HttpError;
 use httpbis::Header;
 use httpbis::StaticHeader;
-use httpbis::server::Http2Server;
+use httpbis::server::HttpServer;
 
 use futures;
 use futures::Future;
@@ -268,14 +268,14 @@ impl ServerServiceDefinition {
 
 
 pub struct GrpcServer {
-    server: Http2Server,
+    server: HttpServer,
 }
 
 impl GrpcServer {
     pub fn new<A: ToSocketAddrs>(addr: A, service_definition: ServerServiceDefinition) -> GrpcServer {
         let service_definition = Arc::new(service_definition);
         GrpcServer {
-            server: Http2Server::new(addr, GrpcHttpServerHandlerFactory {
+            server: HttpServer::new(addr, GrpcHttpServerHandlerFactory {
                 service_definition: service_definition.clone(),
             })
         }
@@ -291,7 +291,7 @@ struct GrpcHttpServerHandlerFactory {
 }
 
 
-fn stream_500(message: &str) -> HttpStreamStreamSend {
+fn stream_500(message: &str) -> HttpPartFutureStreamSend {
     Box::new(stream::once(Ok(HttpStreamPart::last_headers(vec![
         Header::new(":status", "500"),
         Header::new(HEADER_GRPC_MESSAGE, message.to_owned()),
@@ -299,7 +299,7 @@ fn stream_500(message: &str) -> HttpStreamStreamSend {
 }
 
 impl HttpService for GrpcHttpServerHandlerFactory {
-    fn new_request(&self, headers: Vec<StaticHeader>, req: HttpStreamStreamSend) -> HttpStreamStreamSend {
+    fn new_request(&self, headers: Vec<StaticHeader>, req: HttpPartFutureStreamSend) -> HttpPartFutureStreamSend {
 
         let path = match slice_get_header(&headers, ":path") {
             Some(path) => path.to_owned(),
