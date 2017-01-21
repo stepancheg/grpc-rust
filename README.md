@@ -95,7 +95,8 @@ https://github.com/dwrensha/capnpc-rust for more details.
 
 ## TODO
 
-* Tests
-* Proper error handling
-* Upload to crates
-* Performance
+* Implement flow control. See issue #35
+* Fix performance
+* More tests
+* In particular, add more compatibility tests, they live in `long-tests` directory
+* Fix all TODO in sources
