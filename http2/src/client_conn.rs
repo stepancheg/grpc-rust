@@ -300,8 +300,18 @@ impl HttpClientConnectionAsync {
     pub fn new_plain(lh: reactor::Handle, addr: &SocketAddr, conf: HttpClientConf) -> (Self, HttpFuture<()>) {
         let addr = addr.clone();
 
+        let no_delay = conf.no_delay;
+
         let connect = TcpStream::connect(&addr, &lh)
-            .map(move |c| { info!("connected to {}", addr); c })
+            .map(move |socket| {
+                info!("connected to {}", addr);
+
+                if let Some(no_delay) = no_delay {
+                    socket.set_nodelay(no_delay).expect("failed to set TCP_NODELAY");
+                }
+
+                socket
+            })
             .map_err(|e| e.into());
 
         HttpClientConnectionAsync::connected(lh, Box::new(connect), conf)

@@ -92,6 +92,10 @@ fn run_server_event_loop<S>(
     let loop_run = listen.incoming().map_err(HttpError::from).zip(stuff).for_each(move |((socket, peer_addr), (loop_handle, service, state, conf))| {
         info!("accepted connection from {}", peer_addr);
 
+        if let Some(no_delay) = conf.no_delay {
+            socket.set_nodelay(no_delay).expect("failed to set TCP_NODELAY");
+        }
+
         let (conn, future) = HttpServerConnectionAsync::new_plain(&loop_handle, socket, conf, service);
 
         let conn_id = {
