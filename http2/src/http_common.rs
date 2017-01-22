@@ -2,9 +2,9 @@ use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::cmp;
 
-use futures::stream;
 use futures::stream::Stream;
 use futures::Future;
+use futures::future;
 use futures;
 
 use tokio_core::io::ReadHalf;
@@ -585,13 +585,11 @@ impl<I, N> ReadLoopData<I, N>
     }
 
     pub fn run(self) -> HttpFuture<()> {
-        let stream = stream::repeat(());
-
-        let future = stream.fold(self, |lp, _| {
-            lp.read_process_frame()
+        let future = future::loop_fn(self, |lp| {
+            lp.read_process_frame().map(future::Loop::Continue::<(), _>)
         });
 
-        Box::new(future.map(|_| ()))
+        Box::new(future)
     }
 
     fn process_raw_frame(self, frame: RawFrame) -> HttpFuture<Self> {
