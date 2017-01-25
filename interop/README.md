@@ -20,13 +20,9 @@ $ cargo build
 $ ../target/debug/grp-interop
 ```
 
-# build and run the grpc-go interop client.
+# build and run the grpc-go interop client
 ```
-$ go get -u google.golang.org/grpc
-$ go get -u cloud.google.com/go/compute/metadata
-$ go get -u golang.org/x/oauth2
-$ go get -u go/src/github.com/grpc/grpc-go/interop/client/client.go
-$ go build -o go-grpc-interop-client  go/src/github.com/grpc/grpc-go/interop/client/client.go
+$ ./get-go-interop.sh
 $ ./go-grpc-interop-client -use_tls=false  -test_case=empty_unary -server_port=60011
 ```
 
