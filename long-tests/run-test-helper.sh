@@ -20,8 +20,8 @@ case $1 in
 esac
 
 case $2 in
-    rust) server=with-go/long_tests_server/long_tests_server ;;
-    go) server=../target/debug/long_tests_server ;;
+    rust) server=../target/debug/long_tests_server ;;
+    go) server=with-go/long_tests_server/long_tests_server ;;
     *) usage ;;
 esac
 
