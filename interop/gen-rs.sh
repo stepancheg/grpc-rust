@@ -19,9 +19,9 @@ cd $(dirname $0)
 #)
 
 # for protoc-gen-rust-grpc
-PATH=../../target/debug:$PATH
+PATH=../target/debug:$PATH
 # for protoc-gen-rust
-PATH=../../../rust-protobuf/target/debug:$PATH
+PATH=../rust-protobuf/target/debug:$PATH
 # for protoc
 PATH=$HOME/devel/left/protobuf/src:$PATH
 

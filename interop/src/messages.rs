@@ -314,9 +314,7 @@ impl ::protobuf::Message for Payload {
         if self.field_type != PayloadType::COMPRESSABLE {
             my_size += ::protobuf::rt::enum_size(1, self.field_type);
         };
-        // FIXME: had to manually insert <u8> here due to codgen bug
-        // error[E0282]: unable to infer enough type information about `_`
-        // --> src/messages.rs:329:25
+	// FIX: having to hand-add a ::<u8> here seems like a codegen bug.
         if self.body != ::std::vec::Vec::<u8>::new() {
             my_size += ::protobuf::rt::bytes_size(2, &self.body);
         };
