@@ -59,8 +59,8 @@ pub struct TestServiceClient {
 }
 
 impl TestServiceClient {
-    pub fn new(host: &str, port: u16, tls: bool) -> ::grpc::result::GrpcResult<Self> {
-        TestServiceAsyncClient::new(host, port, tls).map(|c| {
+    pub fn new(host: &str, port: u16, tls: bool, conf: ::grpc::client::GrpcClientConf) -> ::grpc::result::GrpcResult<Self> {
+        TestServiceAsyncClient::new(host, port, tls, conf).map(|c| {
             TestServiceClient {
                 async_client: c,
             }
@@ -115,8 +115,8 @@ pub struct TestServiceAsyncClient {
 }
 
 impl TestServiceAsyncClient {
-    pub fn new(host: &str, port: u16, tls: bool) -> ::grpc::result::GrpcResult<Self> {
-        ::grpc::client::GrpcClient::new(host, port, tls).map(|c| {
+    pub fn new(host: &str, port: u16, tls: bool, conf: ::grpc::client::GrpcClientConf) -> ::grpc::result::GrpcResult<Self> {
+        ::grpc::client::GrpcClient::new(host, port, tls, conf).map(|c| {
             TestServiceAsyncClient {
                 grpc_client: c,
                 method_EmptyCall: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
@@ -259,13 +259,13 @@ impl TestServiceAsync for TestServiceServerHandlerToAsync {
 }
 
 impl TestServiceServer {
-    pub fn new<H : TestService + Send + Sync + 'static>(port: u16, h: H) -> Self {
+    pub fn new<A : ::std::net::ToSocketAddrs, H : TestService + Send + Sync + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self {
         let h = TestServiceServerHandlerToAsync {
             cpupool: ::futures_cpupool::CpuPool::new_num_cpus(),
             handler: ::std::sync::Arc::new(h),
         };
         TestServiceServer {
-            async_server: TestServiceAsyncServer::new(port, h),
+            async_server: TestServiceAsyncServer::new(addr, conf, h),
         }
     }
 }
@@ -277,9 +277,16 @@ pub struct TestServiceAsyncServer {
 }
 
 impl TestServiceAsyncServer {
-    pub fn new<H : TestServiceAsync + 'static + Sync + Send + 'static>(port: u16, h: H) -> Self {
-        let handler_arc = ::std::sync::Arc::new(h);
-        let service_definition = ::grpc::server::ServerServiceDefinition::new(
+    pub fn new<A : ::std::net::ToSocketAddrs, H : TestServiceAsync + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self {
+        let service_definition = TestServiceAsyncServer::new_service_def(h);
+        TestServiceAsyncServer {
+            grpc_server: ::grpc::server::GrpcServer::new(addr, conf, service_definition),
+        }
+    }
+
+    pub fn new_service_def<H : TestServiceAsync + 'static + Sync + Send + 'static>(handler: H) -> ::grpc::server::ServerServiceDefinition {
+        let handler_arc = ::std::sync::Arc::new(handler);
+        ::grpc::server::ServerServiceDefinition::new(
             vec![
                 ::grpc::server::ServerMethod::new(
                     ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
@@ -366,11 +373,7 @@ impl TestServiceAsyncServer {
                     },
                 ),
             ],
-        );
-        TestServiceAsyncServer {
-            // FIXME: needed to change port to ("127.0.0.1", port)
-            grpc_server: ::grpc::server::GrpcServer::new(("127.0.0.1", port), service_definition),
-        }
+        )
     }
 }
 
@@ -391,8 +394,8 @@ pub struct UnimplementedServiceClient {
 }
 
 impl UnimplementedServiceClient {
-    pub fn new(host: &str, port: u16, tls: bool) -> ::grpc::result::GrpcResult<Self> {
-        UnimplementedServiceAsyncClient::new(host, port, tls).map(|c| {
+    pub fn new(host: &str, port: u16, tls: bool, conf: ::grpc::client::GrpcClientConf) -> ::grpc::result::GrpcResult<Self> {
+        UnimplementedServiceAsyncClient::new(host, port, tls, conf).map(|c| {
             UnimplementedServiceClient {
                 async_client: c,
             }
@@ -414,8 +417,8 @@ pub struct UnimplementedServiceAsyncClient {
 }
 
 impl UnimplementedServiceAsyncClient {
-    pub fn new(host: &str, port: u16, tls: bool) -> ::grpc::result::GrpcResult<Self> {
-        ::grpc::client::GrpcClient::new(host, port, tls).map(|c| {
+    pub fn new(host: &str, port: u16, tls: bool, conf: ::grpc::client::GrpcClientConf) -> ::grpc::result::GrpcResult<Self> {
+        ::grpc::client::GrpcClient::new(host, port, tls, conf).map(|c| {
             UnimplementedServiceAsyncClient {
                 grpc_client: c,
                 method_UnimplementedCall: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
@@ -456,13 +459,13 @@ impl UnimplementedServiceAsync for UnimplementedServiceServerHandlerToAsync {
 }
 
 impl UnimplementedServiceServer {
-    pub fn new<H : UnimplementedService + Send + Sync + 'static>(port: u16, h: H) -> Self {
+    pub fn new<A : ::std::net::ToSocketAddrs, H : UnimplementedService + Send + Sync + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self {
         let h = UnimplementedServiceServerHandlerToAsync {
             cpupool: ::futures_cpupool::CpuPool::new_num_cpus(),
             handler: ::std::sync::Arc::new(h),
         };
         UnimplementedServiceServer {
-            async_server: UnimplementedServiceAsyncServer::new(port, h),
+            async_server: UnimplementedServiceAsyncServer::new(addr, conf, h),
         }
     }
 }
@@ -474,9 +477,16 @@ pub struct UnimplementedServiceAsyncServer {
 }
 
 impl UnimplementedServiceAsyncServer {
-    pub fn new<H : UnimplementedServiceAsync + 'static + Sync + Send + 'static>(port: u16, h: H) -> Self {
-        let handler_arc = ::std::sync::Arc::new(h);
-        let service_definition = ::grpc::server::ServerServiceDefinition::new(
+    pub fn new<A : ::std::net::ToSocketAddrs, H : UnimplementedServiceAsync + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self {
+        let service_definition = UnimplementedServiceAsyncServer::new_service_def(h);
+        UnimplementedServiceAsyncServer {
+            grpc_server: ::grpc::server::GrpcServer::new(addr, conf, service_definition),
+        }
+    }
+
+    pub fn new_service_def<H : UnimplementedServiceAsync + 'static + Sync + Send + 'static>(handler: H) -> ::grpc::server::ServerServiceDefinition {
+        let handler_arc = ::std::sync::Arc::new(handler);
+        ::grpc::server::ServerServiceDefinition::new(
             vec![
                 ::grpc::server::ServerMethod::new(
                     ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
@@ -491,10 +501,7 @@ impl UnimplementedServiceAsyncServer {
                     },
                 ),
             ],
-        );
-        UnimplementedServiceAsyncServer {
-            grpc_server: ::grpc::server::GrpcServer::new(("127.0.0.1", port), service_definition),
-        }
+        )
     }
 }
 
@@ -519,8 +526,8 @@ pub struct ReconnectServiceClient {
 }
 
 impl ReconnectServiceClient {
-    pub fn new(host: &str, port: u16, tls: bool) -> ::grpc::result::GrpcResult<Self> {
-        ReconnectServiceAsyncClient::new(host, port, tls).map(|c| {
+    pub fn new(host: &str, port: u16, tls: bool, conf: ::grpc::client::GrpcClientConf) -> ::grpc::result::GrpcResult<Self> {
+        ReconnectServiceAsyncClient::new(host, port, tls, conf).map(|c| {
             ReconnectServiceClient {
                 async_client: c,
             }
@@ -547,8 +554,8 @@ pub struct ReconnectServiceAsyncClient {
 }
 
 impl ReconnectServiceAsyncClient {
-    pub fn new(host: &str, port: u16, tls: bool) -> ::grpc::result::GrpcResult<Self> {
-        ::grpc::client::GrpcClient::new(host, port, tls).map(|c| {
+    pub fn new(host: &str, port: u16, tls: bool, conf: ::grpc::client::GrpcClientConf) -> ::grpc::result::GrpcResult<Self> {
+        ::grpc::client::GrpcClient::new(host, port, tls, conf).map(|c| {
             ReconnectServiceAsyncClient {
                 grpc_client: c,
                 method_Start: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
@@ -606,13 +613,13 @@ impl ReconnectServiceAsync for ReconnectServiceServerHandlerToAsync {
 }
 
 impl ReconnectServiceServer {
-    pub fn new<H : ReconnectService + Send + Sync + 'static>(port: u16, h: H) -> Self {
+    pub fn new<A : ::std::net::ToSocketAddrs, H : ReconnectService + Send + Sync + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self {
         let h = ReconnectServiceServerHandlerToAsync {
             cpupool: ::futures_cpupool::CpuPool::new_num_cpus(),
             handler: ::std::sync::Arc::new(h),
         };
         ReconnectServiceServer {
-            async_server: ReconnectServiceAsyncServer::new(port, h),
+            async_server: ReconnectServiceAsyncServer::new(addr, conf, h),
         }
     }
 }
@@ -624,9 +631,16 @@ pub struct ReconnectServiceAsyncServer {
 }
 
 impl ReconnectServiceAsyncServer {
-    pub fn new<H : ReconnectServiceAsync + 'static + Sync + Send + 'static>(port: u16, h: H) -> Self {
-        let handler_arc = ::std::sync::Arc::new(h);
-        let service_definition = ::grpc::server::ServerServiceDefinition::new(
+    pub fn new<A : ::std::net::ToSocketAddrs, H : ReconnectServiceAsync + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self {
+        let service_definition = ReconnectServiceAsyncServer::new_service_def(h);
+        ReconnectServiceAsyncServer {
+            grpc_server: ::grpc::server::GrpcServer::new(addr, conf, service_definition),
+        }
+    }
+
+    pub fn new_service_def<H : ReconnectServiceAsync + 'static + Sync + Send + 'static>(handler: H) -> ::grpc::server::ServerServiceDefinition {
+        let handler_arc = ::std::sync::Arc::new(handler);
+        ::grpc::server::ServerServiceDefinition::new(
             vec![
                 ::grpc::server::ServerMethod::new(
                     ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
@@ -653,9 +667,6 @@ impl ReconnectServiceAsyncServer {
                     },
                 ),
             ],
-        );
-        ReconnectServiceAsyncServer {
-            grpc_server: ::grpc::server::GrpcServer::new(("127.0.0.1", port), service_definition),
-        }
+        )
     }
 }
