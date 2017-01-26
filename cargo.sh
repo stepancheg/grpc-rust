@@ -1,7 +1,7 @@
 #!/bin/sh -e
 
-if rustc rustc -Zhelp | egrep  '\<incremental=' > /dev/null; then
-    RUSTFLAGS="$RUSTFLAGS -Zincremental=$TMPDIR/grpc-rust"
+if rustc -Zhelp | egrep  '\<incremental=' > /dev/null; then
+    export RUSTFLAGS="$RUSTFLAGS -Zincremental=$TMPDIR/grpc-rust"
 fi
 
 exec cargo "$@"
