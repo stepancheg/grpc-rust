@@ -1,6 +1,6 @@
 #!/bin/sh -e
 
-if rustc -Zhelp | egrep  '\<incremental=' > /dev/null; then
+if test -z "$TRAVIS" && rustc -Zhelp | egrep  '\<incremental=' > /dev/null; then
     export RUSTFLAGS="$RUSTFLAGS -Zincremental=$TMPDIR/grpc-rust"
 fi
 
