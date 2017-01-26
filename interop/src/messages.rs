@@ -9,6 +9,7 @@
 
 #![allow(box_pointers)]
 #![allow(dead_code)]
+#![allow(missing_docs)]
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
@@ -20,13 +21,13 @@
 use protobuf::Message as Message_imported_for_functions;
 use protobuf::ProtobufEnum as ProtobufEnum_imported_for_functions;
 
-#[derive(Clone,Default)]
+#[derive(PartialEq,Clone,Default)]
 pub struct BoolValue {
     // message fields
     pub value: bool,
     // special fields
     unknown_fields: ::protobuf::UnknownFields,
-    cached_size: ::std::cell::Cell<u32>,
+    cached_size: ::protobuf::CachedSize,
 }
 
 // see codegen.rs for the explanation why impl Sync explicitly
@@ -77,18 +78,18 @@ impl ::protobuf::Message for BoolValue {
     }
 
     fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream) -> ::protobuf::ProtobufResult<()> {
-        while !try!(is.eof()) {
-            let (field_number, wire_type) = try!(is.read_tag_unpack());
+        while !is.eof()? {
+            let (field_number, wire_type) = is.read_tag_unpack()?;
             match field_number {
                 1 => {
                     if wire_type != ::protobuf::wire_format::WireTypeVarint {
                         return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
                     };
-                    let tmp = try!(is.read_bool());
+                    let tmp = is.read_bool()?;
                     self.value = tmp;
                 },
                 _ => {
-                    try!(::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields()));
+                    ::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields())?;
                 },
             };
         }
@@ -109,9 +110,9 @@ impl ::protobuf::Message for BoolValue {
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
         if self.value != false {
-            try!(os.write_bool(1, self.value));
+            os.write_bool(1, self.value)?;
         };
-        try!(os.write_unknown_fields(self.get_unknown_fields()));
+        os.write_unknown_fields(self.get_unknown_fields())?;
         ::std::result::Result::Ok(())
     }
 
@@ -127,12 +128,14 @@ impl ::protobuf::Message for BoolValue {
         &mut self.unknown_fields
     }
 
-    fn type_id(&self) -> ::std::any::TypeId {
-        ::std::any::TypeId::of::<BoolValue>()
-    }
-
     fn as_any(&self) -> &::std::any::Any {
         self as &::std::any::Any
+    }
+    fn as_any_mut(&mut self) -> &mut ::std::any::Any {
+        self as &mut ::std::any::Any
+    }
+    fn into_any(self: Box<Self>) -> ::std::boxed::Box<::std::any::Any> {
+        self
     }
 
     fn descriptor(&self) -> &'static ::protobuf::reflect::MessageDescriptor {
@@ -175,13 +178,6 @@ impl ::protobuf::Clear for BoolValue {
     }
 }
 
-impl ::std::cmp::PartialEq for BoolValue {
-    fn eq(&self, other: &BoolValue) -> bool {
-        self.value == other.value &&
-        self.unknown_fields == other.unknown_fields
-    }
-}
-
 impl ::std::fmt::Debug for BoolValue {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         ::protobuf::text_format::fmt(self, f)
@@ -194,14 +190,14 @@ impl ::protobuf::reflect::ProtobufValue for BoolValue {
     }
 }
 
-#[derive(Clone,Default)]
+#[derive(PartialEq,Clone,Default)]
 pub struct Payload {
     // message fields
     pub field_type: PayloadType,
     pub body: ::std::vec::Vec<u8>,
     // special fields
     unknown_fields: ::protobuf::UnknownFields,
-    cached_size: ::std::cell::Cell<u32>,
+    cached_size: ::protobuf::CachedSize,
 }
 
 // see codegen.rs for the explanation why impl Sync explicitly
@@ -286,21 +282,21 @@ impl ::protobuf::Message for Payload {
     }
 
     fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream) -> ::protobuf::ProtobufResult<()> {
-        while !try!(is.eof()) {
-            let (field_number, wire_type) = try!(is.read_tag_unpack());
+        while !is.eof()? {
+            let (field_number, wire_type) = is.read_tag_unpack()?;
             match field_number {
                 1 => {
                     if wire_type != ::protobuf::wire_format::WireTypeVarint {
                         return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
                     };
-                    let tmp = try!(is.read_enum());
+                    let tmp = is.read_enum()?;
                     self.field_type = tmp;
                 },
                 2 => {
-                    try!(::protobuf::rt::read_singular_proto3_bytes_into(wire_type, is, &mut self.body));
+                    ::protobuf::rt::read_singular_proto3_bytes_into(wire_type, is, &mut self.body)?;
                 },
                 _ => {
-                    try!(::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields()));
+                    ::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields())?;
                 },
             };
         }
@@ -314,8 +310,7 @@ impl ::protobuf::Message for Payload {
         if self.field_type != PayloadType::COMPRESSABLE {
             my_size += ::protobuf::rt::enum_size(1, self.field_type);
         };
-	// FIX: having to hand-add a ::<u8> here seems like a codegen bug.
-        if self.body != ::std::vec::Vec::<u8>::new() {
+        if !self.body.is_empty() {
             my_size += ::protobuf::rt::bytes_size(2, &self.body);
         };
         my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
@@ -325,12 +320,12 @@ impl ::protobuf::Message for Payload {
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
         if self.field_type != PayloadType::COMPRESSABLE {
-            try!(os.write_enum(1, self.field_type.value()));
+            os.write_enum(1, self.field_type.value())?;
         };
-        if self.body != ::std::vec::Vec::<u8>::new() {
-            try!(os.write_bytes(2, &self.body));
+        if !self.body.is_empty() {
+            os.write_bytes(2, &self.body)?;
         };
-        try!(os.write_unknown_fields(self.get_unknown_fields()));
+        os.write_unknown_fields(self.get_unknown_fields())?;
         ::std::result::Result::Ok(())
     }
 
@@ -346,12 +341,14 @@ impl ::protobuf::Message for Payload {
         &mut self.unknown_fields
     }
 
-    fn type_id(&self) -> ::std::any::TypeId {
-        ::std::any::TypeId::of::<Payload>()
-    }
-
     fn as_any(&self) -> &::std::any::Any {
         self as &::std::any::Any
+    }
+    fn as_any_mut(&mut self) -> &mut ::std::any::Any {
+        self as &mut ::std::any::Any
+    }
+    fn into_any(self: Box<Self>) -> ::std::boxed::Box<::std::any::Any> {
+        self
     }
 
     fn descriptor(&self) -> &'static ::protobuf::reflect::MessageDescriptor {
@@ -400,14 +397,6 @@ impl ::protobuf::Clear for Payload {
     }
 }
 
-impl ::std::cmp::PartialEq for Payload {
-    fn eq(&self, other: &Payload) -> bool {
-        self.field_type == other.field_type &&
-        self.body == other.body &&
-        self.unknown_fields == other.unknown_fields
-    }
-}
-
 impl ::std::fmt::Debug for Payload {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         ::protobuf::text_format::fmt(self, f)
@@ -420,14 +409,14 @@ impl ::protobuf::reflect::ProtobufValue for Payload {
     }
 }
 
-#[derive(Clone,Default)]
+#[derive(PartialEq,Clone,Default)]
 pub struct EchoStatus {
     // message fields
     pub code: i32,
     pub message: ::std::string::String,
     // special fields
     unknown_fields: ::protobuf::UnknownFields,
-    cached_size: ::std::cell::Cell<u32>,
+    cached_size: ::protobuf::CachedSize,
 }
 
 // see codegen.rs for the explanation why impl Sync explicitly
@@ -512,21 +501,21 @@ impl ::protobuf::Message for EchoStatus {
     }
 
     fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream) -> ::protobuf::ProtobufResult<()> {
-        while !try!(is.eof()) {
-            let (field_number, wire_type) = try!(is.read_tag_unpack());
+        while !is.eof()? {
+            let (field_number, wire_type) = is.read_tag_unpack()?;
             match field_number {
                 1 => {
                     if wire_type != ::protobuf::wire_format::WireTypeVarint {
                         return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
                     };
-                    let tmp = try!(is.read_int32());
+                    let tmp = is.read_int32()?;
                     self.code = tmp;
                 },
                 2 => {
-                    try!(::protobuf::rt::read_singular_proto3_string_into(wire_type, is, &mut self.message));
+                    ::protobuf::rt::read_singular_proto3_string_into(wire_type, is, &mut self.message)?;
                 },
                 _ => {
-                    try!(::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields()));
+                    ::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields())?;
                 },
             };
         }
@@ -540,7 +529,7 @@ impl ::protobuf::Message for EchoStatus {
         if self.code != 0 {
             my_size += ::protobuf::rt::value_size(1, self.code, ::protobuf::wire_format::WireTypeVarint);
         };
-        if self.message != ::std::string::String::new() {
+        if !self.message.is_empty() {
             my_size += ::protobuf::rt::string_size(2, &self.message);
         };
         my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
@@ -550,12 +539,12 @@ impl ::protobuf::Message for EchoStatus {
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
         if self.code != 0 {
-            try!(os.write_int32(1, self.code));
+            os.write_int32(1, self.code)?;
         };
-        if self.message != ::std::string::String::new() {
-            try!(os.write_string(2, &self.message));
+        if !self.message.is_empty() {
+            os.write_string(2, &self.message)?;
         };
-        try!(os.write_unknown_fields(self.get_unknown_fields()));
+        os.write_unknown_fields(self.get_unknown_fields())?;
         ::std::result::Result::Ok(())
     }
 
@@ -571,12 +560,14 @@ impl ::protobuf::Message for EchoStatus {
         &mut self.unknown_fields
     }
 
-    fn type_id(&self) -> ::std::any::TypeId {
-        ::std::any::TypeId::of::<EchoStatus>()
-    }
-
     fn as_any(&self) -> &::std::any::Any {
         self as &::std::any::Any
+    }
+    fn as_any_mut(&mut self) -> &mut ::std::any::Any {
+        self as &mut ::std::any::Any
+    }
+    fn into_any(self: Box<Self>) -> ::std::boxed::Box<::std::any::Any> {
+        self
     }
 
     fn descriptor(&self) -> &'static ::protobuf::reflect::MessageDescriptor {
@@ -625,14 +616,6 @@ impl ::protobuf::Clear for EchoStatus {
     }
 }
 
-impl ::std::cmp::PartialEq for EchoStatus {
-    fn eq(&self, other: &EchoStatus) -> bool {
-        self.code == other.code &&
-        self.message == other.message &&
-        self.unknown_fields == other.unknown_fields
-    }
-}
-
 impl ::std::fmt::Debug for EchoStatus {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         ::protobuf::text_format::fmt(self, f)
@@ -645,7 +628,7 @@ impl ::protobuf::reflect::ProtobufValue for EchoStatus {
     }
 }
 
-#[derive(Clone,Default)]
+#[derive(PartialEq,Clone,Default)]
 pub struct SimpleRequest {
     // message fields
     pub response_type: PayloadType,
@@ -658,7 +641,7 @@ pub struct SimpleRequest {
     expect_compressed: ::protobuf::SingularPtrField<BoolValue>,
     // special fields
     unknown_fields: ::protobuf::UnknownFields,
-    cached_size: ::std::cell::Cell<u32>,
+    cached_size: ::protobuf::CachedSize,
 }
 
 // see codegen.rs for the explanation why impl Sync explicitly
@@ -942,51 +925,51 @@ impl ::protobuf::Message for SimpleRequest {
     }
 
     fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream) -> ::protobuf::ProtobufResult<()> {
-        while !try!(is.eof()) {
-            let (field_number, wire_type) = try!(is.read_tag_unpack());
+        while !is.eof()? {
+            let (field_number, wire_type) = is.read_tag_unpack()?;
             match field_number {
                 1 => {
                     if wire_type != ::protobuf::wire_format::WireTypeVarint {
                         return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
                     };
-                    let tmp = try!(is.read_enum());
+                    let tmp = is.read_enum()?;
                     self.response_type = tmp;
                 },
                 2 => {
                     if wire_type != ::protobuf::wire_format::WireTypeVarint {
                         return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
                     };
-                    let tmp = try!(is.read_int32());
+                    let tmp = is.read_int32()?;
                     self.response_size = tmp;
                 },
                 3 => {
-                    try!(::protobuf::rt::read_singular_message_into(wire_type, is, &mut self.payload));
+                    ::protobuf::rt::read_singular_message_into(wire_type, is, &mut self.payload)?;
                 },
                 4 => {
                     if wire_type != ::protobuf::wire_format::WireTypeVarint {
                         return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
                     };
-                    let tmp = try!(is.read_bool());
+                    let tmp = is.read_bool()?;
                     self.fill_username = tmp;
                 },
                 5 => {
                     if wire_type != ::protobuf::wire_format::WireTypeVarint {
                         return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
                     };
-                    let tmp = try!(is.read_bool());
+                    let tmp = is.read_bool()?;
                     self.fill_oauth_scope = tmp;
                 },
                 6 => {
-                    try!(::protobuf::rt::read_singular_message_into(wire_type, is, &mut self.response_compressed));
+                    ::protobuf::rt::read_singular_message_into(wire_type, is, &mut self.response_compressed)?;
                 },
                 7 => {
-                    try!(::protobuf::rt::read_singular_message_into(wire_type, is, &mut self.response_status));
+                    ::protobuf::rt::read_singular_message_into(wire_type, is, &mut self.response_status)?;
                 },
                 8 => {
-                    try!(::protobuf::rt::read_singular_message_into(wire_type, is, &mut self.expect_compressed));
+                    ::protobuf::rt::read_singular_message_into(wire_type, is, &mut self.expect_compressed)?;
                 },
                 _ => {
-                    try!(::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields()));
+                    ::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields())?;
                 },
             };
         }
@@ -1032,38 +1015,38 @@ impl ::protobuf::Message for SimpleRequest {
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
         if self.response_type != PayloadType::COMPRESSABLE {
-            try!(os.write_enum(1, self.response_type.value()));
+            os.write_enum(1, self.response_type.value())?;
         };
         if self.response_size != 0 {
-            try!(os.write_int32(2, self.response_size));
+            os.write_int32(2, self.response_size)?;
         };
         if let Some(v) = self.payload.as_ref() {
-            try!(os.write_tag(3, ::protobuf::wire_format::WireTypeLengthDelimited));
-            try!(os.write_raw_varint32(v.get_cached_size()));
-            try!(v.write_to_with_cached_sizes(os));
+            os.write_tag(3, ::protobuf::wire_format::WireTypeLengthDelimited)?;
+            os.write_raw_varint32(v.get_cached_size())?;
+            v.write_to_with_cached_sizes(os)?;
         };
         if self.fill_username != false {
-            try!(os.write_bool(4, self.fill_username));
+            os.write_bool(4, self.fill_username)?;
         };
         if self.fill_oauth_scope != false {
-            try!(os.write_bool(5, self.fill_oauth_scope));
+            os.write_bool(5, self.fill_oauth_scope)?;
         };
         if let Some(v) = self.response_compressed.as_ref() {
-            try!(os.write_tag(6, ::protobuf::wire_format::WireTypeLengthDelimited));
-            try!(os.write_raw_varint32(v.get_cached_size()));
-            try!(v.write_to_with_cached_sizes(os));
+            os.write_tag(6, ::protobuf::wire_format::WireTypeLengthDelimited)?;
+            os.write_raw_varint32(v.get_cached_size())?;
+            v.write_to_with_cached_sizes(os)?;
         };
         if let Some(v) = self.response_status.as_ref() {
-            try!(os.write_tag(7, ::protobuf::wire_format::WireTypeLengthDelimited));
-            try!(os.write_raw_varint32(v.get_cached_size()));
-            try!(v.write_to_with_cached_sizes(os));
+            os.write_tag(7, ::protobuf::wire_format::WireTypeLengthDelimited)?;
+            os.write_raw_varint32(v.get_cached_size())?;
+            v.write_to_with_cached_sizes(os)?;
         };
         if let Some(v) = self.expect_compressed.as_ref() {
-            try!(os.write_tag(8, ::protobuf::wire_format::WireTypeLengthDelimited));
-            try!(os.write_raw_varint32(v.get_cached_size()));
-            try!(v.write_to_with_cached_sizes(os));
+            os.write_tag(8, ::protobuf::wire_format::WireTypeLengthDelimited)?;
+            os.write_raw_varint32(v.get_cached_size())?;
+            v.write_to_with_cached_sizes(os)?;
         };
-        try!(os.write_unknown_fields(self.get_unknown_fields()));
+        os.write_unknown_fields(self.get_unknown_fields())?;
         ::std::result::Result::Ok(())
     }
 
@@ -1079,12 +1062,14 @@ impl ::protobuf::Message for SimpleRequest {
         &mut self.unknown_fields
     }
 
-    fn type_id(&self) -> ::std::any::TypeId {
-        ::std::any::TypeId::of::<SimpleRequest>()
-    }
-
     fn as_any(&self) -> &::std::any::Any {
         self as &::std::any::Any
+    }
+    fn as_any_mut(&mut self) -> &mut ::std::any::Any {
+        self as &mut ::std::any::Any
+    }
+    fn into_any(self: Box<Self>) -> ::std::boxed::Box<::std::any::Any> {
+        self
     }
 
     fn descriptor(&self) -> &'static ::protobuf::reflect::MessageDescriptor {
@@ -1169,20 +1154,6 @@ impl ::protobuf::Clear for SimpleRequest {
     }
 }
 
-impl ::std::cmp::PartialEq for SimpleRequest {
-    fn eq(&self, other: &SimpleRequest) -> bool {
-        self.response_type == other.response_type &&
-        self.response_size == other.response_size &&
-        self.payload == other.payload &&
-        self.fill_username == other.fill_username &&
-        self.fill_oauth_scope == other.fill_oauth_scope &&
-        self.response_compressed == other.response_compressed &&
-        self.response_status == other.response_status &&
-        self.expect_compressed == other.expect_compressed &&
-        self.unknown_fields == other.unknown_fields
-    }
-}
-
 impl ::std::fmt::Debug for SimpleRequest {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         ::protobuf::text_format::fmt(self, f)
@@ -1195,7 +1166,7 @@ impl ::protobuf::reflect::ProtobufValue for SimpleRequest {
     }
 }
 
-#[derive(Clone,Default)]
+#[derive(PartialEq,Clone,Default)]
 pub struct SimpleResponse {
     // message fields
     payload: ::protobuf::SingularPtrField<Payload>,
@@ -1203,7 +1174,7 @@ pub struct SimpleResponse {
     pub oauth_scope: ::std::string::String,
     // special fields
     unknown_fields: ::protobuf::UnknownFields,
-    cached_size: ::std::cell::Cell<u32>,
+    cached_size: ::protobuf::CachedSize,
 }
 
 // see codegen.rs for the explanation why impl Sync explicitly
@@ -1340,20 +1311,20 @@ impl ::protobuf::Message for SimpleResponse {
     }
 
     fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream) -> ::protobuf::ProtobufResult<()> {
-        while !try!(is.eof()) {
-            let (field_number, wire_type) = try!(is.read_tag_unpack());
+        while !is.eof()? {
+            let (field_number, wire_type) = is.read_tag_unpack()?;
             match field_number {
                 1 => {
-                    try!(::protobuf::rt::read_singular_message_into(wire_type, is, &mut self.payload));
+                    ::protobuf::rt::read_singular_message_into(wire_type, is, &mut self.payload)?;
                 },
                 2 => {
-                    try!(::protobuf::rt::read_singular_proto3_string_into(wire_type, is, &mut self.username));
+                    ::protobuf::rt::read_singular_proto3_string_into(wire_type, is, &mut self.username)?;
                 },
                 3 => {
-                    try!(::protobuf::rt::read_singular_proto3_string_into(wire_type, is, &mut self.oauth_scope));
+                    ::protobuf::rt::read_singular_proto3_string_into(wire_type, is, &mut self.oauth_scope)?;
                 },
                 _ => {
-                    try!(::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields()));
+                    ::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields())?;
                 },
             };
         }
@@ -1368,10 +1339,10 @@ impl ::protobuf::Message for SimpleResponse {
             let len = v.compute_size();
             my_size += 1 + ::protobuf::rt::compute_raw_varint32_size(len) + len;
         };
-        if self.username != ::std::string::String::new() {
+        if !self.username.is_empty() {
             my_size += ::protobuf::rt::string_size(2, &self.username);
         };
-        if self.oauth_scope != ::std::string::String::new() {
+        if !self.oauth_scope.is_empty() {
             my_size += ::protobuf::rt::string_size(3, &self.oauth_scope);
         };
         my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
@@ -1381,17 +1352,17 @@ impl ::protobuf::Message for SimpleResponse {
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
         if let Some(v) = self.payload.as_ref() {
-            try!(os.write_tag(1, ::protobuf::wire_format::WireTypeLengthDelimited));
-            try!(os.write_raw_varint32(v.get_cached_size()));
-            try!(v.write_to_with_cached_sizes(os));
+            os.write_tag(1, ::protobuf::wire_format::WireTypeLengthDelimited)?;
+            os.write_raw_varint32(v.get_cached_size())?;
+            v.write_to_with_cached_sizes(os)?;
         };
-        if self.username != ::std::string::String::new() {
-            try!(os.write_string(2, &self.username));
+        if !self.username.is_empty() {
+            os.write_string(2, &self.username)?;
         };
-        if self.oauth_scope != ::std::string::String::new() {
-            try!(os.write_string(3, &self.oauth_scope));
+        if !self.oauth_scope.is_empty() {
+            os.write_string(3, &self.oauth_scope)?;
         };
-        try!(os.write_unknown_fields(self.get_unknown_fields()));
+        os.write_unknown_fields(self.get_unknown_fields())?;
         ::std::result::Result::Ok(())
     }
 
@@ -1407,12 +1378,14 @@ impl ::protobuf::Message for SimpleResponse {
         &mut self.unknown_fields
     }
 
-    fn type_id(&self) -> ::std::any::TypeId {
-        ::std::any::TypeId::of::<SimpleResponse>()
-    }
-
     fn as_any(&self) -> &::std::any::Any {
         self as &::std::any::Any
+    }
+    fn as_any_mut(&mut self) -> &mut ::std::any::Any {
+        self as &mut ::std::any::Any
+    }
+    fn into_any(self: Box<Self>) -> ::std::boxed::Box<::std::any::Any> {
+        self
     }
 
     fn descriptor(&self) -> &'static ::protobuf::reflect::MessageDescriptor {
@@ -1467,15 +1440,6 @@ impl ::protobuf::Clear for SimpleResponse {
     }
 }
 
-impl ::std::cmp::PartialEq for SimpleResponse {
-    fn eq(&self, other: &SimpleResponse) -> bool {
-        self.payload == other.payload &&
-        self.username == other.username &&
-        self.oauth_scope == other.oauth_scope &&
-        self.unknown_fields == other.unknown_fields
-    }
-}
-
 impl ::std::fmt::Debug for SimpleResponse {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         ::protobuf::text_format::fmt(self, f)
@@ -1488,14 +1452,14 @@ impl ::protobuf::reflect::ProtobufValue for SimpleResponse {
     }
 }
 
-#[derive(Clone,Default)]
+#[derive(PartialEq,Clone,Default)]
 pub struct StreamingInputCallRequest {
     // message fields
     payload: ::protobuf::SingularPtrField<Payload>,
     expect_compressed: ::protobuf::SingularPtrField<BoolValue>,
     // special fields
     unknown_fields: ::protobuf::UnknownFields,
-    cached_size: ::std::cell::Cell<u32>,
+    cached_size: ::protobuf::CachedSize,
 }
 
 // see codegen.rs for the explanation why impl Sync explicitly
@@ -1605,17 +1569,17 @@ impl ::protobuf::Message for StreamingInputCallRequest {
     }
 
     fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream) -> ::protobuf::ProtobufResult<()> {
-        while !try!(is.eof()) {
-            let (field_number, wire_type) = try!(is.read_tag_unpack());
+        while !is.eof()? {
+            let (field_number, wire_type) = is.read_tag_unpack()?;
             match field_number {
                 1 => {
-                    try!(::protobuf::rt::read_singular_message_into(wire_type, is, &mut self.payload));
+                    ::protobuf::rt::read_singular_message_into(wire_type, is, &mut self.payload)?;
                 },
                 2 => {
-                    try!(::protobuf::rt::read_singular_message_into(wire_type, is, &mut self.expect_compressed));
+                    ::protobuf::rt::read_singular_message_into(wire_type, is, &mut self.expect_compressed)?;
                 },
                 _ => {
-                    try!(::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields()));
+                    ::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields())?;
                 },
             };
         }
@@ -1641,16 +1605,16 @@ impl ::protobuf::Message for StreamingInputCallRequest {
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
         if let Some(v) = self.payload.as_ref() {
-            try!(os.write_tag(1, ::protobuf::wire_format::WireTypeLengthDelimited));
-            try!(os.write_raw_varint32(v.get_cached_size()));
-            try!(v.write_to_with_cached_sizes(os));
+            os.write_tag(1, ::protobuf::wire_format::WireTypeLengthDelimited)?;
+            os.write_raw_varint32(v.get_cached_size())?;
+            v.write_to_with_cached_sizes(os)?;
         };
         if let Some(v) = self.expect_compressed.as_ref() {
-            try!(os.write_tag(2, ::protobuf::wire_format::WireTypeLengthDelimited));
-            try!(os.write_raw_varint32(v.get_cached_size()));
-            try!(v.write_to_with_cached_sizes(os));
+            os.write_tag(2, ::protobuf::wire_format::WireTypeLengthDelimited)?;
+            os.write_raw_varint32(v.get_cached_size())?;
+            v.write_to_with_cached_sizes(os)?;
         };
-        try!(os.write_unknown_fields(self.get_unknown_fields()));
+        os.write_unknown_fields(self.get_unknown_fields())?;
         ::std::result::Result::Ok(())
     }
 
@@ -1666,12 +1630,14 @@ impl ::protobuf::Message for StreamingInputCallRequest {
         &mut self.unknown_fields
     }
 
-    fn type_id(&self) -> ::std::any::TypeId {
-        ::std::any::TypeId::of::<StreamingInputCallRequest>()
-    }
-
     fn as_any(&self) -> &::std::any::Any {
         self as &::std::any::Any
+    }
+    fn as_any_mut(&mut self) -> &mut ::std::any::Any {
+        self as &mut ::std::any::Any
+    }
+    fn into_any(self: Box<Self>) -> ::std::boxed::Box<::std::any::Any> {
+        self
     }
 
     fn descriptor(&self) -> &'static ::protobuf::reflect::MessageDescriptor {
@@ -1720,14 +1686,6 @@ impl ::protobuf::Clear for StreamingInputCallRequest {
     }
 }
 
-impl ::std::cmp::PartialEq for StreamingInputCallRequest {
-    fn eq(&self, other: &StreamingInputCallRequest) -> bool {
-        self.payload == other.payload &&
-        self.expect_compressed == other.expect_compressed &&
-        self.unknown_fields == other.unknown_fields
-    }
-}
-
 impl ::std::fmt::Debug for StreamingInputCallRequest {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         ::protobuf::text_format::fmt(self, f)
@@ -1740,13 +1698,13 @@ impl ::protobuf::reflect::ProtobufValue for StreamingInputCallRequest {
     }
 }
 
-#[derive(Clone,Default)]
+#[derive(PartialEq,Clone,Default)]
 pub struct StreamingInputCallResponse {
     // message fields
     pub aggregated_payload_size: i32,
     // special fields
     unknown_fields: ::protobuf::UnknownFields,
-    cached_size: ::std::cell::Cell<u32>,
+    cached_size: ::protobuf::CachedSize,
 }
 
 // see codegen.rs for the explanation why impl Sync explicitly
@@ -1797,18 +1755,18 @@ impl ::protobuf::Message for StreamingInputCallResponse {
     }
 
     fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream) -> ::protobuf::ProtobufResult<()> {
-        while !try!(is.eof()) {
-            let (field_number, wire_type) = try!(is.read_tag_unpack());
+        while !is.eof()? {
+            let (field_number, wire_type) = is.read_tag_unpack()?;
             match field_number {
                 1 => {
                     if wire_type != ::protobuf::wire_format::WireTypeVarint {
                         return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
                     };
-                    let tmp = try!(is.read_int32());
+                    let tmp = is.read_int32()?;
                     self.aggregated_payload_size = tmp;
                 },
                 _ => {
-                    try!(::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields()));
+                    ::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields())?;
                 },
             };
         }
@@ -1829,9 +1787,9 @@ impl ::protobuf::Message for StreamingInputCallResponse {
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
         if self.aggregated_payload_size != 0 {
-            try!(os.write_int32(1, self.aggregated_payload_size));
+            os.write_int32(1, self.aggregated_payload_size)?;
         };
-        try!(os.write_unknown_fields(self.get_unknown_fields()));
+        os.write_unknown_fields(self.get_unknown_fields())?;
         ::std::result::Result::Ok(())
     }
 
@@ -1847,12 +1805,14 @@ impl ::protobuf::Message for StreamingInputCallResponse {
         &mut self.unknown_fields
     }
 
-    fn type_id(&self) -> ::std::any::TypeId {
-        ::std::any::TypeId::of::<StreamingInputCallResponse>()
-    }
-
     fn as_any(&self) -> &::std::any::Any {
         self as &::std::any::Any
+    }
+    fn as_any_mut(&mut self) -> &mut ::std::any::Any {
+        self as &mut ::std::any::Any
+    }
+    fn into_any(self: Box<Self>) -> ::std::boxed::Box<::std::any::Any> {
+        self
     }
 
     fn descriptor(&self) -> &'static ::protobuf::reflect::MessageDescriptor {
@@ -1895,13 +1855,6 @@ impl ::protobuf::Clear for StreamingInputCallResponse {
     }
 }
 
-impl ::std::cmp::PartialEq for StreamingInputCallResponse {
-    fn eq(&self, other: &StreamingInputCallResponse) -> bool {
-        self.aggregated_payload_size == other.aggregated_payload_size &&
-        self.unknown_fields == other.unknown_fields
-    }
-}
-
 impl ::std::fmt::Debug for StreamingInputCallResponse {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         ::protobuf::text_format::fmt(self, f)
@@ -1914,7 +1867,7 @@ impl ::protobuf::reflect::ProtobufValue for StreamingInputCallResponse {
     }
 }
 
-#[derive(Clone,Default)]
+#[derive(PartialEq,Clone,Default)]
 pub struct ResponseParameters {
     // message fields
     pub size: i32,
@@ -1922,7 +1875,7 @@ pub struct ResponseParameters {
     compressed: ::protobuf::SingularPtrField<BoolValue>,
     // special fields
     unknown_fields: ::protobuf::UnknownFields,
-    cached_size: ::std::cell::Cell<u32>,
+    cached_size: ::protobuf::CachedSize,
 }
 
 // see codegen.rs for the explanation why impl Sync explicitly
@@ -2037,28 +1990,28 @@ impl ::protobuf::Message for ResponseParameters {
     }
 
     fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream) -> ::protobuf::ProtobufResult<()> {
-        while !try!(is.eof()) {
-            let (field_number, wire_type) = try!(is.read_tag_unpack());
+        while !is.eof()? {
+            let (field_number, wire_type) = is.read_tag_unpack()?;
             match field_number {
                 1 => {
                     if wire_type != ::protobuf::wire_format::WireTypeVarint {
                         return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
                     };
-                    let tmp = try!(is.read_int32());
+                    let tmp = is.read_int32()?;
                     self.size = tmp;
                 },
                 2 => {
                     if wire_type != ::protobuf::wire_format::WireTypeVarint {
                         return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
                     };
-                    let tmp = try!(is.read_int32());
+                    let tmp = is.read_int32()?;
                     self.interval_us = tmp;
                 },
                 3 => {
-                    try!(::protobuf::rt::read_singular_message_into(wire_type, is, &mut self.compressed));
+                    ::protobuf::rt::read_singular_message_into(wire_type, is, &mut self.compressed)?;
                 },
                 _ => {
-                    try!(::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields()));
+                    ::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields())?;
                 },
             };
         }
@@ -2086,17 +2039,17 @@ impl ::protobuf::Message for ResponseParameters {
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
         if self.size != 0 {
-            try!(os.write_int32(1, self.size));
+            os.write_int32(1, self.size)?;
         };
         if self.interval_us != 0 {
-            try!(os.write_int32(2, self.interval_us));
+            os.write_int32(2, self.interval_us)?;
         };
         if let Some(v) = self.compressed.as_ref() {
-            try!(os.write_tag(3, ::protobuf::wire_format::WireTypeLengthDelimited));
-            try!(os.write_raw_varint32(v.get_cached_size()));
-            try!(v.write_to_with_cached_sizes(os));
+            os.write_tag(3, ::protobuf::wire_format::WireTypeLengthDelimited)?;
+            os.write_raw_varint32(v.get_cached_size())?;
+            v.write_to_with_cached_sizes(os)?;
         };
-        try!(os.write_unknown_fields(self.get_unknown_fields()));
+        os.write_unknown_fields(self.get_unknown_fields())?;
         ::std::result::Result::Ok(())
     }
 
@@ -2112,12 +2065,14 @@ impl ::protobuf::Message for ResponseParameters {
         &mut self.unknown_fields
     }
 
-    fn type_id(&self) -> ::std::any::TypeId {
-        ::std::any::TypeId::of::<ResponseParameters>()
-    }
-
     fn as_any(&self) -> &::std::any::Any {
         self as &::std::any::Any
+    }
+    fn as_any_mut(&mut self) -> &mut ::std::any::Any {
+        self as &mut ::std::any::Any
+    }
+    fn into_any(self: Box<Self>) -> ::std::boxed::Box<::std::any::Any> {
+        self
     }
 
     fn descriptor(&self) -> &'static ::protobuf::reflect::MessageDescriptor {
@@ -2172,15 +2127,6 @@ impl ::protobuf::Clear for ResponseParameters {
     }
 }
 
-impl ::std::cmp::PartialEq for ResponseParameters {
-    fn eq(&self, other: &ResponseParameters) -> bool {
-        self.size == other.size &&
-        self.interval_us == other.interval_us &&
-        self.compressed == other.compressed &&
-        self.unknown_fields == other.unknown_fields
-    }
-}
-
 impl ::std::fmt::Debug for ResponseParameters {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         ::protobuf::text_format::fmt(self, f)
@@ -2193,7 +2139,7 @@ impl ::protobuf::reflect::ProtobufValue for ResponseParameters {
     }
 }
 
-#[derive(Clone,Default)]
+#[derive(PartialEq,Clone,Default)]
 pub struct StreamingOutputCallRequest {
     // message fields
     pub response_type: PayloadType,
@@ -2202,7 +2148,7 @@ pub struct StreamingOutputCallRequest {
     response_status: ::protobuf::SingularPtrField<EchoStatus>,
     // special fields
     unknown_fields: ::protobuf::UnknownFields,
-    cached_size: ::std::cell::Cell<u32>,
+    cached_size: ::protobuf::CachedSize,
 }
 
 // see codegen.rs for the explanation why impl Sync explicitly
@@ -2368,27 +2314,27 @@ impl ::protobuf::Message for StreamingOutputCallRequest {
     }
 
     fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream) -> ::protobuf::ProtobufResult<()> {
-        while !try!(is.eof()) {
-            let (field_number, wire_type) = try!(is.read_tag_unpack());
+        while !is.eof()? {
+            let (field_number, wire_type) = is.read_tag_unpack()?;
             match field_number {
                 1 => {
                     if wire_type != ::protobuf::wire_format::WireTypeVarint {
                         return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
                     };
-                    let tmp = try!(is.read_enum());
+                    let tmp = is.read_enum()?;
                     self.response_type = tmp;
                 },
                 2 => {
-                    try!(::protobuf::rt::read_repeated_message_into(wire_type, is, &mut self.response_parameters));
+                    ::protobuf::rt::read_repeated_message_into(wire_type, is, &mut self.response_parameters)?;
                 },
                 3 => {
-                    try!(::protobuf::rt::read_singular_message_into(wire_type, is, &mut self.payload));
+                    ::protobuf::rt::read_singular_message_into(wire_type, is, &mut self.payload)?;
                 },
                 7 => {
-                    try!(::protobuf::rt::read_singular_message_into(wire_type, is, &mut self.response_status));
+                    ::protobuf::rt::read_singular_message_into(wire_type, is, &mut self.response_status)?;
                 },
                 _ => {
-                    try!(::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields()));
+                    ::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields())?;
                 },
             };
         }
@@ -2421,24 +2367,24 @@ impl ::protobuf::Message for StreamingOutputCallRequest {
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
         if self.response_type != PayloadType::COMPRESSABLE {
-            try!(os.write_enum(1, self.response_type.value()));
+            os.write_enum(1, self.response_type.value())?;
         };
         for v in &self.response_parameters {
-            try!(os.write_tag(2, ::protobuf::wire_format::WireTypeLengthDelimited));
-            try!(os.write_raw_varint32(v.get_cached_size()));
-            try!(v.write_to_with_cached_sizes(os));
+            os.write_tag(2, ::protobuf::wire_format::WireTypeLengthDelimited)?;
+            os.write_raw_varint32(v.get_cached_size())?;
+            v.write_to_with_cached_sizes(os)?;
         };
         if let Some(v) = self.payload.as_ref() {
-            try!(os.write_tag(3, ::protobuf::wire_format::WireTypeLengthDelimited));
-            try!(os.write_raw_varint32(v.get_cached_size()));
-            try!(v.write_to_with_cached_sizes(os));
+            os.write_tag(3, ::protobuf::wire_format::WireTypeLengthDelimited)?;
+            os.write_raw_varint32(v.get_cached_size())?;
+            v.write_to_with_cached_sizes(os)?;
         };
         if let Some(v) = self.response_status.as_ref() {
-            try!(os.write_tag(7, ::protobuf::wire_format::WireTypeLengthDelimited));
-            try!(os.write_raw_varint32(v.get_cached_size()));
-            try!(v.write_to_with_cached_sizes(os));
+            os.write_tag(7, ::protobuf::wire_format::WireTypeLengthDelimited)?;
+            os.write_raw_varint32(v.get_cached_size())?;
+            v.write_to_with_cached_sizes(os)?;
         };
-        try!(os.write_unknown_fields(self.get_unknown_fields()));
+        os.write_unknown_fields(self.get_unknown_fields())?;
         ::std::result::Result::Ok(())
     }
 
@@ -2454,12 +2400,14 @@ impl ::protobuf::Message for StreamingOutputCallRequest {
         &mut self.unknown_fields
     }
 
-    fn type_id(&self) -> ::std::any::TypeId {
-        ::std::any::TypeId::of::<StreamingOutputCallRequest>()
-    }
-
     fn as_any(&self) -> &::std::any::Any {
         self as &::std::any::Any
+    }
+    fn as_any_mut(&mut self) -> &mut ::std::any::Any {
+        self as &mut ::std::any::Any
+    }
+    fn into_any(self: Box<Self>) -> ::std::boxed::Box<::std::any::Any> {
+        self
     }
 
     fn descriptor(&self) -> &'static ::protobuf::reflect::MessageDescriptor {
@@ -2520,16 +2468,6 @@ impl ::protobuf::Clear for StreamingOutputCallRequest {
     }
 }
 
-impl ::std::cmp::PartialEq for StreamingOutputCallRequest {
-    fn eq(&self, other: &StreamingOutputCallRequest) -> bool {
-        self.response_type == other.response_type &&
-        self.response_parameters == other.response_parameters &&
-        self.payload == other.payload &&
-        self.response_status == other.response_status &&
-        self.unknown_fields == other.unknown_fields
-    }
-}
-
 impl ::std::fmt::Debug for StreamingOutputCallRequest {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         ::protobuf::text_format::fmt(self, f)
@@ -2542,13 +2480,13 @@ impl ::protobuf::reflect::ProtobufValue for StreamingOutputCallRequest {
     }
 }
 
-#[derive(Clone,Default)]
+#[derive(PartialEq,Clone,Default)]
 pub struct StreamingOutputCallResponse {
     // message fields
     payload: ::protobuf::SingularPtrField<Payload>,
     // special fields
     unknown_fields: ::protobuf::UnknownFields,
-    cached_size: ::std::cell::Cell<u32>,
+    cached_size: ::protobuf::CachedSize,
 }
 
 // see codegen.rs for the explanation why impl Sync explicitly
@@ -2617,14 +2555,14 @@ impl ::protobuf::Message for StreamingOutputCallResponse {
     }
 
     fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream) -> ::protobuf::ProtobufResult<()> {
-        while !try!(is.eof()) {
-            let (field_number, wire_type) = try!(is.read_tag_unpack());
+        while !is.eof()? {
+            let (field_number, wire_type) = is.read_tag_unpack()?;
             match field_number {
                 1 => {
-                    try!(::protobuf::rt::read_singular_message_into(wire_type, is, &mut self.payload));
+                    ::protobuf::rt::read_singular_message_into(wire_type, is, &mut self.payload)?;
                 },
                 _ => {
-                    try!(::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields()));
+                    ::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields())?;
                 },
             };
         }
@@ -2646,11 +2584,11 @@ impl ::protobuf::Message for StreamingOutputCallResponse {
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
         if let Some(v) = self.payload.as_ref() {
-            try!(os.write_tag(1, ::protobuf::wire_format::WireTypeLengthDelimited));
-            try!(os.write_raw_varint32(v.get_cached_size()));
-            try!(v.write_to_with_cached_sizes(os));
+            os.write_tag(1, ::protobuf::wire_format::WireTypeLengthDelimited)?;
+            os.write_raw_varint32(v.get_cached_size())?;
+            v.write_to_with_cached_sizes(os)?;
         };
-        try!(os.write_unknown_fields(self.get_unknown_fields()));
+        os.write_unknown_fields(self.get_unknown_fields())?;
         ::std::result::Result::Ok(())
     }
 
@@ -2666,12 +2604,14 @@ impl ::protobuf::Message for StreamingOutputCallResponse {
         &mut self.unknown_fields
     }
 
-    fn type_id(&self) -> ::std::any::TypeId {
-        ::std::any::TypeId::of::<StreamingOutputCallResponse>()
-    }
-
     fn as_any(&self) -> &::std::any::Any {
         self as &::std::any::Any
+    }
+    fn as_any_mut(&mut self) -> &mut ::std::any::Any {
+        self as &mut ::std::any::Any
+    }
+    fn into_any(self: Box<Self>) -> ::std::boxed::Box<::std::any::Any> {
+        self
     }
 
     fn descriptor(&self) -> &'static ::protobuf::reflect::MessageDescriptor {
@@ -2714,13 +2654,6 @@ impl ::protobuf::Clear for StreamingOutputCallResponse {
     }
 }
 
-impl ::std::cmp::PartialEq for StreamingOutputCallResponse {
-    fn eq(&self, other: &StreamingOutputCallResponse) -> bool {
-        self.payload == other.payload &&
-        self.unknown_fields == other.unknown_fields
-    }
-}
-
 impl ::std::fmt::Debug for StreamingOutputCallResponse {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         ::protobuf::text_format::fmt(self, f)
@@ -2733,13 +2666,13 @@ impl ::protobuf::reflect::ProtobufValue for StreamingOutputCallResponse {
     }
 }
 
-#[derive(Clone,Default)]
+#[derive(PartialEq,Clone,Default)]
 pub struct ReconnectParams {
     // message fields
     pub max_reconnect_backoff_ms: i32,
     // special fields
     unknown_fields: ::protobuf::UnknownFields,
-    cached_size: ::std::cell::Cell<u32>,
+    cached_size: ::protobuf::CachedSize,
 }
 
 // see codegen.rs for the explanation why impl Sync explicitly
@@ -2790,18 +2723,18 @@ impl ::protobuf::Message for ReconnectParams {
     }
 
     fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream) -> ::protobuf::ProtobufResult<()> {
-        while !try!(is.eof()) {
-            let (field_number, wire_type) = try!(is.read_tag_unpack());
+        while !is.eof()? {
+            let (field_number, wire_type) = is.read_tag_unpack()?;
             match field_number {
                 1 => {
                     if wire_type != ::protobuf::wire_format::WireTypeVarint {
                         return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
                     };
-                    let tmp = try!(is.read_int32());
+                    let tmp = is.read_int32()?;
                     self.max_reconnect_backoff_ms = tmp;
                 },
                 _ => {
-                    try!(::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields()));
+                    ::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields())?;
                 },
             };
         }
@@ -2822,9 +2755,9 @@ impl ::protobuf::Message for ReconnectParams {
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
         if self.max_reconnect_backoff_ms != 0 {
-            try!(os.write_int32(1, self.max_reconnect_backoff_ms));
+            os.write_int32(1, self.max_reconnect_backoff_ms)?;
         };
-        try!(os.write_unknown_fields(self.get_unknown_fields()));
+        os.write_unknown_fields(self.get_unknown_fields())?;
         ::std::result::Result::Ok(())
     }
 
@@ -2840,12 +2773,14 @@ impl ::protobuf::Message for ReconnectParams {
         &mut self.unknown_fields
     }
 
-    fn type_id(&self) -> ::std::any::TypeId {
-        ::std::any::TypeId::of::<ReconnectParams>()
-    }
-
     fn as_any(&self) -> &::std::any::Any {
         self as &::std::any::Any
+    }
+    fn as_any_mut(&mut self) -> &mut ::std::any::Any {
+        self as &mut ::std::any::Any
+    }
+    fn into_any(self: Box<Self>) -> ::std::boxed::Box<::std::any::Any> {
+        self
     }
 
     fn descriptor(&self) -> &'static ::protobuf::reflect::MessageDescriptor {
@@ -2888,13 +2823,6 @@ impl ::protobuf::Clear for ReconnectParams {
     }
 }
 
-impl ::std::cmp::PartialEq for ReconnectParams {
-    fn eq(&self, other: &ReconnectParams) -> bool {
-        self.max_reconnect_backoff_ms == other.max_reconnect_backoff_ms &&
-        self.unknown_fields == other.unknown_fields
-    }
-}
-
 impl ::std::fmt::Debug for ReconnectParams {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         ::protobuf::text_format::fmt(self, f)
@@ -2907,14 +2835,14 @@ impl ::protobuf::reflect::ProtobufValue for ReconnectParams {
     }
 }
 
-#[derive(Clone,Default)]
+#[derive(PartialEq,Clone,Default)]
 pub struct ReconnectInfo {
     // message fields
     pub passed: bool,
     backoff_ms: ::std::vec::Vec<i32>,
     // special fields
     unknown_fields: ::protobuf::UnknownFields,
-    cached_size: ::std::cell::Cell<u32>,
+    cached_size: ::protobuf::CachedSize,
 }
 
 // see codegen.rs for the explanation why impl Sync explicitly
@@ -2998,21 +2926,21 @@ impl ::protobuf::Message for ReconnectInfo {
     }
 
     fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream) -> ::protobuf::ProtobufResult<()> {
-        while !try!(is.eof()) {
-            let (field_number, wire_type) = try!(is.read_tag_unpack());
+        while !is.eof()? {
+            let (field_number, wire_type) = is.read_tag_unpack()?;
             match field_number {
                 1 => {
                     if wire_type != ::protobuf::wire_format::WireTypeVarint {
                         return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
                     };
-                    let tmp = try!(is.read_bool());
+                    let tmp = is.read_bool()?;
                     self.passed = tmp;
                 },
                 2 => {
-                    try!(::protobuf::rt::read_repeated_int32_into(wire_type, is, &mut self.backoff_ms));
+                    ::protobuf::rt::read_repeated_int32_into(wire_type, is, &mut self.backoff_ms)?;
                 },
                 _ => {
-                    try!(::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields()));
+                    ::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields())?;
                 },
             };
         }
@@ -3036,12 +2964,12 @@ impl ::protobuf::Message for ReconnectInfo {
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
         if self.passed != false {
-            try!(os.write_bool(1, self.passed));
+            os.write_bool(1, self.passed)?;
         };
         for v in &self.backoff_ms {
-            try!(os.write_int32(2, *v));
+            os.write_int32(2, *v)?;
         };
-        try!(os.write_unknown_fields(self.get_unknown_fields()));
+        os.write_unknown_fields(self.get_unknown_fields())?;
         ::std::result::Result::Ok(())
     }
 
@@ -3057,12 +2985,14 @@ impl ::protobuf::Message for ReconnectInfo {
         &mut self.unknown_fields
     }
 
-    fn type_id(&self) -> ::std::any::TypeId {
-        ::std::any::TypeId::of::<ReconnectInfo>()
-    }
-
     fn as_any(&self) -> &::std::any::Any {
         self as &::std::any::Any
+    }
+    fn as_any_mut(&mut self) -> &mut ::std::any::Any {
+        self as &mut ::std::any::Any
+    }
+    fn into_any(self: Box<Self>) -> ::std::boxed::Box<::std::any::Any> {
+        self
     }
 
     fn descriptor(&self) -> &'static ::protobuf::reflect::MessageDescriptor {
@@ -3108,14 +3038,6 @@ impl ::protobuf::Clear for ReconnectInfo {
         self.clear_passed();
         self.clear_backoff_ms();
         self.unknown_fields.clear();
-    }
-}
-
-impl ::std::cmp::PartialEq for ReconnectInfo {
-    fn eq(&self, other: &ReconnectInfo) -> bool {
-        self.passed == other.passed &&
-        self.backoff_ms == other.backoff_ms &&
-        self.unknown_fields == other.unknown_fields
     }
 }
 

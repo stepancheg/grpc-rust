@@ -168,6 +168,12 @@ impl ::protobuf::Message for Point {
     fn as_any(&self) -> &::std::any::Any {
         self as &::std::any::Any
     }
+    fn as_any_mut(&mut self) -> &mut ::std::any::Any {
+        self as &mut ::std::any::Any
+    }
+    fn into_any(self: Box<Self>) -> ::std::boxed::Box<::std::any::Any> {
+        self
+    }
 
     fn descriptor(&self) -> &'static ::protobuf::reflect::MessageDescriptor {
         ::protobuf::MessageStatic::descriptor_static(None::<Self>)
@@ -408,6 +414,12 @@ impl ::protobuf::Message for Rectangle {
     fn as_any(&self) -> &::std::any::Any {
         self as &::std::any::Any
     }
+    fn as_any_mut(&mut self) -> &mut ::std::any::Any {
+        self as &mut ::std::any::Any
+    }
+    fn into_any(self: Box<Self>) -> ::std::boxed::Box<::std::any::Any> {
+        self
+    }
 
     fn descriptor(&self) -> &'static ::protobuf::reflect::MessageDescriptor {
         ::protobuf::MessageStatic::descriptor_static(None::<Self>)
@@ -598,7 +610,7 @@ impl ::protobuf::Message for Feature {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u32 {
         let mut my_size = 0;
-        if self.name != ::std::string::String::new() {
+        if !self.name.is_empty() {
             my_size += ::protobuf::rt::string_size(1, &self.name);
         };
         if let Some(v) = self.location.as_ref() {
@@ -611,7 +623,7 @@ impl ::protobuf::Message for Feature {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
-        if self.name != ::std::string::String::new() {
+        if !self.name.is_empty() {
             os.write_string(1, &self.name)?;
         };
         if let Some(v) = self.location.as_ref() {
@@ -637,6 +649,12 @@ impl ::protobuf::Message for Feature {
 
     fn as_any(&self) -> &::std::any::Any {
         self as &::std::any::Any
+    }
+    fn as_any_mut(&mut self) -> &mut ::std::any::Any {
+        self as &mut ::std::any::Any
+    }
+    fn into_any(self: Box<Self>) -> ::std::boxed::Box<::std::any::Any> {
+        self
     }
 
     fn descriptor(&self) -> &'static ::protobuf::reflect::MessageDescriptor {
@@ -832,7 +850,7 @@ impl ::protobuf::Message for RouteNote {
             let len = v.compute_size();
             my_size += 1 + ::protobuf::rt::compute_raw_varint32_size(len) + len;
         };
-        if self.message != ::std::string::String::new() {
+        if !self.message.is_empty() {
             my_size += ::protobuf::rt::string_size(2, &self.message);
         };
         my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
@@ -846,7 +864,7 @@ impl ::protobuf::Message for RouteNote {
             os.write_raw_varint32(v.get_cached_size())?;
             v.write_to_with_cached_sizes(os)?;
         };
-        if self.message != ::std::string::String::new() {
+        if !self.message.is_empty() {
             os.write_string(2, &self.message)?;
         };
         os.write_unknown_fields(self.get_unknown_fields())?;
@@ -867,6 +885,12 @@ impl ::protobuf::Message for RouteNote {
 
     fn as_any(&self) -> &::std::any::Any {
         self as &::std::any::Any
+    }
+    fn as_any_mut(&mut self) -> &mut ::std::any::Any {
+        self as &mut ::std::any::Any
+    }
+    fn into_any(self: Box<Self>) -> ::std::boxed::Box<::std::any::Any> {
+        self
     }
 
     fn descriptor(&self) -> &'static ::protobuf::reflect::MessageDescriptor {
@@ -1147,6 +1171,12 @@ impl ::protobuf::Message for RouteSummary {
 
     fn as_any(&self) -> &::std::any::Any {
         self as &::std::any::Any
+    }
+    fn as_any_mut(&mut self) -> &mut ::std::any::Any {
+        self as &mut ::std::any::Any
+    }
+    fn into_any(self: Box<Self>) -> ::std::boxed::Box<::std::any::Any> {
+        self
     }
 
     fn descriptor(&self) -> &'static ::protobuf::reflect::MessageDescriptor {

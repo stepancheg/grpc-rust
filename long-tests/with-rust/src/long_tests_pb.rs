@@ -107,7 +107,7 @@ impl ::protobuf::Message for EchoRequest {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u32 {
         let mut my_size = 0;
-        if self.payload != ::std::string::String::new() {
+        if !self.payload.is_empty() {
             my_size += ::protobuf::rt::string_size(1, &self.payload);
         };
         my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
@@ -116,7 +116,7 @@ impl ::protobuf::Message for EchoRequest {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
-        if self.payload != ::std::string::String::new() {
+        if !self.payload.is_empty() {
             os.write_string(1, &self.payload)?;
         };
         os.write_unknown_fields(self.get_unknown_fields())?;
@@ -137,6 +137,12 @@ impl ::protobuf::Message for EchoRequest {
 
     fn as_any(&self) -> &::std::any::Any {
         self as &::std::any::Any
+    }
+    fn as_any_mut(&mut self) -> &mut ::std::any::Any {
+        self as &mut ::std::any::Any
+    }
+    fn into_any(self: Box<Self>) -> ::std::boxed::Box<::std::any::Any> {
+        self
     }
 
     fn descriptor(&self) -> &'static ::protobuf::reflect::MessageDescriptor {
@@ -277,7 +283,7 @@ impl ::protobuf::Message for EchoResponse {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u32 {
         let mut my_size = 0;
-        if self.payload != ::std::string::String::new() {
+        if !self.payload.is_empty() {
             my_size += ::protobuf::rt::string_size(2, &self.payload);
         };
         my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
@@ -286,7 +292,7 @@ impl ::protobuf::Message for EchoResponse {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
-        if self.payload != ::std::string::String::new() {
+        if !self.payload.is_empty() {
             os.write_string(2, &self.payload)?;
         };
         os.write_unknown_fields(self.get_unknown_fields())?;
@@ -307,6 +313,12 @@ impl ::protobuf::Message for EchoResponse {
 
     fn as_any(&self) -> &::std::any::Any {
         self as &::std::any::Any
+    }
+    fn as_any_mut(&mut self) -> &mut ::std::any::Any {
+        self as &mut ::std::any::Any
+    }
+    fn into_any(self: Box<Self>) -> ::std::boxed::Box<::std::any::Any> {
+        self
     }
 
     fn descriptor(&self) -> &'static ::protobuf::reflect::MessageDescriptor {
@@ -447,7 +459,7 @@ impl ::protobuf::Message for CharCountRequest {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u32 {
         let mut my_size = 0;
-        if self.part != ::std::string::String::new() {
+        if !self.part.is_empty() {
             my_size += ::protobuf::rt::string_size(1, &self.part);
         };
         my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
@@ -456,7 +468,7 @@ impl ::protobuf::Message for CharCountRequest {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
-        if self.part != ::std::string::String::new() {
+        if !self.part.is_empty() {
             os.write_string(1, &self.part)?;
         };
         os.write_unknown_fields(self.get_unknown_fields())?;
@@ -477,6 +489,12 @@ impl ::protobuf::Message for CharCountRequest {
 
     fn as_any(&self) -> &::std::any::Any {
         self as &::std::any::Any
+    }
+    fn as_any_mut(&mut self) -> &mut ::std::any::Any {
+        self as &mut ::std::any::Any
+    }
+    fn into_any(self: Box<Self>) -> ::std::boxed::Box<::std::any::Any> {
+        self
     }
 
     fn descriptor(&self) -> &'static ::protobuf::reflect::MessageDescriptor {
@@ -641,6 +659,12 @@ impl ::protobuf::Message for CharCountResponse {
     fn as_any(&self) -> &::std::any::Any {
         self as &::std::any::Any
     }
+    fn as_any_mut(&mut self) -> &mut ::std::any::Any {
+        self as &mut ::std::any::Any
+    }
+    fn into_any(self: Box<Self>) -> ::std::boxed::Box<::std::any::Any> {
+        self
+    }
 
     fn descriptor(&self) -> &'static ::protobuf::reflect::MessageDescriptor {
         ::protobuf::MessageStatic::descriptor_static(None::<Self>)
@@ -804,6 +828,12 @@ impl ::protobuf::Message for RandomStringsRequest {
     fn as_any(&self) -> &::std::any::Any {
         self as &::std::any::Any
     }
+    fn as_any_mut(&mut self) -> &mut ::std::any::Any {
+        self as &mut ::std::any::Any
+    }
+    fn into_any(self: Box<Self>) -> ::std::boxed::Box<::std::any::Any> {
+        self
+    }
 
     fn descriptor(&self) -> &'static ::protobuf::reflect::MessageDescriptor {
         ::protobuf::MessageStatic::descriptor_static(None::<Self>)
@@ -943,7 +973,7 @@ impl ::protobuf::Message for RandomStringsResponse {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u32 {
         let mut my_size = 0;
-        if self.s != ::std::string::String::new() {
+        if !self.s.is_empty() {
             my_size += ::protobuf::rt::string_size(1, &self.s);
         };
         my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
@@ -952,7 +982,7 @@ impl ::protobuf::Message for RandomStringsResponse {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
-        if self.s != ::std::string::String::new() {
+        if !self.s.is_empty() {
             os.write_string(1, &self.s)?;
         };
         os.write_unknown_fields(self.get_unknown_fields())?;
@@ -973,6 +1003,12 @@ impl ::protobuf::Message for RandomStringsResponse {
 
     fn as_any(&self) -> &::std::any::Any {
         self as &::std::any::Any
+    }
+    fn as_any_mut(&mut self) -> &mut ::std::any::Any {
+        self as &mut ::std::any::Any
+    }
+    fn into_any(self: Box<Self>) -> ::std::boxed::Box<::std::any::Any> {
+        self
     }
 
     fn descriptor(&self) -> &'static ::protobuf::reflect::MessageDescriptor {

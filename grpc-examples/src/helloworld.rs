@@ -107,7 +107,7 @@ impl ::protobuf::Message for HelloRequest {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u32 {
         let mut my_size = 0;
-        if self.name != ::std::string::String::new() {
+        if !self.name.is_empty() {
             my_size += ::protobuf::rt::string_size(1, &self.name);
         };
         my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
@@ -116,7 +116,7 @@ impl ::protobuf::Message for HelloRequest {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
-        if self.name != ::std::string::String::new() {
+        if !self.name.is_empty() {
             os.write_string(1, &self.name)?;
         };
         os.write_unknown_fields(self.get_unknown_fields())?;
@@ -137,6 +137,12 @@ impl ::protobuf::Message for HelloRequest {
 
     fn as_any(&self) -> &::std::any::Any {
         self as &::std::any::Any
+    }
+    fn as_any_mut(&mut self) -> &mut ::std::any::Any {
+        self as &mut ::std::any::Any
+    }
+    fn into_any(self: Box<Self>) -> ::std::boxed::Box<::std::any::Any> {
+        self
     }
 
     fn descriptor(&self) -> &'static ::protobuf::reflect::MessageDescriptor {
@@ -277,7 +283,7 @@ impl ::protobuf::Message for HelloReply {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u32 {
         let mut my_size = 0;
-        if self.message != ::std::string::String::new() {
+        if !self.message.is_empty() {
             my_size += ::protobuf::rt::string_size(1, &self.message);
         };
         my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
@@ -286,7 +292,7 @@ impl ::protobuf::Message for HelloReply {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream) -> ::protobuf::ProtobufResult<()> {
-        if self.message != ::std::string::String::new() {
+        if !self.message.is_empty() {
             os.write_string(1, &self.message)?;
         };
         os.write_unknown_fields(self.get_unknown_fields())?;
@@ -307,6 +313,12 @@ impl ::protobuf::Message for HelloReply {
 
     fn as_any(&self) -> &::std::any::Any {
         self as &::std::any::Any
+    }
+    fn as_any_mut(&mut self) -> &mut ::std::any::Any {
+        self as &mut ::std::any::Any
+    }
+    fn into_any(self: Box<Self>) -> ::std::boxed::Box<::std::any::Any> {
+        self
     }
 
     fn descriptor(&self) -> &'static ::protobuf::reflect::MessageDescriptor {

@@ -10,8 +10,8 @@ doctest = false
 path = "../.."
 
 [dependencies]
-log             = "0.3"
-env_logger      = "0.3"
+log             = "0.*"
+env_logger      = "0.*"
 protobuf        = "1.*"
 futures         = "0.1.2"
 futures-cpupool = "0.1.2"
