@@ -33,7 +33,7 @@ $ ./go-grpc-interop-client -use_tls=false  -test_case=empty_unary -server_port=6
 First, you will need gradle installed. (`brew install gradle` on macOS)
 ```
 $ git clone https://github.com/grpc/grpc-java.git
-$ cd grpc-java/interop-testing
+$ cd grpc-java
 $ ./gradlew installDist -PskipCodegen=true
 $  ./run-test-client.sh --use_tls=false --test_case=empty_unary --server_port=60011
 ```

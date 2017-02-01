@@ -43,8 +43,7 @@ fn make_string(size: usize) -> Vec<u8> {
 struct TestServerImpl {}
 
 impl TestServiceAsync for TestServerImpl {
-    fn EmptyCall(&self, empty: Empty) -> GrpcFutureSend<Empty> {
-        // done
+    fn EmptyCall(&self, _: Empty) -> GrpcFutureSend<Empty> {
         Box::new(futures::finished(Empty::new()))
     }
 
@@ -57,25 +56,17 @@ impl TestServiceAsync for TestServerImpl {
     }
 
     // TODO: is this needed? I can't find it implemented in grpc-go/interop/client/client.go
-    fn CacheableUnaryCall(&self, req: SimpleRequest) -> GrpcFutureSend<SimpleResponse> {
+    fn CacheableUnaryCall(&self, _: SimpleRequest) -> GrpcFutureSend<SimpleResponse> {
         // TODO: implement fully
         Box::new(futures::finished(SimpleResponse::new()))
     }
 
-    fn StreamingOutputCall(&self, req: StreamingOutputCallRequest) -> GrpcStreamSend<StreamingOutputCallResponse> {
-        // TODO: is there a shorter way to write this?
-        // There's an ownership conflict because response_parameters is a slice
-        // instead of something easily ownable like a Vec.
-        let params = req.get_response_parameters();
-        let mut sizes = Vec::with_capacity(params.len());
-        for param in params {
-            sizes.push(Ok(param.clone()));
-        }
-
-        let output = stream::iter(sizes).map(|response_parameter| {
+    fn StreamingOutputCall(&self, mut req: StreamingOutputCallRequest) -> GrpcStreamSend<StreamingOutputCallResponse> {
+        let sizes = req.take_response_parameters().into_iter().map(|res| Ok(res.get_size() as usize));
+        let output = stream::iter(sizes).map(|size| {
             let mut response = StreamingOutputCallResponse::new();
             let mut payload = Payload::new();
-            payload.set_body(make_string(response_parameter.get_size() as usize));
+            payload.set_body(make_string(size));
             response.set_payload(payload);
             response
         });
@@ -95,19 +86,12 @@ impl TestServiceAsync for TestServerImpl {
     }
 
     fn FullDuplexCall(&self, req_stream: GrpcStreamSend<StreamingOutputCallRequest>) -> GrpcStreamSend<StreamingOutputCallResponse> {
-        let response = req_stream.map(|req| {
-            // TODO: is there a shorter way to write this?
-            // There's an ownership conflict because response_parameters is a slice
-            // instead of something easily ownable like a Vec.
-            let params = req.get_response_parameters();
-            let mut sizes = Vec::with_capacity(params.len());
-            for param in params {
-                sizes.push(Ok(param.clone()));
-            }
-            stream::iter(sizes).map(|response_parameter| {
+        let response = req_stream.map(|mut req| {
+            let sizes = req.take_response_parameters().into_iter().map(|res| Ok(res.get_size() as usize));
+            stream::iter(sizes).map(|size| {
                 let mut response = StreamingOutputCallResponse::new();
                 let mut payload = Payload::new();
-                payload.set_body(make_string(response_parameter.get_size() as usize));
+                payload.set_body(make_string(size));
                 response.set_payload(payload);
                 response
             })
@@ -115,25 +99,11 @@ impl TestServiceAsync for TestServerImpl {
         Box::new(response)
     }
 
-    // TODO: I can't find this used in grpc-go/interop/client/client.go Do we need this?
-    fn HalfDuplexCall(&self, req_stream: GrpcStreamSend<StreamingOutputCallRequest>) -> GrpcStreamSend<StreamingOutputCallResponse> {
-         let response = req_stream.map(|req| {
-            // TODO: is there a shorter way to write this?
-            // There's an ownership conflict because response_parameters is a slice
-            // instead of something easily ownable like a Vec.
-            let params = req.get_response_parameters();
-            let mut sizes = Vec::with_capacity(params.len());
-            for param in params {
-                sizes.push(Ok(param.clone()));
-            }
-            stream::iter(sizes).map(|response_parameter| {
-                StreamingOutputCallResponse::new()
-            })
-        }).flatten();
-        Box::new(response)
+    // TODO: implement this if we find an interop client that needs it.
+    fn HalfDuplexCall(&self, _: GrpcStreamSend<StreamingOutputCallRequest>) -> GrpcStreamSend<StreamingOutputCallResponse> {
+        Box::new(stream::empty())
     }
 }
-
 
 fn main() {
     drop(env_logger::init().unwrap());
