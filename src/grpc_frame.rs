@@ -194,12 +194,14 @@ impl Stream for GrpcFrameFromHttpFramesStreamResponse {
 
                         // Check gRPC status code and message
                         // TODO: a more detailed error message.
-                        if slice_get_header(&headers, HEADER_GRPC_STATUS) != Some("0") {
-                            let message = slice_get_header(&headers, HEADER_GRPC_MESSAGE).unwrap_or("unknown error");
-                            self.error = Some(stream::once(Err(
-                                GrpcError::GrpcMessage(GrpcMessageError { grpc_message: message.to_owned() })
-                            )));
-                            continue;
+                        if let Some(code) = slice_get_header(&headers, HEADER_GRPC_STATUS) {
+                            if code != OK.to_string() {
+                                let message = slice_get_header(&headers, HEADER_GRPC_MESSAGE).unwrap_or("unknown error");
+                                self.error = Some(stream::once(Err(
+                                    GrpcError::GrpcMessage(GrpcMessageError{ grpc_message: message.to_owned() })
+                                )));
+                                continue;
+                            }
                         }
                     }
                     HttpStreamPartContent::Data(..) => {
