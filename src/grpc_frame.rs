@@ -187,13 +187,18 @@ impl Stream for GrpcFrameFromHttpFramesStreamResponse {
                 };
                 match headers.content {
                     HttpStreamPartContent::Headers(headers) => {
-                        let status = slice_get_header(&headers, ":status");
-                        if status != Some("200") {
-                            self.error = Some(stream::once(Err(if let Some(message) = slice_get_header(&headers, HEADER_GRPC_MESSAGE) {
+                        if slice_get_header(&headers, ":status") != Some("200") {
+                            self.error = Some(stream::once(Err(GrpcError::Other("not 200"))));
+                            continue;
+                        }
+
+                        // Check gRPC status code and message
+                        // TODO: a more detailed error message.
+                        if slice_get_header(&headers, HEADER_GRPC_STATUS) != Some("0") {
+                            let message = slice_get_header(&headers, HEADER_GRPC_MESSAGE).unwrap_or("unknown error");
+                            self.error = Some(stream::once(Err(
                                 GrpcError::GrpcMessage(GrpcMessageError { grpc_message: message.to_owned() })
-                            } else {
-                                GrpcError::Other("not 200")
-                            })));
+                            )));
                             continue;
                         }
                     }
