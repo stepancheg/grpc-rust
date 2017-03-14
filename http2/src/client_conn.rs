@@ -10,6 +10,7 @@ use hpack;
 
 use futures;
 use futures::Future;
+use futures::stream;
 use futures::stream::Stream;
 
 use tokio_core::net::TcpStream;
@@ -348,11 +349,13 @@ impl HttpClientConnectionAsync {
 
         let (req_tx, req_rx) = futures::sync::mpsc::unbounded();
 
-        call_tx.send(ClientToWriteMessage::Start(StartRequestMessage {
+        if let Err(e) = call_tx.send(ClientToWriteMessage::Start(StartRequestMessage {
             headers: headers,
             body: body,
             response_handler: req_tx,
-        })).expect("send request to client");
+        })) {
+            return Box::new(stream::once(Err(HttpError::Other(format!("send request to client {:?}", e).into()))));
+        }
 
         let req_rx = req_rx.map_err(|()| HttpError::from(io::Error::new(io::ErrorKind::Other, "req")));
 
