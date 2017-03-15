@@ -6,6 +6,7 @@ extern crate tokio_core;
 extern crate tokio_tls;
 
 extern crate hpack;
+extern crate net2;
 
 pub mod solicit;
 
