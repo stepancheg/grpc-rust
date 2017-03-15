@@ -269,7 +269,7 @@ impl ServerServiceDefinition {
 
 #[derive(Default, Debug, Clone)]
 pub struct GrpcServerConf {
-    http: HttpServerConf,
+    pub http: HttpServerConf,
 }
 
 
