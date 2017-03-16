@@ -136,13 +136,13 @@ impl HttpStreamCommon {
         }
 
         let pop_headers =
-            if let &HttpStreamPartContent::Headers(..) = self.outgoing.front().unwrap() {
+            if let Some(&HttpStreamPartContent::Headers(..)) = self.outgoing.back() {
                 true
             } else {
                 false
             };
         if pop_headers {
-            let r = self.outgoing.pop_front().unwrap();
+            let r = self.outgoing.pop_back().unwrap();
             let last = self.outgoing_end && self.outgoing.is_empty();
             if last {
                 self.close_local();
@@ -158,7 +158,7 @@ impl HttpStreamCommon {
         }
 
         let mut data =
-            if let Some(HttpStreamPartContent::Data(data)) = self.outgoing.pop_front() {
+            if let Some(HttpStreamPartContent::Data(data)) = self.outgoing.pop_back() {
                 data
             } else {
                 unreachable!()
@@ -168,7 +168,7 @@ impl HttpStreamCommon {
 
         if data.len() as usize > max_window as usize {
             let size = self.out_window_size.size() as usize;
-            self.outgoing.push_front(HttpStreamPartContent::Data(
+            self.outgoing.push_back(HttpStreamPartContent::Data(
                 data[size..].to_vec()
             ));
             data.truncate(size);
