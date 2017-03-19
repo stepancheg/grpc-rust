@@ -3,6 +3,9 @@ use futures::Poll;
 use futures::stream;
 use futures::stream::Stream;
 
+use bytes::Bytes;
+use bytes_or_vec::*;
+
 use error::*;
 use result::*;
 use grpc::*;
@@ -30,10 +33,12 @@ fn write_u32_be(v: u32) -> [u8; 4] {
 }
 
 
-// return message and size consumed
-pub fn parse_grpc_frame(stream: &[u8]) -> GrpcResult<Option<(&[u8], usize)>> {
-    let header_len = 5;
-    if stream.len() < header_len {
+const GRPC_HEADER_LEN: usize = 5;
+
+
+/// Return frame len
+pub fn parse_grpc_frame_0(stream: &[u8]) -> GrpcResult<Option<usize>> {
+    if stream.len() < GRPC_HEADER_LEN {
         return Ok(None);
     }
     let compressed = match stream[0] {
@@ -45,12 +50,23 @@ pub fn parse_grpc_frame(stream: &[u8]) -> GrpcResult<Option<(&[u8], usize)>> {
         return Err(GrpcError::Other("compression is not implemented"));
     }
     let len = read_u32_be(&stream[1..]) as usize;
-    let end = len + header_len;
+    let end = len + GRPC_HEADER_LEN;
     if end > stream.len() {
         return Ok(None);
     }
 
-    Ok(Some((&stream[header_len..end], end)))
+    Ok(Some(len))
+}
+
+
+// return message and size consumed
+pub fn parse_grpc_frame(stream: &[u8]) -> GrpcResult<Option<(&[u8], usize)>> {
+    parse_grpc_frame_0(stream)
+        .map(|o| {
+            o.map(|len| {
+                (&stream[GRPC_HEADER_LEN .. len + GRPC_HEADER_LEN], len + GRPC_HEADER_LEN)
+            })
+        })
 }
 
 pub fn parse_grpc_frames_completely(stream: &[u8]) -> GrpcResult<Vec<&[u8]>> {
@@ -105,16 +121,16 @@ pub struct GrpcFrameFromHttpFramesStreamRequest {
 
 pub struct GrpcFrameFromHttpFramesStreamResponse {
     http_stream_stream: HttpPartFutureStreamSend,
-    buf: Vec<u8>,
+    buf: BytesOrVec,
     seen_headers: bool,
-    error: Option<stream::Once<Vec<u8>, GrpcError>>,
+    error: Option<stream::Once<Bytes, GrpcError>>,
 }
 
 impl GrpcFrameFromHttpFramesStreamResponse {
     pub fn new(http_stream_stream: HttpPartFutureStreamSend) -> Self {
         GrpcFrameFromHttpFramesStreamResponse {
             http_stream_stream: http_stream_stream,
-            buf: Vec::new(),
+            buf: BytesOrVec::new(),
             seen_headers: false,
             error: None,
         }
@@ -170,7 +186,7 @@ impl Stream for GrpcFrameFromHttpFramesStreamRequest {
 }
 
 impl Stream for GrpcFrameFromHttpFramesStreamResponse {
-    type Item = Vec<u8>;
+    type Item = Bytes;
     type Error = GrpcError;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
@@ -212,8 +228,10 @@ impl Stream for GrpcFrameFromHttpFramesStreamResponse {
                 self.seen_headers = true;
             }
 
-            if let Some((frame, len)) = parse_grpc_frame(&self.buf)?.map(|(frame, len)| (frame.to_owned(), len)) {
-                self.buf.drain(..len);
+            if let Some(frame_len) = parse_grpc_frame_0(&self.buf)? {
+                let frame = self.buf
+                    .split_to(frame_len + GRPC_HEADER_LEN)
+                    .slice_from(GRPC_HEADER_LEN);
                 return Ok(Async::Ready(Some(frame)));
             }
 
@@ -250,7 +268,9 @@ impl Stream for GrpcFrameFromHttpFramesStreamResponse {
                         continue;
                     }
                 },
-                HttpStreamPartContent::Data(data) => self.buf.extend(data),
+                HttpStreamPartContent::Data(data) => {
+                    self.buf.append(data);
+                }
             }
         }
     }

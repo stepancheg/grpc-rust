@@ -2,6 +2,7 @@
 extern crate log;
 #[macro_use]
 extern crate futures;
+extern crate bytes;
 extern crate futures_cpupool;
 extern crate tokio_core;
 extern crate tokio_tls;
@@ -14,6 +15,8 @@ pub mod client;
 pub mod server;
 mod grpc;
 mod grpc_frame;
+mod bytesx;
+mod bytes_or_vec;
 pub mod method;
 pub mod grpc_protobuf;
 pub mod marshall;

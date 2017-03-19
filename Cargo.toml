@@ -23,6 +23,7 @@ tokio-core      = "0.*"
 #tokio-tls       = { git = "https://github.com/tokio-rs/tokio-tls/" }
 tokio-tls       = "0.*"
 httpbis         = { path = "http2", version = "0.1.1" }
+bytes = "0.*"
 
 openssl = { version = "0.8", optional = true }
 
