@@ -6,7 +6,7 @@ use std::cell::{RefCell, Cell};
 use std::borrow::Cow;
 use std::io::{Cursor, Read, Write};
 
-use solicit::{Header, OwnedHeader, ErrorCode};
+use solicit::{Header, ErrorCode};
 use solicit::frame::{RawFrame, FrameIR, FrameHeader, pack_header};
 use solicit::session::StreamState;
 use solicit::connection::{SendFrame, ReceiveFrame, HttpFrame, HttpConnection, EndStream, DataChunk};

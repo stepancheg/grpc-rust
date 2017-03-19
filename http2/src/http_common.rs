@@ -16,7 +16,7 @@ use tokio_core::io as tokio_io;
 
 use solicit::session::StreamState;
 use solicit::frame::*;
-use solicit::StaticHeader;
+use solicit::Header;
 use solicit::StreamId;
 use solicit::HttpError;
 use solicit::WindowSize;
@@ -34,7 +34,7 @@ use solicit_async::*;
 
 #[derive(Debug)]
 pub enum HttpStreamPartContent {
-    Headers(Vec<StaticHeader>),
+    Headers(Vec<Header>),
     Data(Bytes),
 }
 
@@ -45,14 +45,14 @@ pub struct HttpStreamPart {
 }
 
 impl HttpStreamPart {
-    pub fn last_headers(header: Vec<StaticHeader>) -> Self {
+    pub fn last_headers(header: Vec<Header>) -> Self {
         HttpStreamPart {
             content: HttpStreamPartContent::Headers(header),
             last: true,
         }
     }
 
-    pub fn intermediate_headers(headers: Vec<StaticHeader>) -> Self {
+    pub fn intermediate_headers(headers: Vec<Header>) -> Self {
         HttpStreamPart {
             content: HttpStreamPartContent::Headers(headers),
             last: false,
@@ -79,7 +79,7 @@ pub type HttpPartFutureStreamSend = Box<Stream<Item=HttpStreamPart, Error=HttpEr
 
 
 pub trait HttpService: Send + 'static {
-    fn new_request(&self, headers: Vec<StaticHeader>, req: HttpPartFutureStreamSend) -> HttpPartFutureStreamSend;
+    fn new_request(&self, headers: Vec<Header>, req: HttpPartFutureStreamSend) -> HttpPartFutureStreamSend;
 }
 
 

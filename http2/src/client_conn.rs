@@ -5,7 +5,7 @@ use solicit::frame::*;
 use solicit::StreamId;
 use solicit::HttpScheme;
 use solicit::HttpError;
-use solicit::StaticHeader;
+use solicit::Header;
 use hpack;
 
 use bytes::Bytes;
@@ -100,7 +100,7 @@ impl LoopInner for ClientInner {
         let headers = self.session_state.decoder
                                .decode(&frame.header_fragment())
                                .map_err(HttpError::CompressionError).unwrap();
-        let headers: Vec<StaticHeader> = headers.into_iter().map(|h| h.into()).collect();
+        let headers: Vec<Header> = headers.into_iter().map(|h| Header::new(h.0, h.1)).collect();
 
         let mut stream: &mut HttpClientStream = match self.common.get_stream_mut(frame.get_stream_id()) {
             None => {
@@ -132,7 +132,7 @@ pub struct HttpClientConnectionAsync {
 unsafe impl Sync for HttpClientConnectionAsync {}
 
 struct StartRequestMessage {
-    headers: Vec<StaticHeader>,
+    headers: Vec<Header>,
     body: HttpFutureStreamSend<Vec<u8>>,
     response_handler: futures::sync::mpsc::UnboundedSender<ResultOrEof<HttpStreamPart, HttpError>>,
 }
@@ -341,7 +341,7 @@ impl HttpClientConnectionAsync {
 
     pub fn start_request(
         &self,
-        headers: Vec<StaticHeader>,
+        headers: Vec<Header>,
         body: HttpFutureStreamSend<Vec<u8>>)
             -> HttpPartFutureStreamSend
     {

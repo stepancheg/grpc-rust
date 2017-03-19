@@ -39,8 +39,6 @@ fn parse_stream_id(buf: &[u8]) -> u32 {
 
 pub const FRAME_HEADER_LEN: usize = 9;
 
-mod bs_debug;
-
 pub mod builder;
 pub mod data;
 pub mod headers;

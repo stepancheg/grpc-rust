@@ -6,7 +6,6 @@ use futures::stream::Stream;
 use httpbis::server::HttpServer;
 use httpbis::http_common::*;
 use httpbis::Header;
-use httpbis::StaticHeader;
 
 
 pub struct HttpServerEcho {
@@ -18,7 +17,7 @@ struct EchoService {
 }
 
 impl HttpService for EchoService {
-    fn new_request(&self, _headers: Vec<StaticHeader>, req: HttpPartFutureStreamSend) -> HttpPartFutureStreamSend {
+    fn new_request(&self, _headers: Vec<Header>, req: HttpPartFutureStreamSend) -> HttpPartFutureStreamSend {
         let headers = stream::once(Ok(HttpStreamPart::intermediate_headers(vec![
             Header::new(":status", "200"),
         ])));

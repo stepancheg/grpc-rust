@@ -1,4 +1,3 @@
-use std::fmt;
 use std::io;
 use std::mem;
 use std::cmp;
@@ -6,7 +5,6 @@ use std::str;
 
 use solicit::Header;
 use solicit::StreamId;
-use solicit::StaticHeader;
 use solicit::HttpResult;
 use solicit::frame::*;
 use solicit::connection::ReceiveFrame;
@@ -16,21 +14,7 @@ use solicit::connection::HttpConnection;
 use solicit::connection::EndStream;
 use solicit::connection::DataChunk;
 
-use misc::*;
 use http_common::*;
-
-
-
-#[allow(dead_code)]
-pub struct HeaderDebug<'a>(pub &'a Header<'a, 'a>);
-
-impl<'a> fmt::Debug for HeaderDebug<'a> {
-	fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-	    write!(fmt, "Header {{ name: {:?}, value: {:?} }}",
-	    	BsDebug(self.0.name()), BsDebug(self.0.value()))
-	}
-}
-
 
 
 /// work around https://github.com/mlalic/solicit/pull/33
@@ -79,7 +63,7 @@ pub trait HttpConnectionEx {
         &mut self,
         send: &mut S,
         stream_id: StreamId,
-        headers: &[StaticHeader],
+        headers: &[Header],
         end_stream: EndStream)
             -> HttpResult<()>
     {
@@ -89,7 +73,7 @@ pub trait HttpConnectionEx {
     fn send_headers_to_vec(
         &mut self,
         stream_id: StreamId,
-        headers: &[StaticHeader],
+        headers: &[Header],
         end_stream: EndStream)
              -> HttpResult<Vec<u8>>
     {
@@ -299,7 +283,7 @@ impl<'a> HttpFrameClassified<'a> {
 }
 
 
-pub fn slice_get_header<'a>(headers: &'a [Header<'a, 'a>], name: &str) -> Option<&'a str> {
+pub fn slice_get_header<'a>(headers: &'a [Header], name: &str) -> Option<&'a str> {
     headers.iter()
         .find(|h| h.name() == name.as_bytes())
         .and_then(|h| str::from_utf8(h.value()).ok())

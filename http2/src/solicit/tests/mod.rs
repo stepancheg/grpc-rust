@@ -6,7 +6,7 @@ pub mod common;
 mod root_tests {
     use std::error::Error;
 
-    use solicit::{Response, HttpError, HttpScheme, ErrorCode, ConnectionError};
+    use solicit::{Response, HttpError, HttpScheme, ErrorCode, ConnectionError, Header};
 
     /// Tests that the `Response` struct correctly parses a status code from
     /// its headers list.
@@ -36,7 +36,7 @@ mod root_tests {
         }
         {
             // No headers at all => Malformed
-            let resp = Response::new(1, vec![], vec![]);
+            let resp = Response::new(1, Vec::<Header>::new(), vec![]);
             assert_eq!(resp.status_code().err().unwrap(),
                        HttpError::MalformedResponse);
         }
@@ -89,29 +89,14 @@ mod root_tests {
 mod test_header {
     use std::borrow::Cow;
 
-    use solicit::{Header, OwnedHeader};
+    use solicit::Header;
 
-    fn _assert_is_static(_: Header<'static, 'static>) {}
-
-    #[test]
-    fn test_owned_to_header_is_static_lifetime() {
-        let owned = (vec![1u8], vec![2u8]);
-        _assert_is_static(owned.into());
-    }
+    fn _assert_is_static(_: Header) {}
 
     #[test]
     fn test_header_from_static_slices_lifetime() {
         let header = Header::new(b":method", b"GET");
         _assert_is_static(header);
-    }
-
-    #[test]
-    fn test_header_to_owned_header() {
-        let header = Header::new(b":method", b"GET");
-        let (name, value): OwnedHeader = header.into();
-
-        assert_eq!(name, b":method".to_vec());
-        assert_eq!(value, b"GET".to_vec());
     }
 
     #[test]
@@ -123,29 +108,6 @@ mod test_header {
         assert!(fully_static == static_name);
         assert!(fully_static != other);
         assert!(static_name != other);
-    }
-
-    #[test]
-    fn test_partial_eq_to_owned_header() {
-        let fully_static = Header::new(b":method", b"GET");
-        let owned: OwnedHeader = fully_static.clone().into();
-
-        assert!(fully_static == owned);
-    }
-
-    #[test]
-    fn test_clone_keeps_borrows() {
-        let header = Header::new(b":method", b"GET");
-        let clone = header.clone();
-
-        match clone.name {
-            Cow::Owned(_) => panic!("Expected a borrowed name"),
-            _ => {}
-        };
-        match clone.value {
-            Cow::Owned(_) => panic!("Expected a borrowed value"),
-            _ => {}
-        };
     }
 
     #[test]

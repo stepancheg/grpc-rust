@@ -5,7 +5,8 @@ use std::fmt;
 use std::borrow::Cow;
 use solicit::StreamId;
 use solicit::frame::{FrameBuilder, FrameIR, Flag, Frame, FrameHeader, RawFrame, parse_padded_payload};
-use super::bs_debug::BsDebug;
+
+use misc::BsDebug;
 
 /// An enum representing the flags that a `DataFrame` can have.
 /// The integer representation associated to each variant is that flag's

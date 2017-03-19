@@ -7,7 +7,6 @@ use std::any::Any;
 
 use httpbis::HttpError;
 use httpbis::Header;
-use httpbis::StaticHeader;
 use httpbis::server::HttpServer;
 
 use futures;
@@ -309,7 +308,7 @@ fn stream_500(message: &str) -> HttpPartFutureStreamSend {
 }
 
 impl HttpService for GrpcHttpServerHandlerFactory {
-    fn new_request(&self, headers: Vec<StaticHeader>, req: HttpPartFutureStreamSend) -> HttpPartFutureStreamSend {
+    fn new_request(&self, headers: Vec<Header>, req: HttpPartFutureStreamSend) -> HttpPartFutureStreamSend {
 
         let path = match slice_get_header(&headers, ":path") {
             Some(path) => path.to_owned(),

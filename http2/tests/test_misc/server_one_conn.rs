@@ -15,7 +15,7 @@ use tokio_core::reactor;
 
 //use tokio_tls;
 
-use httpbis::solicit::StaticHeader;
+use httpbis::solicit::Header;
 use httpbis::solicit::HttpError;
 
 use httpbis::for_test::*;
@@ -36,14 +36,14 @@ struct FromLoop {
 
 impl HttpServerOneConn {
     pub fn new_fn<S>(port: u16, service: S) -> Self
-        where S : Fn(Vec<StaticHeader>, HttpPartFutureStreamSend) -> HttpPartFutureStreamSend + Send + 'static
+        where S : Fn(Vec<Header>, HttpPartFutureStreamSend) -> HttpPartFutureStreamSend + Send + 'static
     {
         HttpServerOneConn::new_fn_impl(port, None, service)
     }
 
     /*
     pub fn new_tls_fn<S>(port: u16, server_context: tokio_tls::ServerContext, service: S) -> Self
-        where S : Fn(Vec<StaticHeader>, HttpStreamStreamSend) -> HttpStreamStreamSend + Send + 'static
+        where S : Fn(Vec<Header>, HttpStreamStreamSend) -> HttpStreamStreamSend + Send + 'static
     {
         HttpServerOneConn::new_fn_impl(port, Some(server_context), service)
     }
@@ -51,7 +51,7 @@ impl HttpServerOneConn {
 
     #[allow(dead_code)]
     fn new_fn_impl<S>(port: u16, server_context: Option</* tokio_tls::ServerContext */ u32>, service: S) -> Self
-        where S : Fn(Vec<StaticHeader>, HttpPartFutureStreamSend) -> HttpPartFutureStreamSend + Send + 'static
+        where S : Fn(Vec<Header>, HttpPartFutureStreamSend) -> HttpPartFutureStreamSend + Send + 'static
     {
         let (from_loop_tx, from_loop_rx) = futures::oneshot();
         let (shutdown_tx, shutdown_rx) = futures::oneshot::<()>();

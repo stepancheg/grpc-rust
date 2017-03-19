@@ -241,11 +241,13 @@ impl<'a, S> HttpConnectionSender<'a, S>
     ///   performs no checks as to whether the stream is a valid identifier.
     /// - `end_stream` - whether the stream should be closed from the peer's side immediately
     ///   after sending the headers
-    pub fn send_headers<'n, 'v, H: Into<Vec<Header<'n, 'v>>>>(&mut self,
-                                                              headers: H,
-                                                              stream_id: StreamId,
-                                                              end_stream: EndStream)
-                                                              -> HttpResult<()> {
+    pub fn send_headers<H: Into<Vec<Header>>>(
+        &mut self,
+        headers: H,
+        stream_id: StreamId,
+        end_stream: EndStream)
+            -> HttpResult<()>
+    {
         let headers_fragment = self.conn
                                    .encoder
                                    .encode(headers.into().iter().map(|h| (h.name(), h.value())));

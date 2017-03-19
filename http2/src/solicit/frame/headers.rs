@@ -4,7 +4,7 @@ use std::io;
 use std::borrow::Cow;
 use std::fmt;
 
-use super::bs_debug::BsDebug;
+use misc::BsDebug;
 
 use solicit::StreamId;
 use solicit::frame::{FrameBuilder, FrameIR, Flag, Frame, FrameHeader, RawFrame, parse_padded_payload};

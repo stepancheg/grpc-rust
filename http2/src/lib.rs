@@ -33,7 +33,6 @@ mod misc;
 pub use solicit::HttpScheme;
 pub use solicit::HttpError;
 pub use solicit::Header;
-pub use solicit::StaticHeader;
 
 pub mod for_test {
     pub use server_conf::*;

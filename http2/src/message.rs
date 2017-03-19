@@ -1,11 +1,11 @@
-use solicit::StaticHeader;
+use solicit::Header;
 
 use http_common::*;
 
 
 #[derive(Default)]
 pub struct SimpleHttpMessage {
-    pub headers: Vec<StaticHeader>,
+    pub headers: Vec<Header>,
     pub body: Vec<u8>,
 }
 

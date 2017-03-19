@@ -16,7 +16,6 @@ use solicit::Header;
 use solicit::HttpResult;
 use solicit::HttpError;
 use solicit::HttpScheme;
-use solicit::StaticHeader;
 
 use solicit_async::*;
 
@@ -74,7 +73,7 @@ impl HttpClient {
 
     pub fn start_request(
         &self,
-        headers: Vec<StaticHeader>,
+        headers: Vec<Header>,
         body: HttpFutureStreamSend<Vec<u8>>)
             -> HttpPartFutureStreamSend
     {
@@ -83,7 +82,7 @@ impl HttpClient {
 
     pub fn start_request_simple(
         &self,
-        headers: Vec<StaticHeader>,
+        headers: Vec<Header>,
         body: Vec<u8>)
             -> HttpPartFutureStreamSend
     {
