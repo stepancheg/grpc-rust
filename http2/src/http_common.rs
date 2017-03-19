@@ -92,6 +92,7 @@ pub struct HttpStreamCommon {
     pub out_window_size: WindowSize,
     pub in_window_size: WindowSize,
     pub outgoing: VecDeque<HttpStreamPartContent>,
+    // Means nothing will be added to `outgoing`
     pub outgoing_end: bool,
 }
 
@@ -107,6 +108,7 @@ impl HttpStreamCommon {
     }
 
     pub fn close_local(&mut self) {
+        trace!("close local");
         self.state = match self.state {
             StreamState::Closed | StreamState::HalfClosedRemote => StreamState::Closed,
             _ => StreamState::HalfClosedLocal,
@@ -164,25 +166,26 @@ impl HttpStreamCommon {
                 unreachable!()
             };
 
+        // Max of connection and stream window size
         let max_window = cmp::max(self.out_window_size.size(), conn_out_window_size.size());
 
         if data.len() as usize > max_window as usize {
+            trace!("truncating data of len {} to {}", data.len(), max_window);
             let size = self.out_window_size.size() as usize;
             self.outgoing.push_front(HttpStreamPartContent::Data(
                 data[size..].to_vec()
             ));
             data.truncate(size);
-            self.out_window_size.try_decrease(size as i32).unwrap();
-            conn_out_window_size.try_decrease(size as i32).unwrap();
-        } else {
-            self.out_window_size.try_decrease(data.len() as i32).unwrap();
-            conn_out_window_size.try_decrease(data.len() as i32).unwrap();
         };
+
+        self.out_window_size.try_decrease(data.len() as i32).unwrap();
+        conn_out_window_size.try_decrease(data.len() as i32).unwrap();
 
         let last = self.outgoing_end && self.outgoing.is_empty();
         if last {
             self.close_local();
         }
+
         Some(HttpStreamPart {
             content: HttpStreamPartContent::Data(data),
             last: last,

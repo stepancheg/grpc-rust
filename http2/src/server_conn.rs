@@ -22,7 +22,6 @@ use tokio_core::reactor;
 use futures_misc::*;
 
 use solicit_async::*;
-use solicit_misc::*;
 use http_common::*;
 
 use server_conf::*;
@@ -189,6 +188,7 @@ type ServerCommandLoop<F> = CommandLoopData<ServerInner<F>>;
 enum ServerToWriteMessage<F : HttpService> {
     _Dummy(F),
     ResponsePart(StreamId, HttpStreamPart),
+    // send when user provided handler completed the stream
     ResponseStreamEnd(StreamId),
     Common(CommonToWriteMessage),
 }
@@ -228,32 +228,20 @@ impl<F : HttpService, I : Io + Send> ServerWriteLoop<F, I> {
     }
 
     fn process_response_end(self, stream_id: StreamId) -> HttpFuture<Self> {
-        let send_buf = self.inner.with(move |inner: &mut ServerInner<F>| {
-            let (send, close) = {
-                let stream = inner.common.get_stream_mut(stream_id);
-                if let Some(stream) = stream {
-                    if !stream.common.state.is_closed_local() {
-                        stream.common.close_local();
-                        (true, true)
-                    } else {
-                        (false, false)
-                    }
-                } else {
-                    (false, false)
-                }
-            };
-
-            if close {
-                inner.common.remove_stream_if_closed(stream_id);
-            }
-
-            if send {
-                inner.common.conn.send_end_of_stream_to_vec(stream_id).unwrap()
+        let stream_id = self.inner.with(move |inner: &mut ServerInner<F>| {
+            let stream = inner.common.get_stream_mut(stream_id);
+            if let Some(stream) = stream {
+                stream.common.outgoing_end = true;
+                Some(stream_id)
             } else {
-                Vec::new()
+                None
             }
         });
-        self.write_all(send_buf)
+        if let Some(stream_id) = stream_id {
+            self.send_outg_stream(stream_id)
+        } else {
+            Box::new(futures::finished(self))
+        }
     }
 
     fn process_message(self, message: ServerToWriteMessage<F>) -> HttpFuture<Self> {
