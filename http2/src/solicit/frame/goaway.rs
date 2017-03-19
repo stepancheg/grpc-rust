@@ -72,7 +72,7 @@ impl<'a> GoawayFrame<'a> {
 impl<'a> Frame<'a> for GoawayFrame<'a> {
     type FlagType = NoFlag;
 
-    fn from_raw(raw_frame: &'a RawFrame<'a>) -> Option<Self> {
+    fn from_raw(raw_frame: &'a RawFrame) -> Option<Self> {
         let (payload_len, frame_type, flags, stream_id) = raw_frame.header();
         if payload_len < GOAWAY_MIN_FRAME_LEN {
             return None;

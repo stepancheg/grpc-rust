@@ -168,7 +168,7 @@ impl<'a> Frame<'a> for DataFrame<'a> {
     /// Creates a new `DataFrame` from the given `RawFrame` (i.e. header and
     /// payload), if possible.  Returns `None` if a valid `DataFrame` cannot be
     /// constructed from the given `RawFrame`.
-    fn from_raw(raw_frame: &'a RawFrame<'a>) -> Option<DataFrame<'a>> {
+    fn from_raw(raw_frame: &'a RawFrame) -> Option<DataFrame<'a>> {
         // Unpack the header
         let (len, frame_type, flags, stream_id) = raw_frame.header();
         // Check that the frame type is correct for this frame implementation

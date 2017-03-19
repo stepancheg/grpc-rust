@@ -87,8 +87,6 @@ mod root_tests {
 
 #[cfg(test)]
 mod test_header {
-    use std::borrow::Cow;
-
     use solicit::Header;
 
     fn _assert_is_static(_: Header) {}

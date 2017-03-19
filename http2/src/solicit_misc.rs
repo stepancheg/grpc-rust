@@ -19,14 +19,14 @@ use http_common::*;
 
 /// work around https://github.com/mlalic/solicit/pull/33
 #[allow(dead_code)]
-pub struct OnceReceiveFrame<'a> {
-    raw_frame: RawFrame<'a>,
+pub struct OnceReceiveFrame {
+    raw_frame: RawFrame,
     used: bool,
 }
 
 #[allow(dead_code)]
-impl<'a> OnceReceiveFrame<'a> {
-    pub fn new(raw_frame: RawFrame<'a>) -> OnceReceiveFrame<'a> {
+impl OnceReceiveFrame {
+    pub fn new(raw_frame: RawFrame) -> OnceReceiveFrame {
         OnceReceiveFrame {
             raw_frame: raw_frame,
             used: false,
@@ -34,7 +34,7 @@ impl<'a> OnceReceiveFrame<'a> {
     }
 }
 
-impl<'a> ReceiveFrame for OnceReceiveFrame<'a> {
+impl ReceiveFrame for OnceReceiveFrame {
     fn recv_frame(&mut self) -> HttpResult<HttpFrame> {
         assert!(!self.used);
         self.used = true;
@@ -254,7 +254,7 @@ impl<'a> HttpFrameConn<'a> {
 pub enum HttpFrameClassified<'a> {
     Stream(HttpFrameStream<'a>),
     Conn(HttpFrameConn<'a>),
-    Unknown(RawFrame<'a>),
+    Unknown(RawFrame),
 }
 
 impl<'a> HttpFrameClassified<'a> {

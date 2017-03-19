@@ -575,7 +575,7 @@ impl<I, N> ReadLoopData<I, N>
         N : LoopInner,
 {
     /// Recv a frame from the network
-    fn recv_raw_frame(self) -> HttpFuture<(Self, RawFrame<'static>)> {
+    fn recv_raw_frame(self) -> HttpFuture<(Self, RawFrame)> {
         let ReadLoopData { read, inner } = self;
         Box::new(recv_raw_frame(read)
             .map(|(read, frame)| (ReadLoopData { read: read, inner: inner }, frame))

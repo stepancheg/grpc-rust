@@ -42,7 +42,7 @@ impl<T> AsMut<[T]> for VecWithPos<T> {
     }
 }
 
-pub fn recv_raw_frame<R : Read + Send + 'static>(read: R) -> HttpFuture<(R, RawFrame<'static>)> {
+pub fn recv_raw_frame<R : Read + Send + 'static>(read: R) -> HttpFuture<(R, RawFrame)> {
     let header = read_exact(read, [0; 9]);
     let frame_buf = header.and_then(|(read, raw_header)| {
         let header = unpack_header(&raw_header);
@@ -67,7 +67,7 @@ pub fn recv_raw_frame<R : Read + Send + 'static>(read: R) -> HttpFuture<(R, RawF
 }
 
 #[allow(dead_code)]
-pub fn recv_raw_frame_stream<R : Read + Send + 'static>(_read: R) -> HttpFutureStream<RawFrame<'static>> {
+pub fn recv_raw_frame_stream<R : Read + Send + 'static>(_read: R) -> HttpFutureStream<RawFrame> {
     // https://users.rust-lang.org/t/futures-rs-how-to-generate-a-stream-from-futures/7020
     panic!();
 }
@@ -86,7 +86,7 @@ pub fn recv_settings_frame<R : Read + Send + 'static>(read: R) -> HttpFuture<(R,
 }
 
 #[allow(dead_code)]
-pub fn send_raw_frame<W : Write + Send + 'static>(write: W, frame: RawFrame<'static>) -> HttpFuture<W> {
+pub fn send_raw_frame<W : Write + Send + 'static>(write: W, frame: RawFrame) -> HttpFuture<W> {
     let bytes = frame.serialize();
     Box::new(write_all(write, bytes)
         .map(|(w, _)| w)

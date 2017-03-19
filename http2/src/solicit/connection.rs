@@ -39,7 +39,7 @@ pub enum HttpFrame<'a> {
     PingFrame(PingFrame),
     GoawayFrame(GoawayFrame<'a>),
     WindowUpdateFrame(WindowUpdateFrame),
-    UnknownFrame(RawFrame<'a>),
+    UnknownFrame(RawFrame),
 }
 
 impl<'a> HttpFrame<'a> {

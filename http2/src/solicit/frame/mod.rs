@@ -2,7 +2,8 @@
 
 use std::io;
 use std::mem;
-use std::borrow::Cow;
+
+use bytes::Bytes;
 
 use solicit::StreamId;
 
@@ -168,7 +169,7 @@ pub trait Frame<'a>: Sized {
     /// frame's rules, etc.
     ///
     /// Otherwise, returns a newly constructed `Frame`.
-    fn from_raw(raw_frame: &'a RawFrame<'a>) -> Option<Self>;
+    fn from_raw(raw_frame: &'a RawFrame) -> Option<Self>;
 
     /// Tests if the given flag is set for the frame.
     fn is_set(&self, flag: Self::FlagType) -> bool;
@@ -192,13 +193,13 @@ pub trait Frame<'a>: Sized {
 #[derive(PartialEq)]
 #[derive(Debug)]
 #[derive(Clone)]
-pub struct RawFrame<'a> {
+pub struct RawFrame {
     /// The raw frame representation, including both the raw header representation
     /// (in the first 9 bytes), followed by the raw payload representation.
-    raw_content: Cow<'a, [u8]>,
+    raw_content: Bytes,
 }
 
-impl<'a> RawFrame<'a> {
+impl RawFrame {
     /// Parses a `RawFrame` from the bytes starting at the beginning of the given buffer.
     ///
     /// Returns the `None` variant when it is not possible to parse a raw frame from the buffer
@@ -234,9 +235,12 @@ impl<'a> RawFrame<'a> {
     /// let frame = RawFrame::parse(&buf[..]).unwrap();
     /// assert_eq!(frame.as_ref(), &buf[..]);
     /// ```
-    pub fn parse(buf: &'a [u8]) -> Option<RawFrame<'a>> {
+    pub fn parse<B : Into<Bytes>>(into_buf: B) -> Option<RawFrame> {
         // TODO(mlalic): This might allow an extra parameter that specifies the maximum frame
         //               payload length?
+
+        let buf = into_buf.into();
+
         if buf.len() < 9 {
             return None;
         }
@@ -265,7 +269,7 @@ impl<'a> RawFrame<'a> {
     /// Returns a `Vec` of bytes representing the serialized (on-the-wire)
     /// representation of this raw frame.
     pub fn serialize(&self) -> Vec<u8> {
-        self.raw_content.clone().into_owned()
+        self.raw_content.as_ref().to_owned()
     }
 
     /// Returns a `FrameHeader` instance corresponding to the headers of the
@@ -288,12 +292,12 @@ impl<'a> RawFrame<'a> {
     }
 }
 
-impl<'a> Into<Vec<u8>> for RawFrame<'a> {
+impl Into<Vec<u8>> for RawFrame {
     fn into(self) -> Vec<u8> {
-        self.raw_content.into_owned()
+        self.raw_content.as_ref().to_owned()
     }
 }
-impl<'a> AsRef<[u8]> for RawFrame<'a> {
+impl AsRef<[u8]> for RawFrame {
     fn as_ref(&self) -> &[u8] {
         self.raw_content.as_ref()
     }
@@ -302,19 +306,19 @@ impl<'a> AsRef<[u8]> for RawFrame<'a> {
 ///
 /// This conversion is unchecked and could cause the resulting `RawFrame` to be an
 /// invalid HTTP/2 frame.
-impl<'a> From<Vec<u8>> for RawFrame<'a> {
-    fn from(raw: Vec<u8>) -> RawFrame<'a> {
-        RawFrame { raw_content: Cow::Owned(raw) }
+impl From<Vec<u8>> for RawFrame {
+    fn from(raw: Vec<u8>) -> RawFrame {
+        RawFrame { raw_content: Bytes::from(raw) }
     }
 }
-impl<'a> From<&'a [u8]> for RawFrame<'a> {
-    fn from(raw: &'a [u8]) -> RawFrame<'a> {
-        RawFrame { raw_content: Cow::Borrowed(raw) }
+impl<'a> From<&'a [u8]> for RawFrame {
+    fn from(raw: &'a [u8]) -> RawFrame {
+        RawFrame { raw_content: Bytes::from(raw) }
     }
 }
 
 /// `RawFrame`s can be serialized to an on-the-wire format.
-impl<'a> FrameIR for RawFrame<'a> {
+impl FrameIR for RawFrame {
     fn serialize_into<B: FrameBuilder>(self, b: &mut B) -> io::Result<()> {
         b.write_header(self.header())?;
         b.write_all(self.payload())
