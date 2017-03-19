@@ -625,15 +625,5 @@ impl Response {
     }
 }
 
-/// A struct representing a full HTTP/2 request, along with the full body, as a
-/// sequence of bytes.
-#[derive(Clone)]
-pub struct Request {
-    pub stream_id: u32,
-    pub headers: Vec<Header>,
-    pub body: Vec<u8>,
-}
-
-
 #[cfg(test)]
 pub mod tests;
