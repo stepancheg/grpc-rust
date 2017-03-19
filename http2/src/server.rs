@@ -20,6 +20,8 @@ use solicit::HttpError;
 
 use solicit_async::*;
 
+use net2;
+
 use super::server_conn::*;
 use super::http_common::*;
 
@@ -64,6 +66,38 @@ pub struct HttpServerStateSnapshot {
     pub conns: HashMap<u64, ConnectionStateSnapshot>,
 }
 
+#[cfg(unix)]
+fn configure_tcp(tcp: &net2::TcpBuilder, conf: &HttpServerConf) -> io::Result<()> {
+    use net2::unix::UnixTcpBuilderExt;
+    if let Some(reuse_port) = conf.reuse_port {
+        tcp.reuse_port(reuse_port)?;
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn configure_tcp(_tcp: &net2::TcpBuilder, conf: &HttpServerConf) -> io::Result<()> {
+    Ok(())
+}
+
+fn listener(
+    addr: &SocketAddr,
+    handle: &reactor::Handle,
+    conf: &HttpServerConf)
+        -> io::Result<TcpListener>
+{
+    let listener = match *addr {
+        SocketAddr::V4(_) => net2::TcpBuilder::new_v4()?,
+        SocketAddr::V6(_) => net2::TcpBuilder::new_v6()?,
+    };
+    configure_tcp(&listener, conf)?;
+    listener.reuse_address(true)?;
+    listener.bind(addr)?;
+    let backlog = conf.backlog.unwrap_or(1024);
+    let listener = listener.listen(backlog)?;
+    TcpListener::from_listener(listener, addr, handle)
+}
+
 fn run_server_event_loop<S>(
     listen_addr: SocketAddr,
     state: Arc<Mutex<HttpServerState>>,
@@ -80,7 +114,7 @@ fn run_server_event_loop<S>(
 
     let shutdown_rx = shutdown_rx.map_err(|()| HttpError::IoError(io::Error::new(io::ErrorKind::Other, "shutdown_rx")));
 
-    let listen = TcpListener::bind(&listen_addr, &lp.handle()).unwrap();
+    let listen = listener(&listen_addr, &lp.handle(), &conf).unwrap();
 
     let stuff = stream::repeat((lp.handle(), service, state, conf));
 
