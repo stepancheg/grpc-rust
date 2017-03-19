@@ -7,7 +7,6 @@ use solicit::Header;
 use solicit::StreamId;
 use solicit::HttpResult;
 use solicit::frame::*;
-use solicit::connection::ReceiveFrame;
 use solicit::connection::HttpFrame;
 use solicit::connection::SendFrame;
 use solicit::connection::HttpConnection;
@@ -16,31 +15,6 @@ use solicit::connection::DataChunk;
 
 use http_common::*;
 
-
-/// work around https://github.com/mlalic/solicit/pull/33
-#[allow(dead_code)]
-pub struct OnceReceiveFrame {
-    raw_frame: RawFrame,
-    used: bool,
-}
-
-#[allow(dead_code)]
-impl OnceReceiveFrame {
-    pub fn new(raw_frame: RawFrame) -> OnceReceiveFrame {
-        OnceReceiveFrame {
-            raw_frame: raw_frame,
-            used: false,
-        }
-    }
-}
-
-impl ReceiveFrame for OnceReceiveFrame {
-    fn recv_frame(&mut self) -> HttpResult<HttpFrame> {
-        assert!(!self.used);
-        self.used = true;
-        HttpFrame::from_raw(&self.raw_frame)
-    }
-}
 
 pub struct VecSendFrame(pub Vec<u8>);
 
