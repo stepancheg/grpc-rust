@@ -14,6 +14,7 @@ use tokio_core::net::TcpStream;
 use tokio_core::reactor;
 
 use solicit::HttpError;
+use solicit::frame::FRAME_HEADER_LEN;
 use solicit::frame::RawFrame;
 use solicit::frame::FrameIR;
 use solicit::frame::unpack_header;
@@ -43,19 +44,18 @@ impl<T> AsMut<[T]> for VecWithPos<T> {
 }
 
 pub fn recv_raw_frame<R : Read + Send + 'static>(read: R) -> HttpFuture<(R, RawFrame)> {
-    let header = read_exact(read, [0; 9]);
+    let header = read_exact(read, [0; FRAME_HEADER_LEN]);
     let frame_buf = header.and_then(|(read, raw_header)| {
         let header = unpack_header(&raw_header);
-        let total_len = 9 + header.0 as usize;
+        let total_len = FRAME_HEADER_LEN + header.0 as usize;
         let mut full_frame = VecWithPos {
-            vec: Vec::with_capacity(9),
+            vec: Vec::with_capacity(total_len),
             pos: 0,
         };
 
-        full_frame.vec.reserve_exact(total_len);
         full_frame.vec.extend(&raw_header);
         full_frame.vec.resize(total_len, 0);
-        full_frame.pos = 9;
+        full_frame.pos = FRAME_HEADER_LEN;
 
         read_exact(read, full_frame)
     });
