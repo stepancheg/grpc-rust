@@ -6,6 +6,8 @@ use std::borrow::Cow;
 use solicit::StreamId;
 use solicit::frame::{FrameBuilder, FrameIR, Flag, Frame, FrameHeader, RawFrame, parse_padded_payload};
 
+use bytes::Bytes;
+
 use misc::BsDebug;
 
 /// An enum representing the flags that a `DataFrame` can have.
@@ -49,10 +51,10 @@ impl<'a> From<&'a [u8]> for DataChunk<'a> {
 /// spec, section 6.1.
 #[derive(PartialEq)]
 #[derive(Clone)]
-pub struct DataFrame<'a> {
+pub struct DataFrame {
     /// The data found in the frame as an opaque byte sequence. It never
     /// includes padding bytes.
-    pub data: Cow<'a, [u8]>,
+    pub data: Bytes,
     /// Represents the flags currently set on the `DataFrame`, packed into a
     /// single byte.
     flags: u8,
@@ -64,7 +66,7 @@ pub struct DataFrame<'a> {
     padding_len: Option<u8>,
 }
 
-impl<'a> fmt::Debug for DataFrame<'a> {
+impl fmt::Debug for DataFrame {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         fmt.debug_struct("DataFrame")
             .field("data", &BsDebug(&self.data))
@@ -75,16 +77,16 @@ impl<'a> fmt::Debug for DataFrame<'a> {
     }
 }
 
-impl<'a> DataFrame<'a> {
+impl DataFrame {
     /// Creates a new empty `DataFrame`, associated to the stream with the
     /// given ID.
-    pub fn new(stream_id: StreamId) -> DataFrame<'a> {
+    pub fn new(stream_id: StreamId) -> DataFrame {
         DataFrame {
             stream_id: stream_id,
             // All flags unset by default
             flags: 0,
             // No data stored in the frame yet
-            data: Cow::Borrowed(&[]),
+            data: Bytes::new(),
             // No padding
             padding_len: None,
         }
@@ -94,11 +96,11 @@ impl<'a> DataFrame<'a> {
     ///
     /// The chunk can be any type that can be converted into a `DataChunk` instance and, as such,
     /// can either pass ownership of the buffer to the DataFrame or provide a temporary borrow.
-    pub fn with_data<D: Into<DataChunk<'a>>>(stream_id: StreamId, data: D) -> DataFrame<'a> {
+    pub fn with_data<D: Into<Bytes>>(stream_id: StreamId, data: D) -> DataFrame {
         DataFrame {
             stream_id: stream_id,
             flags: 0,
-            data: data.into().0,
+            data: data.into(),
             padding_len: None,
         }
     }
@@ -143,7 +145,7 @@ impl<'a> DataFrame<'a> {
     /// If there was no padding, returns `None` for the second tuple member.
     ///
     /// If the payload was invalid for a DATA frame, returns `None`
-    fn parse_payload(payload: &[u8], padded: bool) -> Option<(&[u8], Option<u8>)> {
+    fn parse_payload(payload: Bytes, padded: bool) -> Option<(Bytes, Option<u8>)> {
         let (data, pad_len) = if padded {
             match parse_padded_payload(payload) {
                 Some((data, pad_len)) => (data, Some(pad_len)),
@@ -162,13 +164,13 @@ impl<'a> DataFrame<'a> {
     }
 }
 
-impl<'a> Frame<'a> for DataFrame<'a> {
+impl Frame for DataFrame {
     type FlagType = DataFlag;
 
     /// Creates a new `DataFrame` from the given `RawFrame` (i.e. header and
     /// payload), if possible.  Returns `None` if a valid `DataFrame` cannot be
     /// constructed from the given `RawFrame`.
-    fn from_raw(raw_frame: &'a RawFrame) -> Option<DataFrame<'a>> {
+    fn from_raw(raw_frame: &RawFrame) -> Option<DataFrame> {
         // Unpack the header
         let (len, frame_type, flags, stream_id) = raw_frame.header();
         // Check that the frame type is correct for this frame implementation
@@ -196,7 +198,7 @@ impl<'a> Frame<'a> for DataFrame<'a> {
                 Some(DataFrame {
                     stream_id: stream_id,
                     flags: flags,
-                    data: Cow::Borrowed(data),
+                    data: data,
                     padding_len: Some(padding_len),
                 })
             }
@@ -205,7 +207,7 @@ impl<'a> Frame<'a> for DataFrame<'a> {
                 Some(DataFrame {
                     stream_id: stream_id,
                     flags: flags,
-                    data: Cow::Borrowed(data),
+                    data: data,
                     padding_len: None,
                 })
             }
@@ -229,7 +231,7 @@ impl<'a> Frame<'a> for DataFrame<'a> {
     }
 }
 
-impl<'a> FrameIR for DataFrame<'a> {
+impl FrameIR for DataFrame {
     fn serialize_into<B: FrameBuilder>(self, b: &mut B) -> io::Result<()> {
         b.write_header(self.get_header())?;
         if self.is_padded() {

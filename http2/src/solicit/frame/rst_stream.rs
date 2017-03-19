@@ -49,10 +49,10 @@ impl RstStreamFrame {
     }
 }
 
-impl<'a> Frame<'a> for RstStreamFrame {
+impl Frame for RstStreamFrame {
     type FlagType = NoFlag;
 
-    fn from_raw(raw_frame: &'a RawFrame) -> Option<Self> {
+    fn from_raw(raw_frame: &RawFrame) -> Option<Self> {
         let (payload_len, frame_type, flags, stream_id) = raw_frame.header();
         if payload_len != RST_STREAM_FRAME_LEN {
             return None;

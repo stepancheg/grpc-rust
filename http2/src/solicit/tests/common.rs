@@ -9,7 +9,7 @@ use std::io::{Cursor, Read, Write};
 use solicit::{Header, ErrorCode};
 use solicit::frame::{RawFrame, FrameIR, FrameHeader, pack_header};
 use solicit::session::StreamState;
-use solicit::connection::{SendFrame, ReceiveFrame, HttpFrame, HttpConnection, EndStream, DataChunk};
+
 
 /// Creates a new `RawFrame` from two separate parts: the header and the payload.
 /// Useful for tests that need to create frames, since they can easily specify the header and the

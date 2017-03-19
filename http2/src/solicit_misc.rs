@@ -189,16 +189,16 @@ impl HttpConnectionEx for HttpConnection {
 
 /// Frames with stream
 #[derive(Debug)]
-pub enum HttpFrameStream<'a> {
-    Data(DataFrame<'a>),
-    Headers(HeadersFrame<'a>),
+pub enum HttpFrameStream {
+    Data(DataFrame),
+    Headers(HeadersFrame),
     RstStream(RstStreamFrame),
     WindowUpdate(WindowUpdateFrame),
 }
 
-impl<'a> HttpFrameStream<'a> {
+impl HttpFrameStream {
     #[allow(dead_code)]
-    pub fn into_frame(self) -> HttpFrame<'a> {
+    pub fn into_frame(self) -> HttpFrame {
         match self {
             HttpFrameStream::WindowUpdate(f) => HttpFrame::WindowUpdateFrame(f),
             HttpFrameStream::Data(f) => HttpFrame::DataFrame(f),
@@ -231,16 +231,16 @@ impl<'a> HttpFrameStream<'a> {
 
 /// Frames without stream (zero stream id)
 #[derive(Debug)]
-pub enum HttpFrameConn<'a> {
+pub enum HttpFrameConn {
     Settings(SettingsFrame),
     Ping(PingFrame),
-    Goaway(GoawayFrame<'a>),
+    Goaway(GoawayFrame),
     WindowUpdate(WindowUpdateFrame),
 }
 
-impl<'a> HttpFrameConn<'a> {
+impl HttpFrameConn {
     #[allow(dead_code)]
-    pub fn into_frame(self) -> HttpFrame<'a> {
+    pub fn into_frame(self) -> HttpFrame {
         match self {
             HttpFrameConn::Settings(f) => HttpFrame::SettingsFrame(f),
             HttpFrameConn::Ping(f) => HttpFrame::PingFrame(f),
@@ -251,14 +251,14 @@ impl<'a> HttpFrameConn<'a> {
 }
 
 #[derive(Debug)]
-pub enum HttpFrameClassified<'a> {
-    Stream(HttpFrameStream<'a>),
-    Conn(HttpFrameConn<'a>),
+pub enum HttpFrameClassified {
+    Stream(HttpFrameStream),
+    Conn(HttpFrameConn),
     Unknown(RawFrame),
 }
 
-impl<'a> HttpFrameClassified<'a> {
-    pub fn from(frame: HttpFrame<'a>) -> Self {
+impl HttpFrameClassified {
+    pub fn from(frame: HttpFrame) -> Self {
         match frame {
             HttpFrame::DataFrame(f) => HttpFrameClassified::Stream(HttpFrameStream::Data(f)),
             HttpFrame::HeadersFrame(f) => HttpFrameClassified::Stream(HttpFrameStream::Headers(f)),
@@ -277,7 +277,7 @@ impl<'a> HttpFrameClassified<'a> {
         }
     }
 
-    pub fn from_raw(raw_frame: &'a RawFrame) -> HttpResult<HttpFrameClassified<'a>> {
+    pub fn from_raw(raw_frame: &RawFrame) -> HttpResult<HttpFrameClassified> {
         Ok(HttpFrameClassified::from(HttpFrame::from_raw(raw_frame)?))
     }
 }

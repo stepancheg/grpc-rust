@@ -212,7 +212,7 @@ impl SettingsFrame {
     }
 }
 
-impl<'a> Frame<'a> for SettingsFrame {
+impl Frame for SettingsFrame {
     /// The type that represents the flags that the particular `Frame` can take.
     /// This makes sure that only valid `Flag`s are used with each `Frame`.
     type FlagType = SettingsFlag;

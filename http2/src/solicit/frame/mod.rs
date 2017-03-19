@@ -111,7 +111,7 @@ pub fn pack_header(header: &FrameHeader) -> FrameHeaderBuffer {
 ///
 /// If the padded payload is invalid (e.g. the length of the padding is equal
 /// to the total length), returns `None`.
-fn parse_padded_payload(payload: &[u8]) -> Option<(&[u8], u8)> {
+fn parse_padded_payload(payload: Bytes) -> Option<(Bytes, u8)> {
     if payload.len() == 0 {
         // We make sure not to index the payload before we're sure how
         // large the buffer is.
@@ -127,7 +127,7 @@ fn parse_padded_payload(payload: &[u8]) -> Option<(&[u8], u8)> {
         return None;
     }
 
-    Some((&payload[1..payload.len() - pad_len], pad_len as u8))
+    Some((payload.slice(1, payload.len() - pad_len), pad_len as u8))
 }
 
 /// A trait that types that are an intermediate representation of HTTP/2 frames should implement.
@@ -153,7 +153,7 @@ impl Flag for NoFlag {
 }
 
 /// A trait that all HTTP/2 frame structs need to implement.
-pub trait Frame<'a>: Sized {
+pub trait Frame: Sized {
     /// The type that represents the flags that the particular `Frame` can take.
     /// This makes sure that only valid `Flag`s are used with each `Frame`.
     type FlagType: Flag;
@@ -169,7 +169,7 @@ pub trait Frame<'a>: Sized {
     /// frame's rules, etc.
     ///
     /// Otherwise, returns a newly constructed `Frame`.
-    fn from_raw(raw_frame: &'a RawFrame) -> Option<Self>;
+    fn from_raw(raw_frame: &RawFrame) -> Option<Self>;
 
     /// Tests if the given flag is set for the frame.
     fn is_set(&self, flag: Self::FlagType) -> bool;
@@ -287,8 +287,8 @@ impl RawFrame {
     }
 
     /// Returns a slice representing the payload of the `RawFrame`.
-    pub fn payload(&self) -> &[u8] {
-        &self.raw_content[9..]
+    pub fn payload(&self) -> Bytes {
+        self.raw_content.slice_from(9)
     }
 }
 
@@ -321,7 +321,7 @@ impl<'a> From<&'a [u8]> for RawFrame {
 impl FrameIR for RawFrame {
     fn serialize_into<B: FrameBuilder>(self, b: &mut B) -> io::Result<()> {
         b.write_header(self.header())?;
-        b.write_all(self.payload())
+        b.write_all(&self.payload())
     }
 }
 
@@ -329,6 +329,8 @@ impl FrameIR for RawFrame {
 mod tests {
     use super::{unpack_header, pack_header, RawFrame, FrameIR};
     use std::io;
+
+    use bytes::Bytes;
 
     /// Tests that the `unpack_header` function correctly returns the
     /// components of HTTP/2 frame headers.
@@ -456,7 +458,7 @@ mod tests {
             let raw = RawFrame::from(buf);
 
             assert_eq!(raw.header(), header);
-            assert_eq!(raw.payload(), data);
+            assert_eq!(raw.payload(), Bytes::from_static(data));
             assert_eq!(raw.serialize(), buf_clone);
         }
         // Correct frame with trailing data
@@ -475,7 +477,7 @@ mod tests {
             let raw = RawFrame::from(buf);
 
             assert_eq!(raw.header(), header);
-            assert_eq!(raw.payload(), b"12312345");
+            assert_eq!(raw.payload(), Bytes::from_static(b"12312345"));
             assert_eq!(raw.serialize(), buf_clone);
         }
         // Missing payload chunk
@@ -493,7 +495,7 @@ mod tests {
             let raw = RawFrame::from(buf);
 
             assert_eq!(raw.header(), header);
-            assert_eq!(raw.payload(), b"12");
+            assert_eq!(raw.payload(), Bytes::from_static(b"12"));
             assert_eq!(raw.serialize(), buf_clone);
         }
         // Missing header chunk

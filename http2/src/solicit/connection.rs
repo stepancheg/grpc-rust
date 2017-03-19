@@ -31,19 +31,19 @@ use hpack;
 #[derive(PartialEq)]
 #[derive(Debug)]
 #[derive(Clone)]
-pub enum HttpFrame<'a> {
-    DataFrame(DataFrame<'a>),
-    HeadersFrame(HeadersFrame<'a>),
+pub enum HttpFrame {
+    DataFrame(DataFrame),
+    HeadersFrame(HeadersFrame),
     RstStreamFrame(RstStreamFrame),
     SettingsFrame(SettingsFrame),
     PingFrame(PingFrame),
-    GoawayFrame(GoawayFrame<'a>),
+    GoawayFrame(GoawayFrame),
     WindowUpdateFrame(WindowUpdateFrame),
     UnknownFrame(RawFrame),
 }
 
-impl<'a> HttpFrame<'a> {
-    pub fn from_raw(raw_frame: &'a RawFrame) -> HttpResult<HttpFrame<'a>> {
+impl HttpFrame{
+    pub fn from_raw(raw_frame: &RawFrame) -> HttpResult<HttpFrame> {
         let frame = match raw_frame.header().1 {
             0x0 => HttpFrame::DataFrame(HttpFrame::parse_frame(&raw_frame)?),
             0x1 => HttpFrame::HeadersFrame(HttpFrame::parse_frame(&raw_frame)?),
@@ -66,7 +66,7 @@ impl<'a> HttpFrame<'a> {
     /// Failing to decode the given `Frame` from the `raw_frame`, an
     /// `HttpError::InvalidFrame` error is returned.
     #[inline]
-    fn parse_frame<F: Frame<'a>>(raw_frame: &'a RawFrame) -> HttpResult<F> {
+    fn parse_frame<F: Frame>(raw_frame: &RawFrame) -> HttpResult<F> {
         // TODO: The reason behind being unable to decode the frame should be
         //       extracted to allow an appropriate connection-level action to be
         //       taken (e.g. responding with a PROTOCOL_ERROR).

@@ -1,8 +1,9 @@
 //! The module contains the implementation of the `HEADERS` frame and associated flags.
 
 use std::io;
-use std::borrow::Cow;
 use std::fmt;
+
+use bytes::Bytes;
 
 use misc::BsDebug;
 
@@ -118,9 +119,9 @@ impl StreamDependency {
 /// HTTP/2 spec, section 6.2.
 #[derive(PartialEq)]
 #[derive(Clone)]
-pub struct HeadersFrame<'a> {
+pub struct HeadersFrame {
     /// The header fragment bytes stored within the frame.
-    header_fragment: Cow<'a, [u8]>,
+    header_fragment: Bytes,
     /// The ID of the stream with which this frame is associated
     pub stream_id: StreamId,
     /// The stream dependency information, if any.
@@ -131,7 +132,7 @@ pub struct HeadersFrame<'a> {
     flags: u8,
 }
 
-impl<'a> fmt::Debug for HeadersFrame<'a> {
+impl fmt::Debug for HeadersFrame {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         fmt.debug_struct("HeadersFrame")
             .field("header_fragment", &BsDebug(&self.header_fragment))
@@ -143,12 +144,12 @@ impl<'a> fmt::Debug for HeadersFrame<'a> {
     }
 }
 
-impl<'a> HeadersFrame<'a> {
+impl HeadersFrame {
     /// Creates a new `HeadersFrame` with the given header fragment and stream
     /// ID. No padding, no stream dependency, and no flags are set.
-    pub fn new(fragment: Vec<u8>, stream_id: StreamId) -> HeadersFrame<'a> {
+    pub fn new(fragment: Vec<u8>, stream_id: StreamId) -> HeadersFrame {
         HeadersFrame {
-            header_fragment: Cow::Owned(fragment),
+            header_fragment: Bytes::from(fragment),
             stream_id: stream_id,
             stream_dep: None,
             padding_len: None,
@@ -161,9 +162,9 @@ impl<'a> HeadersFrame<'a> {
     pub fn with_dependency(fragment: Vec<u8>,
                            stream_id: StreamId,
                            stream_dep: StreamDependency)
-                           -> HeadersFrame<'a> {
+                           -> HeadersFrame {
         HeadersFrame {
-            header_fragment: Cow::Owned(fragment),
+            header_fragment: Bytes::from(fragment),
             stream_id: stream_id,
             stream_dep: Some(stream_dep),
             padding_len: None,
@@ -217,7 +218,7 @@ impl<'a> HeadersFrame<'a> {
     }
 }
 
-impl<'a> Frame<'a> for HeadersFrame<'a> {
+impl Frame for HeadersFrame {
     /// The type that represents the flags that the particular `Frame` can take.
     /// This makes sure that only valid `Flag`s are used with each `Frame`.
     type FlagType = HeadersFlag;
@@ -231,7 +232,7 @@ impl<'a> Frame<'a> for HeadersFrame<'a> {
     /// `RawFrame`. The stream ID *must not* be 0.
     ///
     /// Otherwise, returns a newly constructed `HeadersFrame`.
-    fn from_raw(raw_frame: &'a RawFrame) -> Option<HeadersFrame<'a>> {
+    fn from_raw(raw_frame: &RawFrame) -> Option<HeadersFrame> {
         // Unpack the header
         let (len, frame_type, flags, stream_id) = raw_frame.header();
         // Check that the frame type is correct for this frame implementation
@@ -253,7 +254,7 @@ impl<'a> Frame<'a> for HeadersFrame<'a> {
         // the frame is padded.
         let padded = (flags & HeadersFlag::Padded.bitmask()) != 0;
         let (actual, pad_len) = if padded {
-            match parse_padded_payload(&raw_frame.payload()) {
+            match parse_padded_payload(raw_frame.payload()) {
                 Some((data, pad_len)) => (data, Some(pad_len)),
                 None => return None,
             }
@@ -265,13 +266,13 @@ impl<'a> Frame<'a> for HeadersFrame<'a> {
         // the appropriate flag is set.
         let priority = (flags & HeadersFlag::Priority.bitmask()) != 0;
         let (data, stream_dep) = if priority {
-            (&actual[5..], Some(StreamDependency::parse(&actual[..5])))
+            (actual.slice_from(5), Some(StreamDependency::parse(&actual[..5])))
         } else {
             (actual, None)
         };
 
         Some(HeadersFrame {
-            header_fragment: Cow::Borrowed(data),
+            header_fragment: data,
             stream_id: stream_id,
             stream_dep: stream_dep,
             padding_len: pad_len,
@@ -297,7 +298,7 @@ impl<'a> Frame<'a> for HeadersFrame<'a> {
     }
 }
 
-impl<'a> FrameIR for HeadersFrame<'a> {
+impl FrameIR for HeadersFrame {
     fn serialize_into<B: FrameBuilder>(self, b: &mut B) -> io::Result<()> {
         b.write_header(self.get_header())?;
         let padded = self.is_set(HeadersFlag::Padded);

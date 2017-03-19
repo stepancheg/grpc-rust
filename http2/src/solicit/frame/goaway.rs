@@ -2,6 +2,8 @@
 
 use std::io;
 
+use bytes::Bytes;
+
 use solicit::{ErrorCode, StreamId};
 use solicit::frame::{Frame, FrameIR, FrameBuilder, FrameHeader, RawFrame, NoFlag, parse_stream_id};
 
@@ -13,14 +15,14 @@ pub const GOAWAY_FRAME_TYPE: u8 = 0x7;
 
 /// The struct represents the `GOAWAY` HTTP/2 frame.
 #[derive(Clone, Debug, PartialEq)]
-pub struct GoawayFrame<'a> {
+pub struct GoawayFrame {
     last_stream_id: StreamId,
     raw_error_code: u32,
-    debug_data: Option<&'a [u8]>,
+    debug_data: Option<Bytes>,
     flags: u8,
 }
 
-impl<'a> GoawayFrame<'a> {
+impl GoawayFrame {
     /// Create a new `GOAWAY` frame with the given error code and no debug data.
     pub fn new(last_stream_id: StreamId, error_code: ErrorCode) -> Self {
         GoawayFrame {
@@ -32,7 +34,7 @@ impl<'a> GoawayFrame<'a> {
     }
 
     /// Create a new `GOAWAY` frame with the given parts.
-    pub fn with_debug_data(last_stream_id: StreamId, raw_error: u32, debug_data: &'a [u8]) -> Self {
+    pub fn with_debug_data(last_stream_id: StreamId, raw_error: u32, debug_data: Bytes) -> Self {
         GoawayFrame {
             last_stream_id: last_stream_id,
             raw_error_code: raw_error,
@@ -59,20 +61,20 @@ impl<'a> GoawayFrame<'a> {
     }
 
     /// Returns the debug data associated with the frame.
-    pub fn debug_data(&self) -> Option<&[u8]> {
-        self.debug_data
+    pub fn debug_data(&self) -> Option<&Bytes> {
+        self.debug_data.as_ref()
     }
 
     /// Returns the total length of the frame's payload, including any debug data.
     pub fn payload_len(&self) -> u32 {
-        GOAWAY_MIN_FRAME_LEN + self.debug_data.map_or(0, |d| d.len() as u32)
+        GOAWAY_MIN_FRAME_LEN + self.debug_data.as_ref().map_or(0, |d| d.len() as u32)
     }
 }
 
-impl<'a> Frame<'a> for GoawayFrame<'a> {
+impl Frame for GoawayFrame {
     type FlagType = NoFlag;
 
-    fn from_raw(raw_frame: &'a RawFrame) -> Option<Self> {
+    fn from_raw(raw_frame: &RawFrame) -> Option<Self> {
         let (payload_len, frame_type, flags, stream_id) = raw_frame.header();
         if payload_len < GOAWAY_MIN_FRAME_LEN {
             return None;
@@ -84,10 +86,10 @@ impl<'a> Frame<'a> for GoawayFrame<'a> {
             return None;
         }
 
-        let last_stream_id = parse_stream_id(raw_frame.payload());
+        let last_stream_id = parse_stream_id(&raw_frame.payload());
         let error = unpack_octets_4!(raw_frame.payload(), 4, u32);
         let debug_data = if payload_len > GOAWAY_MIN_FRAME_LEN {
-            Some(&raw_frame.payload()[GOAWAY_MIN_FRAME_LEN as usize..])
+            Some(raw_frame.payload().slice_from(GOAWAY_MIN_FRAME_LEN as usize))
         } else {
             None
         };
@@ -111,13 +113,13 @@ impl<'a> Frame<'a> for GoawayFrame<'a> {
     }
 }
 
-impl<'a> FrameIR for GoawayFrame<'a> {
+impl FrameIR for GoawayFrame {
     fn serialize_into<B: FrameBuilder>(self, builder: &mut B) -> io::Result<()> {
         builder.write_header(self.get_header())?;
         builder.write_u32(self.last_stream_id)?;
         builder.write_u32(self.raw_error_code)?;
         if let Some(buf) = self.debug_data {
-            builder.write_all(buf)?;
+            builder.write_all(&buf)?;
         }
         Ok(())
     }
@@ -130,6 +132,8 @@ mod tests {
     use solicit::tests::common::{serialize_frame, raw_frame_from_parts};
     use solicit::ErrorCode;
     use solicit::frame::Frame;
+
+    use bytes::Bytes;
 
     #[test]
     fn test_parse_valid_no_debug_data() {
@@ -155,7 +159,7 @@ mod tests {
         let frame = GoawayFrame::from_raw(&raw).expect("Expected successful parse");
         assert_eq!(frame.error_code(), ErrorCode::ProtocolError);
         assert_eq!(frame.last_stream_id(), 0);
-        assert_eq!(frame.debug_data(), Some(&[1, 2, 3, 4][..]));
+        assert_eq!(frame.debug_data().map(|b| &b[..]), Some(&[1, 2, 3, 4][..]));
     }
 
     #[test]
@@ -199,7 +203,8 @@ mod tests {
 
     #[test]
     fn test_serialize_with_debug_data() {
-        let frame = GoawayFrame::with_debug_data(0, ErrorCode::ProtocolError.into(), b"Hi!");
+        let frame = GoawayFrame::with_debug_data(
+            0, ErrorCode::ProtocolError.into(), Bytes::from_static(b"Hi!"));
         let expected: Vec<u8> = raw_frame_from_parts((11, 0x7, 0, 0),
                                                      vec![0, 0, 0, 0, 0, 0, 0, 1, b'H', b'i',
                                                           b'!'])
@@ -211,7 +216,7 @@ mod tests {
 
     #[test]
     fn test_serialize_raw_error() {
-        let frame = GoawayFrame::with_debug_data(1, 0x0001AA, &[]);
+        let frame = GoawayFrame::with_debug_data(1, 0x0001AA, Bytes::new());
         let expected: Vec<u8> = raw_frame_from_parts((8, 0x7, 0, 0),
                                                      vec![0, 0, 0, 1, 0, 0, 0x1, 0xAA])
                                     .into();
