@@ -84,8 +84,8 @@ impl<'a> Frame<'a> for WindowUpdateFrame {
 
 impl FrameIR for WindowUpdateFrame {
     fn serialize_into<B: FrameBuilder>(self, builder: &mut B) -> io::Result<()> {
-        try!(builder.write_header(self.get_header()));
-        try!(builder.write_u32(self.increment));
+        builder.write_header(self.get_header())?;
+        builder.write_u32(self.increment)?;
         Ok(())
     }
 }

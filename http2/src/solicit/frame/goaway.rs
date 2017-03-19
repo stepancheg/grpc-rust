@@ -113,11 +113,11 @@ impl<'a> Frame<'a> for GoawayFrame<'a> {
 
 impl<'a> FrameIR for GoawayFrame<'a> {
     fn serialize_into<B: FrameBuilder>(self, builder: &mut B) -> io::Result<()> {
-        try!(builder.write_header(self.get_header()));
-        try!(builder.write_u32(self.last_stream_id));
-        try!(builder.write_u32(self.raw_error_code));
+        builder.write_header(self.get_header())?;
+        builder.write_u32(self.last_stream_id)?;
+        builder.write_u32(self.raw_error_code)?;
         if let Some(buf) = self.debug_data {
-            try!(builder.write_all(buf));
+            builder.write_all(buf)?;
         }
         Ok(())
     }

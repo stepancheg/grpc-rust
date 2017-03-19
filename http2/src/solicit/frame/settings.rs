@@ -289,9 +289,9 @@ impl<'a> Frame<'a> for SettingsFrame {
 
 impl FrameIR for SettingsFrame {
     fn serialize_into<B: FrameBuilder>(self, b: &mut B) -> io::Result<()> {
-        try!(b.write_header(self.get_header()));
+        b.write_header(self.get_header())?;
         for setting in &self.settings {
-            try!(b.write_all(&setting.serialize()));
+            b.write_all(&setting.serialize())?;
         }
 
         Ok(())

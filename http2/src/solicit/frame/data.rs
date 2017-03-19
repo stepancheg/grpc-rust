@@ -231,14 +231,14 @@ impl<'a> Frame<'a> for DataFrame<'a> {
 
 impl<'a> FrameIR for DataFrame<'a> {
     fn serialize_into<B: FrameBuilder>(self, b: &mut B) -> io::Result<()> {
-        try!(b.write_header(self.get_header()));
+        b.write_header(self.get_header())?;
         if self.is_padded() {
             let pad_len = self.padding_len.unwrap_or(0);
-            try!(b.write_all(&[pad_len]));
-            try!(b.write_all(&self.data));
-            try!(b.write_padding(pad_len));
+            b.write_all(&[pad_len])?;
+            b.write_all(&self.data)?;
+            b.write_padding(pad_len)?;
         } else {
-            try!(b.write_all(&self.data));
+            b.write_all(&self.data)?;
         }
         Ok(())
     }

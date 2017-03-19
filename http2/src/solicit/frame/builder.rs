@@ -21,10 +21,10 @@ pub trait FrameBuilder: io::Write + io::Seek {
     /// The default implementation seeks to the beginning of the buffer, writes the header, and
     /// then moves the cursor back to its previos position (i.e. offset from the beginning).
     fn overwrite_header(&mut self, header: FrameHeader) -> io::Result<()> {
-        let current = try!(self.seek(io::SeekFrom::Current(0)));
-        try!(self.seek(io::SeekFrom::Start(0)));
-        try!(self.write_header(header));
-        try!(self.seek(io::SeekFrom::Start(current)));
+        let current = self.seek(io::SeekFrom::Current(0))?;
+        self.seek(io::SeekFrom::Start(0))?;
+        self.write_header(header)?;
+        self.seek(io::SeekFrom::Start(current))?;
         Ok(())
     }
 
@@ -49,7 +49,7 @@ pub trait FrameBuilder: io::Write + io::Seek {
     /// anything, only increment a cursor/offset).
     fn write_padding(&mut self, padding_length: u8) -> io::Result<()> {
         for _ in 0..padding_length {
-            try!(self.write_all(&[0]));
+            self.write_all(&[0])?;
         }
         Ok(())
     }

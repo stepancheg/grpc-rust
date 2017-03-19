@@ -299,10 +299,10 @@ impl<'a> Frame<'a> for HeadersFrame<'a> {
 
 impl<'a> FrameIR for HeadersFrame<'a> {
     fn serialize_into<B: FrameBuilder>(self, b: &mut B) -> io::Result<()> {
-        try!(b.write_header(self.get_header()));
+        b.write_header(self.get_header())?;
         let padded = self.is_set(HeadersFlag::Padded);
         if padded {
-            try!(b.write_all(&[self.padding_len.unwrap_or(0)]));
+            b.write_all(&[self.padding_len.unwrap_or(0)])?;
         }
         // The stream dependency fields follow, if the priority flag is set
         if self.is_set(HeadersFlag::Priority) {
@@ -310,13 +310,13 @@ impl<'a> FrameIR for HeadersFrame<'a> {
                 Some(ref dep) => dep.serialize(),
                 None => panic!("Priority flag set, but no dependency information given"),
             };
-            try!(b.write_all(&dep_buf));
+            b.write_all(&dep_buf)?;
         }
         // Now the actual headers fragment
-        try!(b.write_all(&self.header_fragment));
+        b.write_all(&self.header_fragment)?;
         // Finally, add the trailing padding, if required
         if padded {
-            try!(b.write_padding(self.padding_len.unwrap_or(0)));
+            b.write_padding(self.padding_len.unwrap_or(0))?;
         }
 
         Ok(())

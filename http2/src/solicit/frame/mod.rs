@@ -316,7 +316,7 @@ impl<'a> From<&'a [u8]> for RawFrame<'a> {
 /// `RawFrame`s can be serialized to an on-the-wire format.
 impl<'a> FrameIR for RawFrame<'a> {
     fn serialize_into<B: FrameBuilder>(self, b: &mut B) -> io::Result<()> {
-        try!(b.write_header(self.header()));
+        b.write_header(self.header())?;
         b.write_all(self.payload())
     }
 }

@@ -45,13 +45,13 @@ pub enum HttpFrame<'a> {
 impl<'a> HttpFrame<'a> {
     pub fn from_raw(raw_frame: &'a RawFrame) -> HttpResult<HttpFrame<'a>> {
         let frame = match raw_frame.header().1 {
-            0x0 => HttpFrame::DataFrame(try!(HttpFrame::parse_frame(&raw_frame))),
-            0x1 => HttpFrame::HeadersFrame(try!(HttpFrame::parse_frame(&raw_frame))),
-            0x3 => HttpFrame::RstStreamFrame(try!(HttpFrame::parse_frame(&raw_frame))),
-            0x4 => HttpFrame::SettingsFrame(try!(HttpFrame::parse_frame(&raw_frame))),
-            0x6 => HttpFrame::PingFrame(try!(HttpFrame::parse_frame(&raw_frame))),
-            0x7 => HttpFrame::GoawayFrame(try!(HttpFrame::parse_frame(&raw_frame))),
-            0x8 => HttpFrame::WindowUpdateFrame(try!(HttpFrame::parse_frame(&raw_frame))),
+            0x0 => HttpFrame::DataFrame(HttpFrame::parse_frame(&raw_frame)?),
+            0x1 => HttpFrame::HeadersFrame(HttpFrame::parse_frame(&raw_frame)?),
+            0x3 => HttpFrame::RstStreamFrame(HttpFrame::parse_frame(&raw_frame)?),
+            0x4 => HttpFrame::SettingsFrame(HttpFrame::parse_frame(&raw_frame)?),
+            0x6 => HttpFrame::PingFrame(HttpFrame::parse_frame(&raw_frame)?),
+            0x7 => HttpFrame::GoawayFrame(HttpFrame::parse_frame(&raw_frame)?),
+            0x8 => HttpFrame::WindowUpdateFrame(HttpFrame::parse_frame(&raw_frame)?),
             _ => HttpFrame::UnknownFrame(raw_frame.as_ref().into()),
         };
 
@@ -275,7 +275,7 @@ impl<'a, S> HttpConnectionSender<'a, S>
             frame.set_flag(DataFlag::EndStream);
         }
         // Adjust the flow control window...
-        try!(self.conn.decrease_out_window(frame.payload_len()));
+        self.conn.decrease_out_window(frame.payload_len())?;
         trace!("New OUT WINDOW size = {}", self.conn.out_window_size());
         // ...and now send it out.
         self.send_frame(frame)

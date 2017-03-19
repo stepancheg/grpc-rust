@@ -104,9 +104,9 @@ impl<'a> Frame<'a> for PingFrame {
 
 impl<'a> FrameIR for PingFrame {
     fn serialize_into<B: FrameBuilder>(self, builder: &mut B) -> io::Result<()> {
-        try!(builder.write_header(self.get_header()));
-        try!(builder.write_u32((self.opaque_data >> 32) as u32));
-        try!(builder.write_u32(self.opaque_data as u32));
+        builder.write_header(self.get_header())?;
+        builder.write_u32((self.opaque_data >> 32) as u32)?;
+        builder.write_u32(self.opaque_data as u32)?;
         Ok(())
     }
 }
