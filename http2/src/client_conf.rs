@@ -2,4 +2,5 @@
 pub struct HttpClientConf {
     /// TCP_NODELAY
     pub no_delay: Option<bool>,
+    pub thread_name: Option<String>,
 }

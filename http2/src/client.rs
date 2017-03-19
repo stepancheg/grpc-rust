@@ -53,9 +53,12 @@ impl HttpClient {
         let (get_from_loop_tx, get_from_loop_rx) = mpsc::channel();
 
         // Start event loop.
-        let join_handle = thread::spawn(move || {
-            run_client_event_loop(socket_addr, tls, conf, get_from_loop_tx);
-        });
+        let join_handle = thread::Builder::new()
+            .name(conf.thread_name.clone().unwrap_or_else(|| "http2-client-loop".to_owned()).to_string())
+            .spawn(move || {
+                run_client_event_loop(socket_addr, tls, conf, get_from_loop_tx);
+            })
+            .expect("spawn");
 
         // Get back call channel and shutdown channel.
         let loop_to_client = get_from_loop_rx.recv()

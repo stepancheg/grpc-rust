@@ -40,6 +40,10 @@ impl GrpcClient {
     pub fn new(host: &str, port: u16, tls: bool, conf: GrpcClientConf)
         -> GrpcResult<GrpcClient>
     {
+        let mut conf = conf;
+        conf.http.thread_name =
+            Some(conf.http.thread_name.unwrap_or_else(|| "grpc-client-loop".to_owned()));
+
         HttpClient::new(host, port, tls, conf.http)
             .map(|client| {
                 GrpcClient {

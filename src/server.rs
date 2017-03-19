@@ -279,6 +279,10 @@ pub struct GrpcServer {
 
 impl GrpcServer {
     pub fn new<A: ToSocketAddrs>(addr: A, conf: GrpcServerConf, service_definition: ServerServiceDefinition) -> GrpcServer {
+        let mut conf = conf;
+        conf.http.thread_name =
+            Some(conf.http.thread_name.unwrap_or_else(|| "grpc-server-loop".to_owned()));
+
         let service_definition = Arc::new(service_definition);
         GrpcServer {
             server: HttpServer::new(addr, conf.http, GrpcHttpServerHandlerFactory {

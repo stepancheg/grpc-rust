@@ -143,9 +143,12 @@ impl HttpServer {
 
         let state_copy = state.clone();
 
-        let join_handle = thread::spawn(move || {
-            run_server_event_loop(listen_addr, state_copy, conf, service, get_from_loop_tx);
-        });
+        let join_handle = thread::Builder::new()
+            .name(conf.thread_name.clone().unwrap_or_else(|| "http2-server-loop".to_owned()).to_string())
+            .spawn(move || {
+                run_server_event_loop(listen_addr, state_copy, conf, service, get_from_loop_tx);
+            })
+            .expect("spawn");
 
         let loop_to_server = get_from_loop_rx.recv().unwrap();
 
