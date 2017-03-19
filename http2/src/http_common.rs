@@ -7,6 +7,8 @@ use futures::Future;
 use futures::future;
 use futures;
 
+use bytes::Bytes;
+
 use tokio_core::io::ReadHalf;
 use tokio_core::io::WriteHalf;
 use tokio_core::io::Io;
@@ -33,7 +35,7 @@ use solicit_async::*;
 #[derive(Debug)]
 pub enum HttpStreamPartContent {
     Headers(Vec<StaticHeader>),
-    Data(Vec<u8>),
+    Data(Bytes),
 }
 
 pub struct HttpStreamPart {
@@ -59,14 +61,14 @@ impl HttpStreamPart {
 
     pub fn intermediate_data(data: Vec<u8>) -> Self {
         HttpStreamPart {
-            content: HttpStreamPartContent::Data(data),
+            content: HttpStreamPartContent::Data(Bytes::from(data)),
             last: false,
         }
     }
 
     pub fn last_data(data: Vec<u8>) -> Self {
         HttpStreamPart {
-            content: HttpStreamPartContent::Data(data),
+            content: HttpStreamPartContent::Data(Bytes::from(data)),
             last: true,
         }
     }
@@ -171,11 +173,9 @@ impl HttpStreamCommon {
 
         if data.len() as usize > max_window as usize {
             trace!("truncating data of len {} to {}", data.len(), max_window);
-            let size = self.out_window_size.size() as usize;
-            self.outgoing.push_front(HttpStreamPartContent::Data(
-                data[size..].to_vec()
-            ));
-            data.truncate(size);
+            let size = max_window as usize;
+            let rem = data.split_off(size);
+            self.outgoing.push_front(HttpStreamPartContent::Data(rem));
         };
 
         self.out_window_size.try_decrease(data.len() as i32).unwrap();

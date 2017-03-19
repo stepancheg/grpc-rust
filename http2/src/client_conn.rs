@@ -8,6 +8,8 @@ use solicit::HttpError;
 use solicit::StaticHeader;
 use hpack;
 
+use bytes::Bytes;
+
 use futures;
 use futures::Future;
 use futures::stream;
@@ -42,7 +44,7 @@ impl HttpStream for HttpClientStream {
     fn new_data_chunk(&mut self, data: &[u8], last: bool) {
         if let Some(ref mut response_handler) = self.response_handler {
             response_handler.send(ResultOrEof::Item(HttpStreamPart {
-                content: HttpStreamPartContent::Data(data.to_owned()),
+                content: HttpStreamPartContent::Data(Bytes::from(data)),
                 last: last,
             })).unwrap();
         }
@@ -211,7 +213,7 @@ impl<I : Io + Send + 'static> ClientWriteLoop<I> {
                 .expect(&format!("stream not found: {}", stream_id));
             // TODO: check stream state
 
-            stream.common.outgoing.push_front(HttpStreamPartContent::Data(chunk));
+            stream.common.outgoing.push_front(HttpStreamPartContent::Data(Bytes::from(chunk)));
         });
 
         self.send_outg_stream(stream_id)

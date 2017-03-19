@@ -9,6 +9,8 @@ use solicit::HttpError;
 use solicit::Header;
 use solicit::StaticHeader;
 
+use bytes::Bytes;
+
 use futures;
 use futures::Future;
 use futures::stream::Stream;
@@ -45,7 +47,7 @@ impl<F : HttpService> HttpStream for HttpServerStream<F> {
     fn new_data_chunk(&mut self, data: &[u8], last: bool) {
         if let Some(ref mut sender) = self.request_handler {
             let part = HttpStreamPart {
-                content: HttpStreamPartContent::Data(data.to_owned()),
+                content: HttpStreamPartContent::Data(Bytes::from(data)),
                 last: last,
             };
             // ignore error
