@@ -268,8 +268,8 @@ impl RawFrame {
 
     /// Returns a `Vec` of bytes representing the serialized (on-the-wire)
     /// representation of this raw frame.
-    pub fn serialize(&self) -> Vec<u8> {
-        self.raw_content.as_ref().to_owned()
+    pub fn serialize(&self) -> &Bytes {
+        &self.raw_content
     }
 
     /// Returns a `FrameHeader` instance corresponding to the headers of the
@@ -292,11 +292,6 @@ impl RawFrame {
     }
 }
 
-impl Into<Vec<u8>> for RawFrame {
-    fn into(self) -> Vec<u8> {
-        self.raw_content.as_ref().to_owned()
-    }
-}
 impl AsRef<[u8]> for RawFrame {
     fn as_ref(&self) -> &[u8] {
         self.raw_content.as_ref()
@@ -439,85 +434,6 @@ mod tests {
         payload
     }
 
-    /// Tests that constructing a `RawFrame` from a `Vec<u8>` by using the `From<Vec<u8>>`
-    /// trait implementation works as expected.
-    #[test]
-    fn test_raw_frame_from_vec_buffer_unchecked() {
-        // Correct frame
-        {
-            let data = b"123";
-            let header = (data.len() as u32, 0x1, 0, 1);
-            let buf = {
-                let mut buf = Vec::new();
-                buf.extend(pack_header(&header).to_vec().into_iter());
-                buf.extend(data.to_vec().into_iter());
-                buf
-            };
-            let buf_clone = buf.clone();
-
-            let raw = RawFrame::from(buf);
-
-            assert_eq!(raw.header(), header);
-            assert_eq!(raw.payload(), Bytes::from_static(data));
-            assert_eq!(raw.serialize(), buf_clone);
-        }
-        // Correct frame with trailing data
-        {
-            let data = b"123";
-            let header = (data.len() as u32, 0x1, 0, 1);
-            let buf = {
-                let mut buf = Vec::new();
-                buf.extend(pack_header(&header).to_vec().into_iter());
-                buf.extend(data.to_vec().into_iter());
-                buf.extend(b"12345".to_vec().into_iter());
-                buf
-            };
-            let buf_clone = buf.clone();
-
-            let raw = RawFrame::from(buf);
-
-            assert_eq!(raw.header(), header);
-            assert_eq!(raw.payload(), Bytes::from_static(b"12312345"));
-            assert_eq!(raw.serialize(), buf_clone);
-        }
-        // Missing payload chunk
-        {
-            let data = b"123";
-            let header = (data.len() as u32, 0x1, 0, 1);
-            let buf = {
-                let mut buf = Vec::new();
-                buf.extend(pack_header(&header).to_vec().into_iter());
-                buf.extend(data[..2].to_vec().into_iter());
-                buf
-            };
-            let buf_clone = buf.clone();
-
-            let raw = RawFrame::from(buf);
-
-            assert_eq!(raw.header(), header);
-            assert_eq!(raw.payload(), Bytes::from_static(b"12"));
-            assert_eq!(raw.serialize(), buf_clone);
-        }
-        // Missing header chunk
-        {
-            let header = (0, 0x1, 0, 1);
-            let buf = {
-                let mut buf = Vec::new();
-                buf.extend(pack_header(&header)[..5].to_vec().into_iter());
-                buf
-            };
-            let buf_clone = buf.clone();
-
-            let raw = RawFrame::from(buf);
-
-            assert_eq!(raw.serialize(), buf_clone);
-        }
-        // Completely empty buffer
-        {
-            assert_eq!(RawFrame::from(vec![]).serialize(), &[]);
-        }
-    }
-
     /// Tests that a borrowed slice can be converted into a `RawFrame` due to the implementation of
     /// the `From<&'a [u8]>` trait.
     #[test]
@@ -541,28 +457,7 @@ mod tests {
         };
         let raw: RawFrame = buf.clone().into();
 
-        assert_eq!(raw.serialize(), buf);
-    }
-
-    /// Tests that converting a `RawFrame` into a `Vec` works correctly.
-    #[test]
-    fn test_raw_frame_into_vec() {
-        let data = b"123";
-        let header = (data.len() as u32, 0x1, 0, 1);
-        let buf = {
-            let mut buf = Vec::new();
-            buf.extend(pack_header(&header).to_vec().into_iter());
-            buf.extend(data.to_vec().into_iter());
-            buf
-        };
-        let raw: RawFrame = buf.clone().into();
-
-        let serialized = raw.serialize();
-        let vec: Vec<_> = raw.into();
-        // The vector is equivalent to the original buffer?
-        assert_eq!(vec, buf);
-        // The vector and the serialized representation are also equivalent
-        assert_eq!(vec, serialized);
+        assert_eq!(raw.serialize().as_ref(), &buf[..]);
     }
 
     /// Tests that `RawFrame`s are correctly serialized to an on-the-wire format, when considered a

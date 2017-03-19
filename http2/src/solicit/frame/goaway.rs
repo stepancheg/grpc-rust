@@ -195,7 +195,7 @@ mod tests {
     fn test_serialize_no_debug_data() {
         let frame = GoawayFrame::new(0, ErrorCode::ProtocolError);
         let expected: Vec<u8> = raw_frame_from_parts((8, 0x7, 0, 0), vec![0, 0, 0, 0, 0, 0, 0, 1])
-                                    .into();
+                                    .as_ref().to_owned();
         let raw = serialize_frame(&frame);
 
         assert_eq!(expected, raw);
@@ -208,7 +208,7 @@ mod tests {
         let expected: Vec<u8> = raw_frame_from_parts((11, 0x7, 0, 0),
                                                      vec![0, 0, 0, 0, 0, 0, 0, 1, b'H', b'i',
                                                           b'!'])
-                                    .into();
+                                    .as_ref().to_owned();
         let raw = serialize_frame(&frame);
 
         assert_eq!(expected, raw);
@@ -219,7 +219,7 @@ mod tests {
         let frame = GoawayFrame::with_debug_data(1, 0x0001AA, Bytes::new());
         let expected: Vec<u8> = raw_frame_from_parts((8, 0x7, 0, 0),
                                                      vec![0, 0, 0, 1, 0, 0, 0x1, 0xAA])
-                                    .into();
+                                    .as_ref().to_owned();
         let raw = serialize_frame(&frame);
 
         assert_eq!(expected, raw);

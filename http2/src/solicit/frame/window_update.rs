@@ -134,7 +134,7 @@ mod tests {
     #[test]
     fn test_serialize_connection_level() {
         let frame = WindowUpdateFrame::for_connection(10);
-        let expected: Vec<u8> = raw_frame_from_parts((4, 0x8, 0, 0), vec![0, 0, 0, 10]).into();
+        let expected: Vec<u8> = raw_frame_from_parts((4, 0x8, 0, 0), vec![0, 0, 0, 10]).as_ref().to_owned();
         let serialized = serialize_frame(&frame);
 
         assert_eq!(expected, serialized);
@@ -143,7 +143,7 @@ mod tests {
     #[test]
     fn test_serialize_stream_level() {
         let frame = WindowUpdateFrame::for_stream(1, 10);
-        let expected: Vec<u8> = raw_frame_from_parts((4, 0x8, 0, 1), vec![0, 0, 0, 10]).into();
+        let expected = raw_frame_from_parts((4, 0x8, 0, 1), vec![0, 0, 0, 10]).as_ref().to_owned();
         let serialized = serialize_frame(&frame);
 
         assert_eq!(expected, serialized);

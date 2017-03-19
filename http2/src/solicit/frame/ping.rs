@@ -147,7 +147,7 @@ mod tests {
         let frame = PingFrame::new_ack(0);
         let expected: Vec<u8> = raw_frame_from_parts(
             (8, 0x6, 1, 0),
-            vec![0, 0, 0, 0, 0, 0, 0, 0]).into();
+            vec![0, 0, 0, 0, 0, 0, 0, 0]).as_ref().to_owned();
 
         let raw = serialize_frame(&frame);
 

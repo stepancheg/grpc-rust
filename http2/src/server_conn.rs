@@ -64,7 +64,6 @@ impl<F : HttpService> HttpStream for HttpServerStream<F> {
 
 impl<F : HttpService> HttpServerStream<F> {
     fn set_headers(&mut self, headers: Vec<Header>, last: bool) {
-        let headers = headers.into_iter().map(|h| Header::new(h.name().to_owned(), h.value().to_owned())).collect();
         if let Some(ref mut sender) = self.request_handler {
             let part = HttpStreamPart {
                 content: HttpStreamPartContent::Headers(headers),

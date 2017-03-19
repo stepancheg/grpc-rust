@@ -88,7 +88,7 @@ pub fn recv_settings_frame<R : Read + Send + 'static>(read: R) -> HttpFuture<(R,
 #[allow(dead_code)]
 pub fn send_raw_frame<W : Write + Send + 'static>(write: W, frame: RawFrame) -> HttpFuture<W> {
     let bytes = frame.serialize();
-    Box::new(write_all(write, bytes)
+    Box::new(write_all(write, bytes.clone())
         .map(|(w, _)| w)
         .map_err(|e| e.into()))
 }
