@@ -6,6 +6,7 @@ use std::mem;
 use bytes::Bytes;
 
 use solicit::StreamId;
+use solicit::frame::flags::*;
 
 /// A helper macro that unpacks a sequence of 4 bytes found in the buffer with
 /// the given identifier, starting at the given offset, into the given integer
@@ -48,6 +49,7 @@ pub mod settings;
 pub mod goaway;
 pub mod ping;
 pub mod window_update;
+mod flags;
 
 pub use self::builder::FrameBuilder;
 
@@ -136,20 +138,6 @@ fn parse_padded_payload(payload: Bytes) -> Option<(Bytes, u8)> {
 pub trait FrameIR {
     /// Write out the on-the-wire representation of the frame into the given `FrameBuilder`.
     fn serialize_into<B: FrameBuilder>(self, builder: &mut B) -> io::Result<()>;
-}
-
-/// A trait that all HTTP/2 frame header flags need to implement.
-pub trait Flag {
-    /// Returns a bit mask that represents the flag.
-    fn bitmask(&self) -> u8;
-}
-
-/// A helper struct that can be used by all frames that do not define any flags.
-pub struct NoFlag;
-impl Flag for NoFlag {
-    fn bitmask(&self) -> u8 {
-        0
-    }
 }
 
 /// A trait that all HTTP/2 frame structs need to implement.

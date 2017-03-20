@@ -8,7 +8,8 @@ use bytes::Bytes;
 use misc::BsDebug;
 
 use solicit::StreamId;
-use solicit::frame::{FrameBuilder, FrameIR, Flag, Frame, FrameHeader, RawFrame, parse_padded_payload};
+use solicit::frame::{FrameBuilder, FrameIR, Frame, FrameHeader, RawFrame, parse_padded_payload};
+use solicit::frame::flags::*;
 
 /// An enum representing the flags that a `HeadersFrame` can have.
 /// The integer representation associated to each variant is that flag's
@@ -30,6 +31,16 @@ impl Flag for HeadersFlag {
     #[inline]
     fn bitmask(&self) -> u8 {
         *self as u8
+    }
+
+    fn flags() -> &'static [Self] {
+        static FLAGS: &'static [HeadersFlag] = &[
+            HeadersFlag::EndStream,
+            HeadersFlag::EndHeaders,
+            HeadersFlag::Padded,
+            HeadersFlag::Priority,
+        ];
+        FLAGS
     }
 }
 
@@ -129,7 +140,7 @@ pub struct HeadersFrame {
     /// The length of the padding, if any.
     pub padding_len: Option<u8>,
     /// The set of flags for the frame, packed into a single byte.
-    flags: u8,
+    flags: Flags<HeadersFlag>,
 }
 
 impl fmt::Debug for HeadersFrame {
@@ -153,7 +164,7 @@ impl HeadersFrame {
             stream_id: stream_id,
             stream_dep: None,
             padding_len: None,
-            flags: 0,
+            flags: Flags::default(),
         }
     }
 
@@ -168,7 +179,7 @@ impl HeadersFrame {
             stream_id: stream_id,
             stream_dep: Some(stream_dep),
             padding_len: None,
-            flags: HeadersFlag::Priority.bitmask(),
+            flags: HeadersFlag::Priority.to_flags(),
         }
     }
 
@@ -214,7 +225,7 @@ impl HeadersFrame {
 
     /// Sets the given flag for the frame.
     pub fn set_flag(&mut self, flag: HeadersFlag) {
-        self.flags |= flag.bitmask();
+        self.flags.set(&flag);
     }
 }
 
@@ -276,13 +287,13 @@ impl Frame for HeadersFrame {
             stream_id: stream_id,
             stream_dep: stream_dep,
             padding_len: pad_len,
-            flags: flags,
+            flags: Flags::new(flags),
         })
     }
 
     /// Tests if the given flag is set for the frame.
     fn is_set(&self, flag: HeadersFlag) -> bool {
-        (self.flags & flag.bitmask()) != 0
+        self.flags.is_set(&flag)
     }
 
     /// Returns the `StreamId` of the stream to which the frame is associated.
@@ -294,7 +305,7 @@ impl Frame for HeadersFrame {
 
     /// Returns a `FrameHeader` based on the current state of the `Frame`.
     fn get_header(&self) -> FrameHeader {
-        (self.payload_len(), 0x1, self.flags, self.stream_id)
+        (self.payload_len(), 0x1, self.flags.0, self.stream_id)
     }
 }
 
@@ -423,7 +434,7 @@ mod tests {
         let frame: HeadersFrame = Frame::from_raw(&raw).unwrap();
 
         assert_eq!(frame.header_fragment(), &data[..]);
-        assert_eq!(frame.flags, 0);
+        assert_eq!(frame.flags.0, 0);
         assert_eq!(frame.get_stream_id(), 1);
         assert!(frame.stream_dep.is_none());
         assert!(frame.padding_len.is_none());
@@ -440,7 +451,7 @@ mod tests {
         let frame: HeadersFrame = Frame::from_raw(&raw).unwrap();
 
         assert_eq!(frame.header_fragment(), &data[..]);
-        assert_eq!(frame.flags, 8);
+        assert_eq!(frame.flags.0, 8);
         assert_eq!(frame.get_stream_id(), 1);
         assert!(frame.stream_dep.is_none());
         assert_eq!(frame.padding_len.unwrap(), 6);
@@ -465,7 +476,7 @@ mod tests {
         let frame: HeadersFrame = Frame::from_raw(&raw).unwrap();
 
         assert_eq!(frame.header_fragment(), &data[..]);
-        assert_eq!(frame.flags, 0x20);
+        assert_eq!(frame.flags.0, 0x20);
         assert_eq!(frame.get_stream_id(), 1);
         assert_eq!(frame.stream_dep.unwrap(), dep);
         assert!(frame.padding_len.is_none());
@@ -491,7 +502,7 @@ mod tests {
         let frame: HeadersFrame = Frame::from_raw(&raw).unwrap();
 
         assert_eq!(frame.header_fragment(), &data[..]);
-        assert_eq!(frame.flags, 0x20 | 0x8);
+        assert_eq!(frame.flags.0, 0x20 | 0x8);
         assert_eq!(frame.get_stream_id(), 1);
         assert_eq!(frame.stream_dep.unwrap(), dep);
         assert_eq!(frame.padding_len.unwrap(), 4);

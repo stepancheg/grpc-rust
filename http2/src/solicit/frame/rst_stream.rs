@@ -2,7 +2,8 @@
 use std::io;
 
 use solicit::{ErrorCode, StreamId};
-use solicit::frame::{Frame, FrameIR, FrameBuilder, FrameHeader, RawFrame, NoFlag};
+use solicit::frame::{Frame, FrameIR, FrameBuilder, FrameHeader, RawFrame};
+use solicit::frame::flags::*;
 
 /// The total allowed size for the `RST_STREAM` frame payload.
 pub const RST_STREAM_FRAME_LEN: u32 = 4;
@@ -14,7 +15,7 @@ pub const RST_STREAM_FRAME_TYPE: u8 = 0x3;
 pub struct RstStreamFrame {
     raw_error_code: u32,
     stream_id: StreamId,
-    flags: u8,
+    flags: Flags<NoFlag>,
 }
 
 impl RstStreamFrame {
@@ -23,7 +24,7 @@ impl RstStreamFrame {
         RstStreamFrame {
             raw_error_code: error_code.into(),
             stream_id: stream_id,
-            flags: 0,
+            flags: Flags::default(),
         }
     }
 
@@ -32,7 +33,7 @@ impl RstStreamFrame {
         RstStreamFrame {
             raw_error_code: raw_error_code,
             stream_id: stream_id,
-            flags: 0,
+            flags: Flags::default(),
         }
     }
 
@@ -69,7 +70,7 @@ impl Frame for RstStreamFrame {
         Some(RstStreamFrame {
             raw_error_code: error,
             stream_id: stream_id,
-            flags: flags,
+            flags: Flags::new(flags),
         })
     }
 
@@ -82,7 +83,7 @@ impl Frame for RstStreamFrame {
     fn get_header(&self) -> FrameHeader {
         (RST_STREAM_FRAME_LEN,
          RST_STREAM_FRAME_TYPE,
-         self.flags,
+         self.flags.0,
          self.stream_id)
     }
 }

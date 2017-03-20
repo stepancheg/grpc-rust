@@ -4,7 +4,8 @@ use std::io;
 use std::fmt;
 use std::borrow::Cow;
 use solicit::StreamId;
-use solicit::frame::{FrameBuilder, FrameIR, Flag, Frame, FrameHeader, RawFrame, parse_padded_payload};
+use solicit::frame::{FrameBuilder, FrameIR, Frame, FrameHeader, RawFrame, parse_padded_payload};
+use solicit::frame::flags::*;
 
 use bytes::Bytes;
 
@@ -28,6 +29,11 @@ impl Flag for DataFlag {
     #[inline]
     fn bitmask(&self) -> u8 {
         *self as u8
+    }
+
+    fn flags() -> &'static [Self] {
+        static FLAGS: &'static [DataFlag] = &[DataFlag::EndStream, DataFlag::Padded];
+        FLAGS
     }
 }
 
@@ -57,7 +63,7 @@ pub struct DataFrame {
     pub data: Bytes,
     /// Represents the flags currently set on the `DataFrame`, packed into a
     /// single byte.
-    flags: u8,
+    flags: Flags<DataFlag>,
     /// The ID of the stream with which the frame is associated.
     stream_id: StreamId,
     /// The length of the padding applied to the data. Since the spec defines
@@ -84,7 +90,7 @@ impl DataFrame {
         DataFrame {
             stream_id: stream_id,
             // All flags unset by default
-            flags: 0,
+            flags: Flags::default(),
             // No data stored in the frame yet
             data: Bytes::new(),
             // No padding
@@ -99,7 +105,7 @@ impl DataFrame {
     pub fn with_data<D: Into<Bytes>>(stream_id: StreamId, data: D) -> DataFrame {
         DataFrame {
             stream_id: stream_id,
-            flags: 0,
+            flags: Flags::default(),
             data: data.into(),
             padding_len: None,
         }
@@ -160,7 +166,7 @@ impl DataFrame {
 
     /// Sets the given flag for the frame.
     pub fn set_flag(&mut self, flag: DataFlag) {
-        self.flags |= flag.bitmask();
+        self.flags.0 |= flag.bitmask();
     }
 }
 
@@ -197,7 +203,7 @@ impl Frame for DataFrame {
                 // The data got extracted (from a padded frame)
                 Some(DataFrame {
                     stream_id: stream_id,
-                    flags: flags,
+                    flags: Flags::new(flags),
                     data: data,
                     padding_len: Some(padding_len),
                 })
@@ -206,7 +212,7 @@ impl Frame for DataFrame {
                 // The data got extracted (from a no-padding frame)
                 Some(DataFrame {
                     stream_id: stream_id,
-                    flags: flags,
+                    flags: Flags::new(flags),
                     data: data,
                     padding_len: None,
                 })
@@ -217,7 +223,7 @@ impl Frame for DataFrame {
 
     /// Tests if the given flag is set for the frame.
     fn is_set(&self, flag: DataFlag) -> bool {
-        (self.flags & flag.bitmask()) != 0
+        self.flags.is_set(&flag)
     }
 
     /// Returns the `StreamId` of the stream to which the frame is associated.
@@ -227,7 +233,7 @@ impl Frame for DataFrame {
 
     /// Returns a `FrameHeader` based on the current state of the frame.
     fn get_header(&self) -> FrameHeader {
-        (self.payload_len(), 0x0, self.flags, self.stream_id)
+        (self.payload_len(), 0x0, self.flags.0, self.stream_id)
     }
 }
 

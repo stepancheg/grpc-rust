@@ -2,7 +2,8 @@
 
 use std::io;
 use solicit::StreamId;
-use solicit::frame::{FrameBuilder, FrameIR, Flag, Frame, FrameHeader, RawFrame};
+use solicit::frame::{FrameBuilder, FrameIR, Frame, FrameHeader, RawFrame};
+use solicit::frame::flags::*;
 
 /// An enum that lists all valid settings that can be sent in a SETTINGS
 /// frame.
@@ -110,6 +111,11 @@ impl Flag for SettingsFlag {
     fn bitmask(&self) -> u8 {
         *self as u8
     }
+
+    fn flags() -> &'static [Self] {
+        static FLAGS: &'static [SettingsFlag] = &[SettingsFlag::Ack];
+        FLAGS
+    }
 }
 
 /// A struct representing the SETTINGS frames of HTTP/2, as defined in the
@@ -139,7 +145,7 @@ pub struct SettingsFrame {
     pub settings: Vec<HttpSetting>,
     /// Represents the flags currently set on the `SettingsFrame`, packed into
     /// a single byte.
-    flags: u8,
+    flags: Flags<SettingsFlag>,
 }
 
 impl SettingsFrame {
@@ -148,7 +154,7 @@ impl SettingsFrame {
         SettingsFrame {
             settings: Vec::new(),
             // By default, no flags are set
-            flags: 0,
+            flags: Flags::default(),
         }
     }
 
@@ -157,7 +163,7 @@ impl SettingsFrame {
     pub fn new_ack() -> SettingsFrame {
         SettingsFrame {
             settings: Vec::new(),
-            flags: SettingsFlag::Ack.bitmask(),
+            flags: SettingsFlag::Ack.to_flags(),
         }
     }
 
@@ -208,7 +214,7 @@ impl SettingsFrame {
 
     /// Sets the given flag for the frame.
     pub fn set_flag(&mut self, flag: SettingsFlag) {
-        self.flags |= flag.bitmask();
+        self.flags.set(&flag);
     }
 }
 
@@ -250,7 +256,7 @@ impl Frame for SettingsFrame {
                 // Ack is set and there's no payload => just an Ack frame
                 Some(SettingsFrame {
                     settings: Vec::new(),
-                    flags: flags,
+                    flags: Flags::new(flags),
                 })
             } else {
                 // The SETTINGS flag MUST not have a payload if Ack is set
@@ -262,7 +268,7 @@ impl Frame for SettingsFrame {
             Some(settings) => {
                 Some(SettingsFrame {
                     settings: settings,
-                    flags: flags,
+                    flags: Flags::new(flags),
                 })
             }
             None => None,
@@ -271,7 +277,7 @@ impl Frame for SettingsFrame {
 
     /// Tests if the given flag is set for the frame.
     fn is_set(&self, flag: SettingsFlag) -> bool {
-        (self.flags & flag.bitmask()) != 0
+        self.flags.is_set(&flag)
     }
 
     /// Returns the `StreamId` of the stream to which the frame is associated.
@@ -283,7 +289,7 @@ impl Frame for SettingsFrame {
 
     /// Returns a `FrameHeader` based on the current state of the `Frame`.
     fn get_header(&self) -> FrameHeader {
-        (self.payload_len(), 0x4, self.flags, 0)
+        (self.payload_len(), 0x4, self.flags.0, 0)
     }
 }
 

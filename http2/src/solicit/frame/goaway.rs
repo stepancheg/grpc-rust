@@ -5,7 +5,8 @@ use std::io;
 use bytes::Bytes;
 
 use solicit::{ErrorCode, StreamId};
-use solicit::frame::{Frame, FrameIR, FrameBuilder, FrameHeader, RawFrame, NoFlag, parse_stream_id};
+use solicit::frame::{Frame, FrameIR, FrameBuilder, FrameHeader, RawFrame, parse_stream_id};
+use solicit::frame::flags::*;
 
 /// The minimum size for the `GOAWAY` frame payload.
 /// It is 8 octets, as the last stream id and error code are required parts of the GOAWAY frame.
@@ -19,7 +20,7 @@ pub struct GoawayFrame {
     last_stream_id: StreamId,
     raw_error_code: u32,
     debug_data: Option<Bytes>,
-    flags: u8,
+    flags: Flags<NoFlag>,
 }
 
 impl GoawayFrame {
@@ -29,7 +30,7 @@ impl GoawayFrame {
             last_stream_id: last_stream_id,
             raw_error_code: error_code.into(),
             debug_data: None,
-            flags: 0,
+            flags: Flags::default(),
         }
     }
 
@@ -39,7 +40,7 @@ impl GoawayFrame {
             last_stream_id: last_stream_id,
             raw_error_code: raw_error,
             debug_data: Some(debug_data),
-            flags: 0,
+            flags: Flags::default(),
         }
     }
 
@@ -98,7 +99,7 @@ impl Frame for GoawayFrame {
             last_stream_id: last_stream_id,
             raw_error_code: error,
             debug_data: debug_data,
-            flags: flags,
+            flags: Flags::new(flags),
         })
     }
 
@@ -109,7 +110,7 @@ impl Frame for GoawayFrame {
         0
     }
     fn get_header(&self) -> FrameHeader {
-        (self.payload_len(), GOAWAY_FRAME_TYPE, self.flags, 0)
+        (self.payload_len(), GOAWAY_FRAME_TYPE, self.flags.0, 0)
     }
 }
 

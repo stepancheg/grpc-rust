@@ -9,18 +9,24 @@ use solicit::frame::{
     FrameBuilder,
     FrameHeader,
     RawFrame,
-    Flag,
 };
+use solicit::frame::flags::*;
 
 /// Ping frames are always 8 bytes
 pub const PING_FRAME_LEN: u32 = 8;
 /// The frame type of the `PING` frame.
 pub const PING_FRAME_TYPE: u8 = 0x6;
 
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub struct PingFlag;
 impl Flag for PingFlag {
     fn bitmask(&self) -> u8 {
         0x1
+    }
+
+    fn flags() -> &'static [Self] {
+        static FLAGS: &'static [PingFlag] = &[PingFlag];
+        FLAGS
     }
 }
 
@@ -28,7 +34,7 @@ impl Flag for PingFlag {
 #[derive(Clone, Debug, PartialEq)]
 pub struct PingFrame {
     opaque_data: u64,
-    flags: u8,
+    flags: Flags<PingFlag>,
 }
 
 impl PingFrame {
@@ -36,7 +42,7 @@ impl PingFrame {
     pub fn new() -> Self {
         PingFrame {
             opaque_data: 0,
-            flags: 0,
+            flags: Flags::default(),
         }
     }
 
@@ -44,7 +50,7 @@ impl PingFrame {
     pub fn new_ack(opaque_data: u64) -> Self {
         PingFrame {
             opaque_data: opaque_data,
-            flags: 1,
+            flags: PingFlag.to_flags(),
         }
     }
 
@@ -52,7 +58,7 @@ impl PingFrame {
     pub fn with_data(opaque_data: u64) -> Self {
         PingFrame {
             opaque_data: opaque_data,
-            flags: 0,
+            flags: Flags::default(),
         }
     }
 
@@ -85,12 +91,12 @@ impl Frame for PingFrame {
 
         Some(PingFrame {
             opaque_data: data,
-            flags: flags,
+            flags: Flags::new(flags),
         })
     }
 
     fn is_set(&self, flag: PingFlag) -> bool {
-        (flag.bitmask() & self.flags) != 0
+        self.flags.is_set(&flag)
     }
 
     fn get_stream_id(&self) -> StreamId {
@@ -98,7 +104,7 @@ impl Frame for PingFrame {
     }
 
     fn get_header(&self) -> FrameHeader {
-        (PING_FRAME_LEN, PING_FRAME_TYPE, self.flags, 0)
+        (PING_FRAME_LEN, PING_FRAME_TYPE, self.flags.0, 0)
     }
 }
 

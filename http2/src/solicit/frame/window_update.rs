@@ -3,7 +3,8 @@
 use std::io;
 
 use solicit::StreamId;
-use solicit::frame::{Frame, FrameIR, FrameBuilder, FrameHeader, RawFrame, NoFlag};
+use solicit::frame::{Frame, FrameIR, FrameBuilder, FrameHeader, RawFrame};
+use solicit::frame::flags::*;
 
 /// The minimum size for the `WINDOW_UPDATE` frame payload.
 pub const WINDOW_UPDATE_FRAME_LEN: u32 = 4;
@@ -15,7 +16,7 @@ pub const WINDOW_UPDATE_FRAME_TYPE: u8 = 0x8;
 pub struct WindowUpdateFrame {
     stream_id: StreamId,
     increment: u32,
-    flags: u8,
+    flags: Flags<NoFlag>,
 }
 
 impl WindowUpdateFrame {
@@ -25,7 +26,7 @@ impl WindowUpdateFrame {
         WindowUpdateFrame {
             stream_id: 0,
             increment: increment,
-            flags: 0,
+            flags: Flags::default(),
         }
     }
 
@@ -35,7 +36,7 @@ impl WindowUpdateFrame {
         WindowUpdateFrame {
             stream_id: stream_id,
             increment: increment,
-            flags: 0,
+            flags: Flags::default(),
         }
     }
 
@@ -64,7 +65,7 @@ impl Frame for WindowUpdateFrame {
         Some(WindowUpdateFrame {
             stream_id: stream_id,
             increment: increment,
-            flags: flags,
+            flags: Flags::new(flags),
         })
     }
 
@@ -77,7 +78,7 @@ impl Frame for WindowUpdateFrame {
     fn get_header(&self) -> FrameHeader {
         (WINDOW_UPDATE_FRAME_LEN,
          WINDOW_UPDATE_FRAME_TYPE,
-         self.flags,
+         self.flags.0,
          self.get_stream_id())
     }
 }
