@@ -16,3 +16,7 @@ script:
   - ./cargo.sh build
   - ./test.sh
   - ./build-all.sh
+
+notifications:
+  email:
+    on_success: never
