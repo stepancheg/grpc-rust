@@ -105,7 +105,7 @@ impl TesterUnary {
     fn call_expect_grpc_error<F : FnOnce(&str) -> bool>(&self, param: &str, expect: F) {
         self.call_expect_error(param, |e| {
             match e {
-                &GrpcError::GrpcMessage(GrpcMessageError { ref grpc_message }) if expect(&grpc_message) => true,
+                &GrpcError::GrpcMessage(GrpcMessageError { ref grpc_message, .. }) if expect(&grpc_message) => true,
                 _ => false,
             }
         });
