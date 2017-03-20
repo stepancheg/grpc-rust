@@ -213,7 +213,7 @@ impl<I : Io + Send + 'static> ClientWriteLoop<I> {
                 .expect(&format!("stream not found: {}", stream_id));
             // TODO: check stream state
 
-            stream.common.outgoing.push_front(HttpStreamPartContent::Data(Bytes::from(chunk)));
+            stream.common.outgoing.push_back(HttpStreamPartContent::Data(Bytes::from(chunk)));
         });
 
         self.send_outg_stream(stream_id)
