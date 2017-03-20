@@ -531,12 +531,15 @@ pub trait LoopInner: 'static {
     fn close_remote(&mut self, stream_id: StreamId) {
         debug!("close remote: {}", stream_id);
 
+        // RST_STREAM and WINDOW_UPDATE can be received when we have no stream
         {
-            let mut stream: &mut Self::LoopHttpStream = self.common().get_stream_mut(stream_id)
-                .expect(&format!("stream not found: {}", stream_id));
-            stream.common_mut().close_remote();
-            stream.closed_remote();
-        };
+            if let Some(stream) = self.common().get_stream_mut(stream_id) {
+                stream.common_mut().close_remote();
+                stream.closed_remote();
+            } else {
+                return;
+            }
+        }
 
         self.common().remove_stream_if_closed(stream_id);
     }
