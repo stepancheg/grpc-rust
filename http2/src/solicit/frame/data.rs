@@ -58,14 +58,14 @@ impl<'a> From<&'a [u8]> for DataChunk<'a> {
 #[derive(PartialEq)]
 #[derive(Clone)]
 pub struct DataFrame {
-    /// The data found in the frame as an opaque byte sequence. It never
-    /// includes padding bytes.
-    pub data: Bytes,
     /// Represents the flags currently set on the `DataFrame`, packed into a
     /// single byte.
     flags: Flags<DataFlag>,
     /// The ID of the stream with which the frame is associated.
     stream_id: StreamId,
+    /// The data found in the frame as an opaque byte sequence. It never
+    /// includes padding bytes.
+    pub data: Bytes,
     /// The length of the padding applied to the data. Since the spec defines
     /// that the padding length is at most an unsigned integer value, we also
     /// keep a `u8`, instead of a `usize`.
@@ -75,9 +75,9 @@ pub struct DataFrame {
 impl fmt::Debug for DataFrame {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         fmt.debug_struct("DataFrame")
-            .field("data", &BsDebug(&self.data))
             .field("flags", &self.flags)
             .field("stream_id", &self.stream_id)
+            .field("data", &BsDebug(&self.data))
             .field("padding_len", &self.padding_len)
             .finish()
     }

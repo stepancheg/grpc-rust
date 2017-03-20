@@ -131,26 +131,26 @@ impl StreamDependency {
 #[derive(PartialEq)]
 #[derive(Clone)]
 pub struct HeadersFrame {
-    /// The header fragment bytes stored within the frame.
-    header_fragment: Bytes,
+    /// The set of flags for the frame, packed into a single byte.
+    flags: Flags<HeadersFlag>,
     /// The ID of the stream with which this frame is associated
     pub stream_id: StreamId,
+    /// The header fragment bytes stored within the frame.
+    header_fragment: Bytes,
     /// The stream dependency information, if any.
     pub stream_dep: Option<StreamDependency>,
     /// The length of the padding, if any.
     pub padding_len: Option<u8>,
-    /// The set of flags for the frame, packed into a single byte.
-    flags: Flags<HeadersFlag>,
 }
 
 impl fmt::Debug for HeadersFrame {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         fmt.debug_struct("HeadersFrame")
-            .field("header_fragment", &BsDebug(&self.header_fragment))
+            .field("flags", &self.flags)
             .field("stream_id", &self.stream_id)
+            .field("header_fragment", &BsDebug(&self.header_fragment))
             .field("stream_dep", &self.stream_dep)
             .field("padding_len", &self.padding_len)
-            .field("flags", &self.flags)
             .finish()
     }
 }
