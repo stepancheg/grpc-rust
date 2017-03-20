@@ -108,7 +108,7 @@ impl TestServiceAsync for TestServerImpl {
 fn main() {
     drop(env_logger::init().unwrap());
 
-    let _server = TestServiceAsyncServer::new("[::]:60011", Default::default(), TestServerImpl {});
+    let _server = TestServiceAsyncServer::new("[::]:10000", Default::default(), TestServerImpl {});
 
     loop {
         thread::park();
