@@ -20,7 +20,7 @@ use messages::{Payload, SimpleRequest, SimpleResponse, StreamingOutputCallReques
 use test_grpc::*;
 
 use grpc::futures_grpc::{GrpcFutureSend, GrpcStreamSend};
-use grpc::error::GrpcError;
+use grpc::error::*;
 
 static DICTIONARY: &'static str = "ABCDEFGHIJKLMNOPQRSTUVabcdefghijklmnoqprstuvwxyz0123456789";
 // Note: due to const restrictions, this is calculated by hand.
@@ -47,7 +47,14 @@ impl TestServiceAsync for TestServerImpl {
         Box::new(futures::finished(Empty::new()))
     }
 
-    fn UnaryCall(&self, req: SimpleRequest) -> GrpcFutureSend<SimpleResponse> {
+    fn UnaryCall(&self, mut req: SimpleRequest) -> GrpcFutureSend<SimpleResponse> {
+        if req.get_response_status().get_code() != 0 {
+            return Box::new(futures::failed(GrpcError::GrpcMessage(GrpcMessageError {
+                grpc_status: req.get_response_status().get_code(),
+                grpc_message: req.mut_response_status().take_message(),
+            })));
+        }
+
         let mut payload = Payload::new();
         payload.set_body(make_string(req.get_response_size() as usize));
         let mut response = SimpleResponse::new();
@@ -87,14 +94,23 @@ impl TestServiceAsync for TestServerImpl {
 
     fn FullDuplexCall(&self, req_stream: GrpcStreamSend<StreamingOutputCallRequest>) -> GrpcStreamSend<StreamingOutputCallResponse> {
         let response = req_stream.map(|mut req| {
+            if req.get_response_status().get_code() != 0 {
+                let s: GrpcStreamSend<StreamingOutputCallResponse> = Box::new(stream::once(Err(GrpcError::GrpcMessage(GrpcMessageError {
+                    grpc_status: req.get_response_status().get_code(),
+                    grpc_message: req.mut_response_status().take_message(),
+                }))));
+                return s;
+            }
+
             let sizes = req.take_response_parameters().into_iter().map(|res| Ok(res.get_size() as usize));
-            stream::iter(sizes).map(|size| {
+            let ss: GrpcStreamSend<StreamingOutputCallResponse> = Box::new(stream::iter(sizes).map(|size| {
                 let mut response = StreamingOutputCallResponse::new();
                 let mut payload = Payload::new();
                 payload.set_body(make_string(size));
                 response.set_payload(payload);
                 response
-            })
+            }));
+            ss
         }).flatten();
         Box::new(response)
     }

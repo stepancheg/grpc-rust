@@ -10,8 +10,7 @@ use protobuf::ProtobufError;
 
 #[derive(Debug)]
 pub struct GrpcMessageError {
-    // TODO: utilize grpc_status
-    // pub grpc_status: u32,
+    pub grpc_status: i32,
 
     /// Content of `grpc-message` header
     pub grpc_message: String,

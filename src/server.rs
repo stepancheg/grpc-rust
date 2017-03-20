@@ -333,10 +333,25 @@ impl HttpService for GrpcHttpServerHandlerFactory {
                         r
                     }
                     Err(e) =>
-                        Ok(HttpStreamPart::last_headers(vec![
-                            Header::new(":status", "500"),
-                            Header::new(HEADER_GRPC_MESSAGE, format!("error: {:?}", e)),
-                        ]))
+                        Ok(HttpStreamPart::last_headers(
+                            match e {
+                                GrpcError::GrpcMessage(GrpcMessageError { grpc_status, grpc_message }) => {
+                                    vec![
+                                        Header::new(":status", "500"),
+                                        // TODO: check nonzero
+                                        Header::new(HEADER_GRPC_STATUS, format!("{}", grpc_status)),
+                                        // TODO: escape invalid
+                                        Header::new(HEADER_GRPC_MESSAGE, grpc_message),
+                                    ]
+                                }
+                                e => {
+                                    vec![
+                                        Header::new(":status", "500"),
+                                        Header::new(HEADER_GRPC_MESSAGE, format!("error: {:?}", e)),
+                                    ]
+                                }
+                            }
+                        ))
                 }
             });
 

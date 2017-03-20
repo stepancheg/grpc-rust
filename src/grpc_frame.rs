@@ -210,11 +210,14 @@ impl Stream for GrpcFrameFromHttpFramesStreamResponse {
 
                         // Check gRPC status code and message
                         // TODO: a more detailed error message.
-                        if let Some(code) = slice_get_header(&headers, HEADER_GRPC_STATUS) {
-                            if code != OK.to_string() {
+                        if let Some(grpc_status) = slice_get_header_parse(&headers, HEADER_GRPC_STATUS) {
+                            if grpc_status != GrpcStatus::Ok as i32 {
                                 let message = slice_get_header(&headers, HEADER_GRPC_MESSAGE).unwrap_or("unknown error");
                                 self.error = Some(stream::once(Err(
-                                    GrpcError::GrpcMessage(GrpcMessageError{ grpc_message: message.to_owned() })
+                                    GrpcError::GrpcMessage(GrpcMessageError{
+                                        grpc_status: grpc_status,
+                                        grpc_message: message.to_owned(),
+                                    })
                                 )));
                                 continue;
                             }
@@ -254,12 +257,15 @@ impl Stream for GrpcFrameFromHttpFramesStreamResponse {
                         if !self.buf.is_empty() {
                             self.error = Some(stream::once(Err(GrpcError::Other("partial frame"))));
                         } else {
-                            let grpc_status_0 = slice_get_header(&headers, HEADER_GRPC_STATUS) == Some("0");
-                            if grpc_status_0 {
+                            let grpc_status = slice_get_header_parse(&headers, HEADER_GRPC_STATUS);
+                            if grpc_status == Some(GrpcStatus::Ok as i32) {
                                 return Ok(Async::Ready(None));
                             } else {
                                 self.error = Some(stream::once(Err(if let Some(message) = slice_get_header(&headers, HEADER_GRPC_MESSAGE) {
-                                    GrpcError::GrpcMessage(GrpcMessageError { grpc_message: message.to_owned() })
+                                    GrpcError::GrpcMessage(GrpcMessageError {
+                                        grpc_status: grpc_status.unwrap_or(GrpcStatus::Unknown as i32),
+                                        grpc_message: message.to_owned(),
+                                    })
                                 } else {
                                     GrpcError::Other("not xxx")
                                 })));

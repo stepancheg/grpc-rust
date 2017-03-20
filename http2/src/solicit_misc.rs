@@ -2,6 +2,7 @@ use std::io;
 use std::mem;
 use std::cmp;
 use std::str;
+use std::str::FromStr;
 
 use solicit::Header;
 use solicit::StreamId;
@@ -263,3 +264,7 @@ pub fn slice_get_header<'a>(headers: &'a [Header], name: &str) -> Option<&'a str
         .and_then(|h| str::from_utf8(h.value()).ok())
 }
 
+pub fn slice_get_header_parse<I : FromStr>(headers: &[Header], name: &str) -> Option<I> {
+    slice_get_header(headers, name)
+        .and_then(|h| h.parse().ok())
+}
