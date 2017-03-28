@@ -293,6 +293,10 @@ impl GrpcServer {
     pub fn local_addr(&self) -> &SocketAddr {
         self.server.local_addr()
     }
+
+    pub fn is_alive(&self) -> bool {
+        self.server.is_alive()
+    }
 }
 
 struct GrpcHttpServerHandlerFactory {
