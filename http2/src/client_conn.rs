@@ -314,7 +314,7 @@ impl HttpClientConnectionAsync {
             socket
         };
 
-        let connect = if let Some(timeout) = conf.timeout {
+        let connect = if let Some(timeout) = conf.connection_timeout {
             let timer = Timer::default();
             timer.timeout(connect, timeout).map(map_callback).boxed()
         } else {
