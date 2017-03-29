@@ -9,6 +9,7 @@ use std::error::Error;
 use bytes::Bytes;
 
 use misc::BsDebug;
+use tokio_timer::TimeoutError;
 
 use hpack::decoder::DecoderError;
 
@@ -376,6 +377,7 @@ pub enum HttpError {
     UnknownStreamId,
     UnableToConnect,
     MalformedResponse,
+    ConnectionTimeout,
     Other(Box<Error + Send + Sync>),
 }
 
@@ -384,6 +386,12 @@ pub enum HttpError {
 impl From<io::Error> for HttpError {
     fn from(err: io::Error) -> HttpError {
         HttpError::IoError(err)
+    }
+}
+
+impl<F> From<TimeoutError<F>> for HttpError {
+    fn from(_err: TimeoutError<F>) -> HttpError {
+        HttpError::ConnectionTimeout
     }
 }
 
@@ -404,6 +412,7 @@ impl Error for HttpError {
             HttpError::UnknownStreamId => "Attempted an operation with an unknown HTTP/2 stream ID",
             HttpError::UnableToConnect => "An error attempting to establish an HTTP/2 connection",
             HttpError::MalformedResponse => "The received response was malformed",
+            HttpError::ConnectionTimeout => "Connection time out",
             HttpError::Other(_) => "An unknown error",
         }
     }
@@ -432,6 +441,7 @@ impl PartialEq for HttpError {
             (&HttpError::UnknownStreamId, &HttpError::UnknownStreamId) => true,
             (&HttpError::UnableToConnect, &HttpError::UnableToConnect) => true,
             (&HttpError::MalformedResponse, &HttpError::MalformedResponse) => true,
+            (&HttpError::ConnectionTimeout, &HttpError::ConnectionTimeout) => true,
             (&HttpError::Other(ref e1), &HttpError::Other(ref e2)) => {
                 e1.description() == e2.description()
             }

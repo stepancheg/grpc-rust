@@ -18,6 +18,7 @@ use futures::stream::Stream;
 use tokio_core::net::TcpStream;
 use tokio_core::io::Io;
 use tokio_core::reactor;
+use tokio_timer::Timer;
 
 use futures_misc::*;
 
@@ -304,18 +305,23 @@ impl HttpClientConnectionAsync {
         let addr = addr.clone();
 
         let no_delay = conf.no_delay.unwrap_or(true);
+        let connect = TcpStream::connect(&addr, &lh).map_err(Into::into);
+        let map_callback = move |socket: TcpStream| {
+            info!("connected to {}", addr);
 
-        let connect = TcpStream::connect(&addr, &lh)
-            .map(move |socket| {
-                info!("connected to {}", addr);
+            socket.set_nodelay(no_delay).expect("failed to set TCP_NODELAY");
 
-                socket.set_nodelay(no_delay).expect("failed to set TCP_NODELAY");
+            socket
+        };
 
-                socket
-            })
-            .map_err(|e| e.into());
+        let connect = if let Some(timeout) = conf.connection_timeout {
+            let timer = Timer::default();
+            timer.timeout(connect, timeout).map(map_callback).boxed()
+        } else {
+            connect.map(map_callback).boxed()
+        };
 
-        HttpClientConnectionAsync::connected(lh, Box::new(connect), conf)
+        HttpClientConnectionAsync::connected(lh, connect, conf)
     }
 
     pub fn new_tls(_lh: reactor::Handle, _addr: &SocketAddr, _conf: HttpClientConf) -> (Self, HttpFuture<()>) {
