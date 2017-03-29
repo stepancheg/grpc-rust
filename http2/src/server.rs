@@ -40,6 +40,7 @@ struct LoopToServer {
 pub struct HttpServer {
     state: Arc<Mutex<HttpServerState>>,
     loop_to_server: LoopToServer,
+    alive_rx: mpsc::Receiver<()>,
     thread_join_handle: Option<thread::JoinHandle<()>>,
 }
 
@@ -103,7 +104,8 @@ fn run_server_event_loop<S>(
     state: Arc<Mutex<HttpServerState>>,
     conf: HttpServerConf,
     service: S,
-    send_to_back: mpsc::Sender<LoopToServer>)
+    send_to_back: mpsc::Sender<LoopToServer>,
+    _alive_tx: mpsc::Sender<()>)
         where S : HttpService,
 {
     let service = Arc::new(service);
@@ -172,6 +174,7 @@ impl HttpServer {
         let listen_addr = addr.to_socket_addrs().unwrap().next().unwrap();
 
         let (get_from_loop_tx, get_from_loop_rx) = mpsc::channel();
+        let (alive_tx, alive_rx) = mpsc::channel();
 
         let state: Arc<Mutex<HttpServerState>> = Default::default();
 
@@ -180,7 +183,11 @@ impl HttpServer {
         let join_handle = thread::Builder::new()
             .name(conf.thread_name.clone().unwrap_or_else(|| "http2-server-loop".to_owned()).to_string())
             .spawn(move || {
-                run_server_event_loop(listen_addr, state_copy, conf, service, get_from_loop_tx);
+                run_server_event_loop(listen_addr,
+                                      state_copy,
+                                      conf, service,
+                                      get_from_loop_tx,
+                                      alive_tx);
             })
             .expect("spawn");
 
@@ -190,11 +197,16 @@ impl HttpServer {
             state: state,
             loop_to_server: loop_to_server,
             thread_join_handle: Some(join_handle),
+            alive_rx: alive_rx,
         }
     }
 
     pub fn local_addr(&self) -> &SocketAddr {
         &self.loop_to_server.local_addr
+    }
+
+    pub fn is_alive(&self) -> bool {
+        self.alive_rx.try_recv() != Err(mpsc::TryRecvError::Disconnected)
     }
 
     // for tests

@@ -307,6 +307,16 @@ impl<'a> ServiceGen<'a> {
 
         w.write_line("");
 
+        w.impl_for_block("::std::ops::Deref", &self.sync_server_name(), |w| {
+            w.write_line(&format!("type Target = {};", &self.async_server_name()));
+            w.write_line("");
+            w.def_fn("deref(&self) -> &Self::Target", |w| {
+                w.write_line("&self.async_server");
+            })
+        });
+
+        w.write_line("");
+
         w.def_struct(&self.sync_handler_to_async_name(), |w| {
             w.field_decl("handler", &format!("::std::sync::Arc<{} + Send + Sync>", self.sync_intf_name()));
             w.field_decl("cpupool", "::futures_cpupool::CpuPool");
@@ -366,6 +376,16 @@ impl<'a> ServiceGen<'a> {
     fn write_async_server(&self, w: &mut CodeWriter) {
         w.pub_struct(&self.async_server_name(), |w| {
             w.field_decl("grpc_server", "::grpc::server::GrpcServer");
+        });
+
+        w.write_line("");
+
+        w.impl_for_block("::std::ops::Deref", &self.async_server_name(), |w| {
+            w.write_line("type Target = ::grpc::server::GrpcServer;");
+            w.write_line("");
+            w.def_fn("deref(&self) -> &Self::Target", |w| {
+                w.write_line("&self.grpc_server");
+            })
         });
 
         w.write_line("");
