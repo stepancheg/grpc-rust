@@ -1,6 +1,8 @@
 grpc-rust
 =========
 
+[![Join the chat at https://gitter.im/grpc-rust/Lobby](https://badges.gitter.im/grpc-rust/Lobby.svg)](https://gitter.im/grpc-rust/Lobby?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
 <!-- https://travis-ci.org/stepancheg/rust-protobuf.png -->
 [![Build Status](https://img.shields.io/travis/stepancheg/grpc-rust.svg)](https://travis-ci.org/stepancheg/grpc-rust)
 [![License](https://img.shields.io/crates/l/grpc.svg)](https://github.com/stepancheg/grpc-rust/blob/master/LICENSE.txt)
