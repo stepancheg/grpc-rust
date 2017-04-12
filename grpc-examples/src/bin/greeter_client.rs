@@ -18,7 +18,7 @@ fn main() {
     let mut req = HelloRequest::new();
     req.set_name(name);
 
-    let resp = client.SayHello(GrpcRequestOptions::new(), req);
+    let resp = client.say_hello(GrpcRequestOptions::new(), req);
 
     println!("{:?}", resp.wait());
 }

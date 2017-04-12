@@ -22,7 +22,7 @@
 // interface
 
 pub trait Greeter {
-    fn SayHello(&self, o: ::grpc::GrpcRequestOptions, p: super::helloworld::HelloRequest) -> ::grpc::GrpcSingleResponse<super::helloworld::HelloReply>;
+    fn say_hello(&self, o: ::grpc::GrpcRequestOptions, p: super::helloworld::HelloRequest) -> ::grpc::GrpcSingleResponse<super::helloworld::HelloReply>;
 }
 
 // client
@@ -53,7 +53,7 @@ impl GreeterClient {
 }
 
 impl Greeter for GreeterClient {
-    fn SayHello(&self, o: ::grpc::GrpcRequestOptions, p: super::helloworld::HelloRequest) -> ::grpc::GrpcSingleResponse<super::helloworld::HelloReply> {
+    fn say_hello(&self, o: ::grpc::GrpcRequestOptions, p: super::helloworld::HelloRequest) -> ::grpc::GrpcSingleResponse<super::helloworld::HelloReply> {
         self.grpc_client.call_unary(o, p, self.method_SayHello.clone())
     }
 }
@@ -100,7 +100,7 @@ impl GreeterServer {
                     }),
                     {
                         let handler_copy = handler_arc.clone();
-                        ::grpc::server::MethodHandlerUnary::new(move |o, p| handler_copy.SayHello(o, p))
+                        ::grpc::server::MethodHandlerUnary::new(move |o, p| handler_copy.say_hello(o, p))
                     },
                 ),
             ],

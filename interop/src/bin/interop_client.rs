@@ -22,7 +22,7 @@ use chrono::*;
 use clap::{App, Arg};
 
 fn empty_unary(client: TestServiceClient) {
-    client.EmptyCall(GrpcRequestOptions::new(), Empty::new())
+    client.empty_call(GrpcRequestOptions::new(), Empty::new())
         .wait_drop_metadata()
         .expect("failed to get EmptyUnary result");
     println!("{} EmptyUnary done", Local::now().to_rfc3339());
@@ -35,7 +35,7 @@ fn large_unary(client: TestServiceClient) {
     let mut request = SimpleRequest::new();
     request.set_payload(payload);
     request.set_response_size(314159);
-    let response = client.UnaryCall(GrpcRequestOptions::new(), request).wait_drop_metadata().expect("expected full frame");
+    let response = client.unary_call(GrpcRequestOptions::new(), request).wait_drop_metadata().expect("expected full frame");
     assert!(response.get_payload().body.len() == 314159);
     println!("{} LargeUnary done", Local::now().to_rfc3339());
 }
@@ -50,7 +50,7 @@ fn client_streaming(client: TestServiceClient) {
         requests.push(request);
     }
 
-    let response = client.StreamingInputCall(GrpcRequestOptions::new(), GrpcStreamingRequest::iter(requests)).wait_drop_metadata()
+    let response = client.streaming_input_call(GrpcRequestOptions::new(), GrpcStreamingRequest::iter(requests)).wait_drop_metadata()
         .expect("expected response");
     assert!(response.aggregated_payload_size == 74922);
     println!("{} ClientStreaming done", Local::now().to_rfc3339());
@@ -68,7 +68,7 @@ fn server_streaming(client: TestServiceClient) {
     }
     req.set_response_parameters(::protobuf::RepeatedField::from_vec(params));
 
-    let response_stream = client.StreamingOutputCall(GrpcRequestOptions::new(), req).wait_drop_metadata();
+    let response_stream = client.streaming_output_call(GrpcRequestOptions::new(), req).wait_drop_metadata();
 
     let mut response_sizes = Vec::new();
 
@@ -102,7 +102,7 @@ fn ping_pong(client: TestServiceClient) {
         req.set_payload(payload);
         requests.push(req);
     }
-    let response = client.FullDuplexCall(GrpcRequestOptions::new(), GrpcStreamingRequest::iter(requests)).wait_drop_metadata();
+    let response = client.full_duplex_call(GrpcRequestOptions::new(), GrpcStreamingRequest::iter(requests)).wait_drop_metadata();
     let mut response_sizes = Vec::new();
     {
         // this scope is to satisfy the borrow checker.
@@ -122,7 +122,7 @@ fn ping_pong(client: TestServiceClient) {
 }
 
 fn empty_stream(client: TestServiceClient) {
-    let response = client.FullDuplexCall(
+    let response = client.full_duplex_call(
         GrpcRequestOptions::new(),
         GrpcStreamingRequest::empty())
             .wait_drop_metadata();
@@ -163,7 +163,7 @@ fn custom_metadata(client: TestServiceClient) {
         let mut payload = Payload::new();
         payload.set_body(vec![0; 271828]);
         req.set_payload(payload);
-        let (initial, _result, trailing) = client.UnaryCall(make_options(), req)
+        let (initial, _result, trailing) = client.unary_call(make_options(), req)
             .wait().expect("UnaryCall");
 
         assert_result_metadata(initial, trailing);
@@ -191,7 +191,7 @@ fn custom_metadata(client: TestServiceClient) {
             req.set_payload(p);
         }
 
-        let (initial, _res, trailing) = client.FullDuplexCall(make_options(), GrpcStreamingRequest::single(req))
+        let (initial, _res, trailing) = client.full_duplex_call(make_options(), GrpcStreamingRequest::single(req))
             .collect().wait().expect("FullDuplexCall");
 
         assert_result_metadata(initial, trailing);

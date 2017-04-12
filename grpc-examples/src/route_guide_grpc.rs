@@ -22,13 +22,13 @@
 // interface
 
 pub trait RouteGuide {
-    fn GetFeature(&self, o: ::grpc::GrpcRequestOptions, p: super::route_guide::Point) -> ::grpc::GrpcSingleResponse<super::route_guide::Feature>;
+    fn get_feature(&self, o: ::grpc::GrpcRequestOptions, p: super::route_guide::Point) -> ::grpc::GrpcSingleResponse<super::route_guide::Feature>;
 
-    fn ListFeatures(&self, o: ::grpc::GrpcRequestOptions, p: super::route_guide::Rectangle) -> ::grpc::GrpcStreamingResponse<super::route_guide::Feature>;
+    fn list_features(&self, o: ::grpc::GrpcRequestOptions, p: super::route_guide::Rectangle) -> ::grpc::GrpcStreamingResponse<super::route_guide::Feature>;
 
-    fn RecordRoute(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::GrpcStreamingRequest<super::route_guide::Point>) -> ::grpc::GrpcSingleResponse<super::route_guide::RouteSummary>;
+    fn record_route(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::GrpcStreamingRequest<super::route_guide::Point>) -> ::grpc::GrpcSingleResponse<super::route_guide::RouteSummary>;
 
-    fn RouteChat(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::GrpcStreamingRequest<super::route_guide::RouteNote>) -> ::grpc::GrpcStreamingResponse<super::route_guide::RouteNote>;
+    fn route_chat(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::GrpcStreamingRequest<super::route_guide::RouteNote>) -> ::grpc::GrpcStreamingResponse<super::route_guide::RouteNote>;
 }
 
 // client
@@ -80,19 +80,19 @@ impl RouteGuideClient {
 }
 
 impl RouteGuide for RouteGuideClient {
-    fn GetFeature(&self, o: ::grpc::GrpcRequestOptions, p: super::route_guide::Point) -> ::grpc::GrpcSingleResponse<super::route_guide::Feature> {
+    fn get_feature(&self, o: ::grpc::GrpcRequestOptions, p: super::route_guide::Point) -> ::grpc::GrpcSingleResponse<super::route_guide::Feature> {
         self.grpc_client.call_unary(o, p, self.method_GetFeature.clone())
     }
 
-    fn ListFeatures(&self, o: ::grpc::GrpcRequestOptions, p: super::route_guide::Rectangle) -> ::grpc::GrpcStreamingResponse<super::route_guide::Feature> {
+    fn list_features(&self, o: ::grpc::GrpcRequestOptions, p: super::route_guide::Rectangle) -> ::grpc::GrpcStreamingResponse<super::route_guide::Feature> {
         self.grpc_client.call_server_streaming(o, p, self.method_ListFeatures.clone())
     }
 
-    fn RecordRoute(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::GrpcStreamingRequest<super::route_guide::Point>) -> ::grpc::GrpcSingleResponse<super::route_guide::RouteSummary> {
+    fn record_route(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::GrpcStreamingRequest<super::route_guide::Point>) -> ::grpc::GrpcSingleResponse<super::route_guide::RouteSummary> {
         self.grpc_client.call_client_streaming(o, p, self.method_RecordRoute.clone())
     }
 
-    fn RouteChat(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::GrpcStreamingRequest<super::route_guide::RouteNote>) -> ::grpc::GrpcStreamingResponse<super::route_guide::RouteNote> {
+    fn route_chat(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::GrpcStreamingRequest<super::route_guide::RouteNote>) -> ::grpc::GrpcStreamingResponse<super::route_guide::RouteNote> {
         self.grpc_client.call_bidi(o, p, self.method_RouteChat.clone())
     }
 }
@@ -139,7 +139,7 @@ impl RouteGuideServer {
                     }),
                     {
                         let handler_copy = handler_arc.clone();
-                        ::grpc::server::MethodHandlerUnary::new(move |o, p| handler_copy.GetFeature(o, p))
+                        ::grpc::server::MethodHandlerUnary::new(move |o, p| handler_copy.get_feature(o, p))
                     },
                 ),
                 ::grpc::server::ServerMethod::new(
@@ -151,7 +151,7 @@ impl RouteGuideServer {
                     }),
                     {
                         let handler_copy = handler_arc.clone();
-                        ::grpc::server::MethodHandlerServerStreaming::new(move |o, p| handler_copy.ListFeatures(o, p))
+                        ::grpc::server::MethodHandlerServerStreaming::new(move |o, p| handler_copy.list_features(o, p))
                     },
                 ),
                 ::grpc::server::ServerMethod::new(
@@ -163,7 +163,7 @@ impl RouteGuideServer {
                     }),
                     {
                         let handler_copy = handler_arc.clone();
-                        ::grpc::server::MethodHandlerClientStreaming::new(move |o, p| handler_copy.RecordRoute(o, p))
+                        ::grpc::server::MethodHandlerClientStreaming::new(move |o, p| handler_copy.record_route(o, p))
                     },
                 ),
                 ::grpc::server::ServerMethod::new(
@@ -175,7 +175,7 @@ impl RouteGuideServer {
                     }),
                     {
                         let handler_copy = handler_arc.clone();
-                        ::grpc::server::MethodHandlerBidi::new(move |o, p| handler_copy.RouteChat(o, p))
+                        ::grpc::server::MethodHandlerBidi::new(move |o, p| handler_copy.route_chat(o, p))
                     },
                 ),
             ],

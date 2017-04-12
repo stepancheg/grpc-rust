@@ -22,19 +22,19 @@
 // interface
 
 pub trait TestService {
-    fn EmptyCall(&self, o: ::grpc::GrpcRequestOptions, p: super::empty::Empty) -> ::grpc::GrpcSingleResponse<super::empty::Empty>;
+    fn empty_call(&self, o: ::grpc::GrpcRequestOptions, p: super::empty::Empty) -> ::grpc::GrpcSingleResponse<super::empty::Empty>;
 
-    fn UnaryCall(&self, o: ::grpc::GrpcRequestOptions, p: super::messages::SimpleRequest) -> ::grpc::GrpcSingleResponse<super::messages::SimpleResponse>;
+    fn unary_call(&self, o: ::grpc::GrpcRequestOptions, p: super::messages::SimpleRequest) -> ::grpc::GrpcSingleResponse<super::messages::SimpleResponse>;
 
-    fn CacheableUnaryCall(&self, o: ::grpc::GrpcRequestOptions, p: super::messages::SimpleRequest) -> ::grpc::GrpcSingleResponse<super::messages::SimpleResponse>;
+    fn cacheable_unary_call(&self, o: ::grpc::GrpcRequestOptions, p: super::messages::SimpleRequest) -> ::grpc::GrpcSingleResponse<super::messages::SimpleResponse>;
 
-    fn StreamingOutputCall(&self, o: ::grpc::GrpcRequestOptions, p: super::messages::StreamingOutputCallRequest) -> ::grpc::GrpcStreamingResponse<super::messages::StreamingOutputCallResponse>;
+    fn streaming_output_call(&self, o: ::grpc::GrpcRequestOptions, p: super::messages::StreamingOutputCallRequest) -> ::grpc::GrpcStreamingResponse<super::messages::StreamingOutputCallResponse>;
 
-    fn StreamingInputCall(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::GrpcStreamingRequest<super::messages::StreamingInputCallRequest>) -> ::grpc::GrpcSingleResponse<super::messages::StreamingInputCallResponse>;
+    fn streaming_input_call(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::GrpcStreamingRequest<super::messages::StreamingInputCallRequest>) -> ::grpc::GrpcSingleResponse<super::messages::StreamingInputCallResponse>;
 
-    fn FullDuplexCall(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::GrpcStreamingRequest<super::messages::StreamingOutputCallRequest>) -> ::grpc::GrpcStreamingResponse<super::messages::StreamingOutputCallResponse>;
+    fn full_duplex_call(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::GrpcStreamingRequest<super::messages::StreamingOutputCallRequest>) -> ::grpc::GrpcStreamingResponse<super::messages::StreamingOutputCallResponse>;
 
-    fn HalfDuplexCall(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::GrpcStreamingRequest<super::messages::StreamingOutputCallRequest>) -> ::grpc::GrpcStreamingResponse<super::messages::StreamingOutputCallResponse>;
+    fn half_duplex_call(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::GrpcStreamingRequest<super::messages::StreamingOutputCallRequest>) -> ::grpc::GrpcStreamingResponse<super::messages::StreamingOutputCallResponse>;
 }
 
 // client
@@ -107,31 +107,31 @@ impl TestServiceClient {
 }
 
 impl TestService for TestServiceClient {
-    fn EmptyCall(&self, o: ::grpc::GrpcRequestOptions, p: super::empty::Empty) -> ::grpc::GrpcSingleResponse<super::empty::Empty> {
+    fn empty_call(&self, o: ::grpc::GrpcRequestOptions, p: super::empty::Empty) -> ::grpc::GrpcSingleResponse<super::empty::Empty> {
         self.grpc_client.call_unary(o, p, self.method_EmptyCall.clone())
     }
 
-    fn UnaryCall(&self, o: ::grpc::GrpcRequestOptions, p: super::messages::SimpleRequest) -> ::grpc::GrpcSingleResponse<super::messages::SimpleResponse> {
+    fn unary_call(&self, o: ::grpc::GrpcRequestOptions, p: super::messages::SimpleRequest) -> ::grpc::GrpcSingleResponse<super::messages::SimpleResponse> {
         self.grpc_client.call_unary(o, p, self.method_UnaryCall.clone())
     }
 
-    fn CacheableUnaryCall(&self, o: ::grpc::GrpcRequestOptions, p: super::messages::SimpleRequest) -> ::grpc::GrpcSingleResponse<super::messages::SimpleResponse> {
+    fn cacheable_unary_call(&self, o: ::grpc::GrpcRequestOptions, p: super::messages::SimpleRequest) -> ::grpc::GrpcSingleResponse<super::messages::SimpleResponse> {
         self.grpc_client.call_unary(o, p, self.method_CacheableUnaryCall.clone())
     }
 
-    fn StreamingOutputCall(&self, o: ::grpc::GrpcRequestOptions, p: super::messages::StreamingOutputCallRequest) -> ::grpc::GrpcStreamingResponse<super::messages::StreamingOutputCallResponse> {
+    fn streaming_output_call(&self, o: ::grpc::GrpcRequestOptions, p: super::messages::StreamingOutputCallRequest) -> ::grpc::GrpcStreamingResponse<super::messages::StreamingOutputCallResponse> {
         self.grpc_client.call_server_streaming(o, p, self.method_StreamingOutputCall.clone())
     }
 
-    fn StreamingInputCall(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::GrpcStreamingRequest<super::messages::StreamingInputCallRequest>) -> ::grpc::GrpcSingleResponse<super::messages::StreamingInputCallResponse> {
+    fn streaming_input_call(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::GrpcStreamingRequest<super::messages::StreamingInputCallRequest>) -> ::grpc::GrpcSingleResponse<super::messages::StreamingInputCallResponse> {
         self.grpc_client.call_client_streaming(o, p, self.method_StreamingInputCall.clone())
     }
 
-    fn FullDuplexCall(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::GrpcStreamingRequest<super::messages::StreamingOutputCallRequest>) -> ::grpc::GrpcStreamingResponse<super::messages::StreamingOutputCallResponse> {
+    fn full_duplex_call(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::GrpcStreamingRequest<super::messages::StreamingOutputCallRequest>) -> ::grpc::GrpcStreamingResponse<super::messages::StreamingOutputCallResponse> {
         self.grpc_client.call_bidi(o, p, self.method_FullDuplexCall.clone())
     }
 
-    fn HalfDuplexCall(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::GrpcStreamingRequest<super::messages::StreamingOutputCallRequest>) -> ::grpc::GrpcStreamingResponse<super::messages::StreamingOutputCallResponse> {
+    fn half_duplex_call(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::GrpcStreamingRequest<super::messages::StreamingOutputCallRequest>) -> ::grpc::GrpcStreamingResponse<super::messages::StreamingOutputCallResponse> {
         self.grpc_client.call_bidi(o, p, self.method_HalfDuplexCall.clone())
     }
 }
@@ -178,7 +178,7 @@ impl TestServiceServer {
                     }),
                     {
                         let handler_copy = handler_arc.clone();
-                        ::grpc::server::MethodHandlerUnary::new(move |o, p| handler_copy.EmptyCall(o, p))
+                        ::grpc::server::MethodHandlerUnary::new(move |o, p| handler_copy.empty_call(o, p))
                     },
                 ),
                 ::grpc::server::ServerMethod::new(
@@ -190,7 +190,7 @@ impl TestServiceServer {
                     }),
                     {
                         let handler_copy = handler_arc.clone();
-                        ::grpc::server::MethodHandlerUnary::new(move |o, p| handler_copy.UnaryCall(o, p))
+                        ::grpc::server::MethodHandlerUnary::new(move |o, p| handler_copy.unary_call(o, p))
                     },
                 ),
                 ::grpc::server::ServerMethod::new(
@@ -202,7 +202,7 @@ impl TestServiceServer {
                     }),
                     {
                         let handler_copy = handler_arc.clone();
-                        ::grpc::server::MethodHandlerUnary::new(move |o, p| handler_copy.CacheableUnaryCall(o, p))
+                        ::grpc::server::MethodHandlerUnary::new(move |o, p| handler_copy.cacheable_unary_call(o, p))
                     },
                 ),
                 ::grpc::server::ServerMethod::new(
@@ -214,7 +214,7 @@ impl TestServiceServer {
                     }),
                     {
                         let handler_copy = handler_arc.clone();
-                        ::grpc::server::MethodHandlerServerStreaming::new(move |o, p| handler_copy.StreamingOutputCall(o, p))
+                        ::grpc::server::MethodHandlerServerStreaming::new(move |o, p| handler_copy.streaming_output_call(o, p))
                     },
                 ),
                 ::grpc::server::ServerMethod::new(
@@ -226,7 +226,7 @@ impl TestServiceServer {
                     }),
                     {
                         let handler_copy = handler_arc.clone();
-                        ::grpc::server::MethodHandlerClientStreaming::new(move |o, p| handler_copy.StreamingInputCall(o, p))
+                        ::grpc::server::MethodHandlerClientStreaming::new(move |o, p| handler_copy.streaming_input_call(o, p))
                     },
                 ),
                 ::grpc::server::ServerMethod::new(
@@ -238,7 +238,7 @@ impl TestServiceServer {
                     }),
                     {
                         let handler_copy = handler_arc.clone();
-                        ::grpc::server::MethodHandlerBidi::new(move |o, p| handler_copy.FullDuplexCall(o, p))
+                        ::grpc::server::MethodHandlerBidi::new(move |o, p| handler_copy.full_duplex_call(o, p))
                     },
                 ),
                 ::grpc::server::ServerMethod::new(
@@ -250,7 +250,7 @@ impl TestServiceServer {
                     }),
                     {
                         let handler_copy = handler_arc.clone();
-                        ::grpc::server::MethodHandlerBidi::new(move |o, p| handler_copy.HalfDuplexCall(o, p))
+                        ::grpc::server::MethodHandlerBidi::new(move |o, p| handler_copy.half_duplex_call(o, p))
                     },
                 ),
             ],
@@ -261,7 +261,7 @@ impl TestServiceServer {
 // interface
 
 pub trait UnimplementedService {
-    fn UnimplementedCall(&self, o: ::grpc::GrpcRequestOptions, p: super::empty::Empty) -> ::grpc::GrpcSingleResponse<super::empty::Empty>;
+    fn unimplemented_call(&self, o: ::grpc::GrpcRequestOptions, p: super::empty::Empty) -> ::grpc::GrpcSingleResponse<super::empty::Empty>;
 }
 
 // client
@@ -292,7 +292,7 @@ impl UnimplementedServiceClient {
 }
 
 impl UnimplementedService for UnimplementedServiceClient {
-    fn UnimplementedCall(&self, o: ::grpc::GrpcRequestOptions, p: super::empty::Empty) -> ::grpc::GrpcSingleResponse<super::empty::Empty> {
+    fn unimplemented_call(&self, o: ::grpc::GrpcRequestOptions, p: super::empty::Empty) -> ::grpc::GrpcSingleResponse<super::empty::Empty> {
         self.grpc_client.call_unary(o, p, self.method_UnimplementedCall.clone())
     }
 }
@@ -339,7 +339,7 @@ impl UnimplementedServiceServer {
                     }),
                     {
                         let handler_copy = handler_arc.clone();
-                        ::grpc::server::MethodHandlerUnary::new(move |o, p| handler_copy.UnimplementedCall(o, p))
+                        ::grpc::server::MethodHandlerUnary::new(move |o, p| handler_copy.unimplemented_call(o, p))
                     },
                 ),
             ],
@@ -350,9 +350,9 @@ impl UnimplementedServiceServer {
 // interface
 
 pub trait ReconnectService {
-    fn Start(&self, o: ::grpc::GrpcRequestOptions, p: super::messages::ReconnectParams) -> ::grpc::GrpcSingleResponse<super::empty::Empty>;
+    fn start(&self, o: ::grpc::GrpcRequestOptions, p: super::messages::ReconnectParams) -> ::grpc::GrpcSingleResponse<super::empty::Empty>;
 
-    fn Stop(&self, o: ::grpc::GrpcRequestOptions, p: super::empty::Empty) -> ::grpc::GrpcSingleResponse<super::messages::ReconnectInfo>;
+    fn stop(&self, o: ::grpc::GrpcRequestOptions, p: super::empty::Empty) -> ::grpc::GrpcSingleResponse<super::messages::ReconnectInfo>;
 }
 
 // client
@@ -390,11 +390,11 @@ impl ReconnectServiceClient {
 }
 
 impl ReconnectService for ReconnectServiceClient {
-    fn Start(&self, o: ::grpc::GrpcRequestOptions, p: super::messages::ReconnectParams) -> ::grpc::GrpcSingleResponse<super::empty::Empty> {
+    fn start(&self, o: ::grpc::GrpcRequestOptions, p: super::messages::ReconnectParams) -> ::grpc::GrpcSingleResponse<super::empty::Empty> {
         self.grpc_client.call_unary(o, p, self.method_Start.clone())
     }
 
-    fn Stop(&self, o: ::grpc::GrpcRequestOptions, p: super::empty::Empty) -> ::grpc::GrpcSingleResponse<super::messages::ReconnectInfo> {
+    fn stop(&self, o: ::grpc::GrpcRequestOptions, p: super::empty::Empty) -> ::grpc::GrpcSingleResponse<super::messages::ReconnectInfo> {
         self.grpc_client.call_unary(o, p, self.method_Stop.clone())
     }
 }
@@ -441,7 +441,7 @@ impl ReconnectServiceServer {
                     }),
                     {
                         let handler_copy = handler_arc.clone();
-                        ::grpc::server::MethodHandlerUnary::new(move |o, p| handler_copy.Start(o, p))
+                        ::grpc::server::MethodHandlerUnary::new(move |o, p| handler_copy.start(o, p))
                     },
                 ),
                 ::grpc::server::ServerMethod::new(
@@ -453,7 +453,7 @@ impl ReconnectServiceServer {
                     }),
                     {
                         let handler_copy = handler_arc.clone();
-                        ::grpc::server::MethodHandlerUnary::new(move |o, p| handler_copy.Stop(o, p))
+                        ::grpc::server::MethodHandlerUnary::new(move |o, p| handler_copy.stop(o, p))
                     },
                 ),
             ],
