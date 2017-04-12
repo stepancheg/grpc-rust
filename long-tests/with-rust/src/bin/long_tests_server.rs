@@ -21,7 +21,7 @@ use grpc::error::GrpcError;
 struct LongTestsServerImpl {
 }
 
-impl LongTestsAsync for LongTestsServerImpl {
+impl AsyncLongTests for LongTestsServerImpl {
     fn echo(&self, mut p: EchoRequest)
         -> GrpcFutureSend<EchoResponse>
     {
@@ -62,7 +62,7 @@ impl LongTestsAsync for LongTestsServerImpl {
 fn main() {
     env_logger::init().unwrap();
 
-    let _server = LongTestsAsyncServer::new(long_tests::TEST_HOST, Default::default(), LongTestsServerImpl {});
+    let _server = AsyncLongTestsServer::new(long_tests::TEST_HOST, Default::default(), LongTestsServerImpl {});
 
     loop {
         thread::park();

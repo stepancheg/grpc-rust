@@ -25,19 +25,19 @@ pub trait Greeter {
     fn SayHello(&self, p: super::helloworld::HelloRequest) -> ::grpc::result::GrpcResult<super::helloworld::HelloReply>;
 }
 
-pub trait GreeterAsync {
+pub trait AsyncGreeter {
     fn SayHello(&self, p: super::helloworld::HelloRequest) -> ::grpc::futures_grpc::GrpcFutureSend<super::helloworld::HelloReply>;
 }
 
 // sync client
 
 pub struct GreeterClient {
-    async_client: GreeterAsyncClient,
+    async_client: AsyncGreeterClient,
 }
 
 impl GreeterClient {
     pub fn new(host: &str, port: u16, tls: bool, conf: ::grpc::client::GrpcClientConf) -> ::grpc::result::GrpcResult<Self> {
-        GreeterAsyncClient::new(host, port, tls, conf).map(|c| {
+        AsyncGreeterClient::new(host, port, tls, conf).map(|c| {
             GreeterClient {
                 async_client: c,
             }
@@ -53,15 +53,15 @@ impl Greeter for GreeterClient {
 
 // async client
 
-pub struct GreeterAsyncClient {
+pub struct AsyncGreeterClient {
     grpc_client: ::grpc::client::GrpcClient,
     method_SayHello: ::std::sync::Arc<::grpc::method::MethodDescriptor<super::helloworld::HelloRequest, super::helloworld::HelloReply>>,
 }
 
-impl GreeterAsyncClient {
+impl AsyncGreeterClient {
     pub fn new(host: &str, port: u16, tls: bool, conf: ::grpc::client::GrpcClientConf) -> ::grpc::result::GrpcResult<Self> {
         ::grpc::client::GrpcClient::new(host, port, tls, conf).map(|c| {
-            GreeterAsyncClient {
+            AsyncGreeterClient {
                 grpc_client: c,
                 method_SayHello: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
                     name: "/helloworld.Greeter/SayHello".to_string(),
@@ -74,7 +74,7 @@ impl GreeterAsyncClient {
     }
 }
 
-impl GreeterAsync for GreeterAsyncClient {
+impl AsyncGreeter for AsyncGreeterClient {
     fn SayHello(&self, p: super::helloworld::HelloRequest) -> ::grpc::futures_grpc::GrpcFutureSend<super::helloworld::HelloReply> {
         self.grpc_client.call_unary(p, self.method_SayHello.clone())
     }
@@ -83,7 +83,7 @@ impl GreeterAsync for GreeterAsyncClient {
 // sync server
 
 pub struct GreeterServer {
-    async_server: GreeterAsyncServer,
+    async_server: AsyncGreeterServer,
 }
 
 struct GreeterServerHandlerToAsync {
@@ -91,7 +91,7 @@ struct GreeterServerHandlerToAsync {
     cpupool: ::futures_cpupool::CpuPool,
 }
 
-impl GreeterAsync for GreeterServerHandlerToAsync {
+impl AsyncGreeter for GreeterServerHandlerToAsync {
     fn SayHello(&self, p: super::helloworld::HelloRequest) -> ::grpc::futures_grpc::GrpcFutureSend<super::helloworld::HelloReply> {
         let h = self.handler.clone();
         ::grpc::rt::sync_to_async_unary(&self.cpupool, p, move |p| {
@@ -107,26 +107,26 @@ impl GreeterServer {
             handler: ::std::sync::Arc::new(h),
         };
         GreeterServer {
-            async_server: GreeterAsyncServer::new(addr, conf, h),
+            async_server: AsyncGreeterServer::new(addr, conf, h),
         }
     }
 }
 
 // async server
 
-pub struct GreeterAsyncServer {
+pub struct AsyncGreeterServer {
     grpc_server: ::grpc::server::GrpcServer,
 }
 
-impl GreeterAsyncServer {
-    pub fn new<A : ::std::net::ToSocketAddrs, H : GreeterAsync + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self {
-        let service_definition = GreeterAsyncServer::new_service_def(h);
-        GreeterAsyncServer {
+impl AsyncGreeterServer {
+    pub fn new<A : ::std::net::ToSocketAddrs, H : AsyncGreeter + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self {
+        let service_definition = AsyncGreeterServer::new_service_def(h);
+        AsyncGreeterServer {
             grpc_server: ::grpc::server::GrpcServer::new(addr, conf, service_definition),
         }
     }
 
-    pub fn new_service_def<H : GreeterAsync + 'static + Sync + Send + 'static>(handler: H) -> ::grpc::server::ServerServiceDefinition {
+    pub fn new_service_def<H : AsyncGreeter + 'static + Sync + Send + 'static>(handler: H) -> ::grpc::server::ServerServiceDefinition {
         let handler_arc = ::std::sync::Arc::new(handler);
         ::grpc::server::ServerServiceDefinition::new(
             vec![

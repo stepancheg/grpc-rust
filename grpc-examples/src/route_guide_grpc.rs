@@ -31,7 +31,7 @@ pub trait RouteGuide {
     fn RouteChat(&self, p: ::grpc::iter::GrpcIterator<super::route_guide::RouteNote>) -> ::grpc::iter::GrpcIterator<super::route_guide::RouteNote>;
 }
 
-pub trait RouteGuideAsync {
+pub trait AsyncRouteGuide {
     fn GetFeature(&self, p: super::route_guide::Point) -> ::grpc::futures_grpc::GrpcFutureSend<super::route_guide::Feature>;
 
     fn ListFeatures(&self, p: super::route_guide::Rectangle) -> ::grpc::futures_grpc::GrpcStreamSend<super::route_guide::Feature>;
@@ -44,12 +44,12 @@ pub trait RouteGuideAsync {
 // sync client
 
 pub struct RouteGuideClient {
-    async_client: RouteGuideAsyncClient,
+    async_client: AsyncRouteGuideClient,
 }
 
 impl RouteGuideClient {
     pub fn new(host: &str, port: u16, tls: bool, conf: ::grpc::client::GrpcClientConf) -> ::grpc::result::GrpcResult<Self> {
-        RouteGuideAsyncClient::new(host, port, tls, conf).map(|c| {
+        AsyncRouteGuideClient::new(host, port, tls, conf).map(|c| {
             RouteGuideClient {
                 async_client: c,
             }
@@ -79,7 +79,7 @@ impl RouteGuide for RouteGuideClient {
 
 // async client
 
-pub struct RouteGuideAsyncClient {
+pub struct AsyncRouteGuideClient {
     grpc_client: ::grpc::client::GrpcClient,
     method_GetFeature: ::std::sync::Arc<::grpc::method::MethodDescriptor<super::route_guide::Point, super::route_guide::Feature>>,
     method_ListFeatures: ::std::sync::Arc<::grpc::method::MethodDescriptor<super::route_guide::Rectangle, super::route_guide::Feature>>,
@@ -87,10 +87,10 @@ pub struct RouteGuideAsyncClient {
     method_RouteChat: ::std::sync::Arc<::grpc::method::MethodDescriptor<super::route_guide::RouteNote, super::route_guide::RouteNote>>,
 }
 
-impl RouteGuideAsyncClient {
+impl AsyncRouteGuideClient {
     pub fn new(host: &str, port: u16, tls: bool, conf: ::grpc::client::GrpcClientConf) -> ::grpc::result::GrpcResult<Self> {
         ::grpc::client::GrpcClient::new(host, port, tls, conf).map(|c| {
-            RouteGuideAsyncClient {
+            AsyncRouteGuideClient {
                 grpc_client: c,
                 method_GetFeature: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
                     name: "/proto.RouteGuide/GetFeature".to_string(),
@@ -121,7 +121,7 @@ impl RouteGuideAsyncClient {
     }
 }
 
-impl RouteGuideAsync for RouteGuideAsyncClient {
+impl AsyncRouteGuide for AsyncRouteGuideClient {
     fn GetFeature(&self, p: super::route_guide::Point) -> ::grpc::futures_grpc::GrpcFutureSend<super::route_guide::Feature> {
         self.grpc_client.call_unary(p, self.method_GetFeature.clone())
     }
@@ -142,7 +142,7 @@ impl RouteGuideAsync for RouteGuideAsyncClient {
 // sync server
 
 pub struct RouteGuideServer {
-    async_server: RouteGuideAsyncServer,
+    async_server: AsyncRouteGuideServer,
 }
 
 struct RouteGuideServerHandlerToAsync {
@@ -150,7 +150,7 @@ struct RouteGuideServerHandlerToAsync {
     cpupool: ::futures_cpupool::CpuPool,
 }
 
-impl RouteGuideAsync for RouteGuideServerHandlerToAsync {
+impl AsyncRouteGuide for RouteGuideServerHandlerToAsync {
     fn GetFeature(&self, p: super::route_guide::Point) -> ::grpc::futures_grpc::GrpcFutureSend<super::route_guide::Feature> {
         let h = self.handler.clone();
         ::grpc::rt::sync_to_async_unary(&self.cpupool, p, move |p| {
@@ -187,26 +187,26 @@ impl RouteGuideServer {
             handler: ::std::sync::Arc::new(h),
         };
         RouteGuideServer {
-            async_server: RouteGuideAsyncServer::new(addr, conf, h),
+            async_server: AsyncRouteGuideServer::new(addr, conf, h),
         }
     }
 }
 
 // async server
 
-pub struct RouteGuideAsyncServer {
+pub struct AsyncRouteGuideServer {
     grpc_server: ::grpc::server::GrpcServer,
 }
 
-impl RouteGuideAsyncServer {
-    pub fn new<A : ::std::net::ToSocketAddrs, H : RouteGuideAsync + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self {
-        let service_definition = RouteGuideAsyncServer::new_service_def(h);
-        RouteGuideAsyncServer {
+impl AsyncRouteGuideServer {
+    pub fn new<A : ::std::net::ToSocketAddrs, H : AsyncRouteGuide + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self {
+        let service_definition = AsyncRouteGuideServer::new_service_def(h);
+        AsyncRouteGuideServer {
             grpc_server: ::grpc::server::GrpcServer::new(addr, conf, service_definition),
         }
     }
 
-    pub fn new_service_def<H : RouteGuideAsync + 'static + Sync + Send + 'static>(handler: H) -> ::grpc::server::ServerServiceDefinition {
+    pub fn new_service_def<H : AsyncRouteGuide + 'static + Sync + Send + 'static>(handler: H) -> ::grpc::server::ServerServiceDefinition {
         let handler_arc = ::std::sync::Arc::new(handler);
         ::grpc::server::ServerServiceDefinition::new(
             vec![

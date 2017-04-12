@@ -42,7 +42,7 @@ fn make_string(size: usize) -> Vec<u8> {
 
 struct TestServerImpl {}
 
-impl TestServiceAsync for TestServerImpl {
+impl AsyncTestService for TestServerImpl {
     fn EmptyCall(&self, _: Empty) -> GrpcFutureSend<Empty> {
         Box::new(futures::finished(Empty::new()))
     }
@@ -124,7 +124,7 @@ impl TestServiceAsync for TestServerImpl {
 fn main() {
     drop(env_logger::init().unwrap());
 
-    let _server = TestServiceAsyncServer::new("[::]:10000", Default::default(), TestServerImpl {});
+    let _server = AsyncTestServiceServer::new("[::]:10000", Default::default(), TestServerImpl {});
 
     loop {
         thread::park();

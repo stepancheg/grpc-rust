@@ -177,7 +177,7 @@ impl<'a> ServiceGen<'a> {
 
     // name of asynchronous interface
     fn async_intf_name(&self) -> String {
-        format!("{}Async", self.sync_intf_name())
+        format!("Async{}", self.sync_intf_name())
     }
 
     fn sync_client_name(&self) -> String {
