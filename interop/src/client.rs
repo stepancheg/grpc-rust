@@ -21,7 +21,7 @@ use messages::{Payload, ResponseParameters, SimpleRequest,
 use test_grpc::*;
 
 fn empty_unary(client: TestServiceClient) {
-    client.EmptyCall(Empty::new()).expect("failed to get EmptyUnary result");
+    client.empty_call(Empty::new()).expect("failed to get EmptyUnary result");
     println!("{} EmptyUnary done", Local::now().to_rfc3339());
 }
 
@@ -32,7 +32,7 @@ fn large_unary(client: TestServiceClient) {
     let mut request = SimpleRequest::new();
     request.set_payload(payload);
     request.set_response_size(314159);
-    let response = client.UnaryCall(request).expect("expected full frame");
+    let response = client.unary_call(request).expect("expected full frame");
     assert!(response.get_payload().body.len() == 314159);
     println!("{} LargeUnary done", Local::now().to_rfc3339());
 }
@@ -47,7 +47,7 @@ fn client_streaming(client: TestServiceClient) {
         requests.push(Ok(request));
     }
 
-    let response = client.StreamingInputCall(Box::new(requests.into_iter()))
+    let response = client.streaming_input_call(Box::new(requests.into_iter()))
         .expect("expected response");
     assert!(response.aggregated_payload_size == 74922);
     println!("{} ClientStreaming done", Local::now().to_rfc3339());
@@ -65,7 +65,7 @@ fn server_streaming(client: TestServiceClient) {
     }
     req.set_response_parameters(::protobuf::RepeatedField::from_vec(params));
 
-    let response_stream = client.StreamingOutputCall(req);
+    let response_stream = client.streaming_output_call(req);
 
     let mut response_sizes = Vec::new();
 
@@ -99,7 +99,7 @@ fn ping_pong(client: TestServiceClient) {
         req.set_payload(payload);
         requests.push(Ok(req));
     }
-    let response = client.FullDuplexCall(Box::new(requests.into_iter()));
+    let response = client.full_duplex_call(Box::new(requests.into_iter()));
     let mut response_sizes = Vec::new();
     {
         // this scope is to satisfy the borrow checker.
@@ -119,7 +119,7 @@ fn ping_pong(client: TestServiceClient) {
 }
 
 fn empty_stream(client: TestServiceClient) {
-    let response = client.FullDuplexCall(Box::new(Vec::new().into_iter()));
+    let response = client.full_duplex_call(Box::new(Vec::new().into_iter()));
     assert!(response.count() == 0);
     println!("{} EmptyStream done", Local::now().to_rfc3339());
 }

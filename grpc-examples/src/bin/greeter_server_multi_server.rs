@@ -16,7 +16,7 @@ use grpc_examples::helloworld::*;
 struct GreeterImpl;
 
 impl GreeterAsync for GreeterImpl {
-    fn SayHello(&self, req: HelloRequest) -> GrpcFutureSend<HelloReply> {
+    fn say_hello(&self, req: HelloRequest) -> GrpcFutureSend<HelloReply> {
         let mut r = HelloReply::new();
         let name = if req.get_name().is_empty() { "world" } else { req.get_name() };
         println!("greeting request from {}", name);

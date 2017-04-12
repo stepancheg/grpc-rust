@@ -22,11 +22,11 @@
 // interface
 
 pub trait Greeter {
-    fn SayHello(&self, p: super::helloworld::HelloRequest) -> ::grpc::result::GrpcResult<super::helloworld::HelloReply>;
+    fn say_hello(&self, p: super::helloworld::HelloRequest) -> ::grpc::result::GrpcResult<super::helloworld::HelloReply>;
 }
 
 pub trait GreeterAsync {
-    fn SayHello(&self, p: super::helloworld::HelloRequest) -> ::grpc::futures_grpc::GrpcFutureSend<super::helloworld::HelloReply>;
+    fn say_hello(&self, p: super::helloworld::HelloRequest) -> ::grpc::futures_grpc::GrpcFutureSend<super::helloworld::HelloReply>;
 }
 
 // sync client
@@ -46,8 +46,8 @@ impl GreeterClient {
 }
 
 impl Greeter for GreeterClient {
-    fn SayHello(&self, p: super::helloworld::HelloRequest) -> ::grpc::result::GrpcResult<super::helloworld::HelloReply> {
-        ::futures::Future::wait(self.async_client.SayHello(p))
+    fn say_hello(&self, p: super::helloworld::HelloRequest) -> ::grpc::result::GrpcResult<super::helloworld::HelloReply> {
+        ::futures::Future::wait(self.async_client.say_hello(p))
     }
 }
 
@@ -75,7 +75,7 @@ impl GreeterAsyncClient {
 }
 
 impl GreeterAsync for GreeterAsyncClient {
-    fn SayHello(&self, p: super::helloworld::HelloRequest) -> ::grpc::futures_grpc::GrpcFutureSend<super::helloworld::HelloReply> {
+    fn say_hello(&self, p: super::helloworld::HelloRequest) -> ::grpc::futures_grpc::GrpcFutureSend<super::helloworld::HelloReply> {
         self.grpc_client.call_unary(p, self.method_SayHello.clone())
     }
 }
@@ -92,10 +92,10 @@ struct GreeterServerHandlerToAsync {
 }
 
 impl GreeterAsync for GreeterServerHandlerToAsync {
-    fn SayHello(&self, p: super::helloworld::HelloRequest) -> ::grpc::futures_grpc::GrpcFutureSend<super::helloworld::HelloReply> {
+    fn say_hello(&self, p: super::helloworld::HelloRequest) -> ::grpc::futures_grpc::GrpcFutureSend<super::helloworld::HelloReply> {
         let h = self.handler.clone();
         ::grpc::rt::sync_to_async_unary(&self.cpupool, p, move |p| {
-            h.SayHello(p)
+            h.say_hello(p)
         })
     }
 }
@@ -139,7 +139,7 @@ impl GreeterAsyncServer {
                     }),
                     {
                         let handler_copy = handler_arc.clone();
-                        ::grpc::server::MethodHandlerUnary::new(move |p| handler_copy.SayHello(p))
+                        ::grpc::server::MethodHandlerUnary::new(move |p| handler_copy.say_hello(p))
                     },
                 ),
             ],
