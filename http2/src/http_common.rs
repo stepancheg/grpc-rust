@@ -242,7 +242,10 @@ impl<S> LoopInnerCommon<S>
 
     pub fn remove_stream(&mut self, stream_id: StreamId) {
         match self.streams.remove(&stream_id) {
-            Some(_) => debug!("removed stream: {}", stream_id),
+            Some(mut stream) => {
+                debug!("removed stream: {}", stream_id);
+                stream.closed_remote();
+            }
             None => debug!("incorrect request to remove stream: {}", stream_id),
         }
     }
