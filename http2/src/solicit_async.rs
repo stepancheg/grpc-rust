@@ -127,17 +127,22 @@ pub fn client_handshake<I : Io + Send + 'static>(conn: I) -> HttpFuture<I> {
 }
 
 pub fn server_handshake<I : Io + Send + 'static>(conn: I) -> HttpFuture<I> {
+    // The server connection preface consists of a potentially empty SETTINGS frame.
+    let send_preface = send_frame(conn, SettingsFrame::new());
+
     let mut preface_buf = Vec::with_capacity(PREFACE.len());
     preface_buf.resize(PREFACE.len(), 0);
-    let recv_preface = read_exact(conn, preface_buf)
-        .map_err(|e| e.into())
-        .and_then(|(conn, preface_buf)| {
-            done(if preface_buf == PREFACE {
-                Ok((conn))
-            } else {
-                Err(HttpError::InvalidFrame)
+    let recv_preface = send_preface.and_then(|conn| {
+        read_exact(conn, preface_buf)
+            .map_err(|e| e.into())
+            .and_then(|(conn, preface_buf)| {
+                done(if preface_buf == PREFACE {
+                    Ok((conn))
+                } else {
+                    Err(HttpError::InvalidFrame)
+                })
             })
-        });
+    });
 
     let recv_settings = recv_preface.and_then(|conn| {
         recv_settings_frame(conn).map(|(conn, _)| conn)
