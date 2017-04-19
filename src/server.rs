@@ -326,6 +326,7 @@ impl HttpService for GrpcHttpServerHandlerFactory {
 
         let s1 = stream::once(Ok(HttpStreamPart::intermediate_headers(vec![
             Header::new(":status", "200"),
+            Header::new("content-type", "application/grpc"),
         ])));
 
         let s2 = grpc_frames

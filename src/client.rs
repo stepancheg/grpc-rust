@@ -83,6 +83,7 @@ impl GrpcClient {
             Header::new(":path", method.name.clone()),
             Header::new(":authority", host.clone()),
             Header::new(":scheme", http_scheme.as_bytes()),
+            Header::new("content-type", "application/grpc"),
         ];
 
         let request_frames = {
