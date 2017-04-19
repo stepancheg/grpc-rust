@@ -495,11 +495,15 @@ pub trait LoopInner: 'static {
         }
     }
 
+    fn process_goaway(&mut self, _frame: GoawayFrame) {
+        // TODO: After all streams end, close the connection.
+    }
+
     fn process_conn_frame(&mut self, frame: HttpFrameConn) {
         match frame {
             HttpFrameConn::Settings(f) => self.process_settings_global(f),
             HttpFrameConn::Ping(f) => self.process_ping(f),
-            HttpFrameConn::Goaway(_f) => panic!("TODO"),
+            HttpFrameConn::Goaway(f) => self.process_goaway(f),
             HttpFrameConn::WindowUpdate(f) => self.process_conn_window_update(f),
         }
     }
