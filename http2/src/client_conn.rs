@@ -112,8 +112,11 @@ impl LoopInner for ClientInner {
                 //               request made by the client nor any server-initiated stream (pushed)
                 return;
             }
-            Some(ref mut stream) if headers.len() != 0 => {
+            Some(stream) => {
                 // TODO: hack
+                if headers.len() == 0 {
+                    return;
+                }
                 if let Some(ref mut response_handler) = stream.response_handler {
                     response_handler.send(ResultOrEof::Item(HttpStreamPart {
                         content: HttpStreamPartContent::Headers(headers),
@@ -123,7 +126,6 @@ impl LoopInner for ClientInner {
                     Ok(())
                 }
             }
-            _ => Ok(()),
         };
 
         if let Err(e) = result {
