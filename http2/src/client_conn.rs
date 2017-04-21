@@ -44,10 +44,13 @@ impl HttpStream for HttpClientStream {
 
     fn new_data_chunk(&mut self, data: &[u8], last: bool) {
         if let Some(ref mut response_handler) = self.response_handler {
-            response_handler.send(ResultOrEof::Item(HttpStreamPart {
+            if let Err(e) = response_handler.send(ResultOrEof::Item(HttpStreamPart {
                 content: HttpStreamPartContent::Data(Bytes::from(data)),
                 last: last,
-            })).unwrap();
+            })) {
+                // TODO: remove this stream.
+                error!("client side streaming error {:?}", e);
+            }
         }
     }
 
