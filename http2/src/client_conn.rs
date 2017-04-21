@@ -104,6 +104,11 @@ impl LoopInner for ClientInner {
         let headers = self.session_state.decoder
                                .decode(&frame.header_fragment())
                                .map_err(HttpError::CompressionError).unwrap();
+        // TODO: hack
+        if headers.is_empty() {
+            return;
+        }
+
         let headers: Vec<Header> = headers.into_iter().map(|h| Header::new(h.0, h.1)).collect();
 
         let result = match self.common.get_stream_mut(frame.get_stream_id()) {
@@ -113,10 +118,6 @@ impl LoopInner for ClientInner {
                 return;
             }
             Some(stream) => {
-                // TODO: hack
-                if headers.len() == 0 {
-                    return;
-                }
                 if let Some(ref mut response_handler) = stream.response_handler {
                     response_handler.send(ResultOrEof::Item(HttpStreamPart {
                         content: HttpStreamPartContent::Headers(headers),
