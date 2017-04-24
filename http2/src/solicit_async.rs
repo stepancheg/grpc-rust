@@ -85,6 +85,26 @@ pub fn recv_settings_frame<R : Read + Send + 'static>(read: R) -> HttpFuture<(R,
         }))
 }
 
+pub fn recv_settings_frame_ack<R : Read + Send + 'static>(read: R) -> HttpFuture<(R, SettingsFrame)> {
+    Box::new(recv_settings_frame(read).and_then(|(read, frame)| {
+        if frame.is_ack() {
+            Ok((read, frame))
+        } else {
+            Err(HttpError::InvalidFrame)
+        }
+    }))
+}
+
+pub fn recv_settings_frame_set<R : Read + Send + 'static>(read: R) -> HttpFuture<(R, SettingsFrame)> {
+    Box::new(recv_settings_frame(read).and_then(|(read, frame)| {
+        if !frame.is_ack() {
+            Ok((read, frame))
+        } else {
+            Err(HttpError::InvalidFrame)
+        }
+    }))
+}
+
 #[allow(dead_code)]
 pub fn send_raw_frame<W : Write + Send + 'static>(write: W, frame: RawFrame) -> HttpFuture<W> {
     let bytes = frame.serialize();
@@ -103,27 +123,39 @@ pub fn send_frame<W : Write + Send + 'static, F : FrameIR>(write: W, frame: F) -
 
 static PREFACE: &'static [u8] = b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
 
+/// Send and receive settings frames and acks
+fn settings_xchg<I : Io + Send + 'static>(conn: I) -> HttpFuture<I> {
+    let settings = {
+        let mut frame = SettingsFrame::new();
+        frame.add_setting(HttpSetting::EnablePush(0));
+        frame
+    };
+
+    let send_settings = send_frame(conn, settings);
+
+    let recv_settings = send_settings.and_then(|conn| {
+        recv_settings_frame_set(conn).map(|(conn, _)| conn)
+    });
+
+    let send_settings_ack = recv_settings.and_then(|conn| {
+        send_frame(conn, SettingsFrame::new_ack())
+    });
+
+    let recv_settings_ack = send_settings_ack.and_then(|conn| {
+        recv_settings_frame_ack(conn).map(|(conn, _)| conn)
+    });
+
+    Box::new(recv_settings_ack)
+}
+
 pub fn client_handshake<I : Io + Send + 'static>(conn: I) -> HttpFuture<I> {
     let send_preface = write_all(conn, PREFACE)
         .map(|(conn, _)| conn)
         .map_err(|e| e.into());
 
-    let send_settings = send_preface.and_then(|conn| {
-        let settings = {
-            let mut frame = SettingsFrame::new();
-            frame.add_setting(HttpSetting::EnablePush(0));
-            frame
-        };
-        send_frame(conn, settings)
-    });
+    let settings_xchg = send_preface.and_then(settings_xchg);
 
-    let recv_settings = send_settings.and_then(|conn| {
-        recv_settings_frame(conn).map(|(conn, _)| conn)
-    });
-
-    let done = recv_settings;
-
-    Box::new(done)
+    Box::new(settings_xchg)
 }
 
 pub fn server_handshake<I : Io + Send + 'static>(conn: I) -> HttpFuture<I> {
@@ -139,15 +171,9 @@ pub fn server_handshake<I : Io + Send + 'static>(conn: I) -> HttpFuture<I> {
             })
         });
 
-    let recv_settings = recv_preface.and_then(|conn| {
-        recv_settings_frame(conn).map(|(conn, _)| conn)
-    });
+    let settings_xchg = recv_preface.and_then(settings_xchg);
 
-    let send_settings = recv_settings.and_then(|conn| {
-        send_frame(conn, SettingsFrame::new_ack())
-    });
-
-    Box::new(send_settings)
+    Box::new(settings_xchg)
 }
 
 pub fn connect_and_handshake(lh: &reactor::Handle, addr: &SocketAddr) -> HttpFuture<TcpStream> {
