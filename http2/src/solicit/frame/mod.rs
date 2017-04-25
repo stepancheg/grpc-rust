@@ -138,6 +138,14 @@ fn parse_padded_payload(payload: Bytes) -> Option<(Bytes, u8)> {
 pub trait FrameIR {
     /// Write out the on-the-wire representation of the frame into the given `FrameBuilder`.
     fn serialize_into<B: FrameBuilder>(self, builder: &mut B) -> io::Result<()>;
+
+    fn serialize_into_vec(self) -> Vec<u8>
+        where Self : Sized
+    {
+        let mut buf = io::Cursor::new(Vec::with_capacity(16));
+        self.serialize_into(&mut buf).expect("serialize_into");
+        buf.into_inner()
+    }
 }
 
 /// A trait that all HTTP/2 frame structs need to implement.

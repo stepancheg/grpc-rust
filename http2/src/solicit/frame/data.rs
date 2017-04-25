@@ -62,7 +62,7 @@ pub struct DataFrame {
     /// single byte.
     flags: Flags<DataFlag>,
     /// The ID of the stream with which the frame is associated.
-    stream_id: StreamId,
+    pub stream_id: StreamId,
     /// The data found in the frame as an opaque byte sequence. It never
     /// includes padding bytes.
     pub data: Bytes,

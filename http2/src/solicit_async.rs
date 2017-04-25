@@ -1,4 +1,3 @@
-use std::io;
 use std::io::Read;
 use std::io::Write;
 use std::net::SocketAddr;
@@ -14,6 +13,7 @@ use tokio_core::net::TcpStream;
 use tokio_core::reactor;
 
 use solicit::HttpError;
+use solicit::HttpResult;
 use solicit::frame::FRAME_HEADER_LEN;
 use solicit::frame::RawFrame;
 use solicit::frame::FrameIR;
@@ -66,6 +66,22 @@ pub fn recv_raw_frame<R : Read + Send + 'static>(read: R) -> HttpFuture<(R, RawF
         .map_err(|e| e.into()))
 }
 
+pub fn recv_raw_frame_sync(read: &mut Read) -> HttpResult<RawFrame> {
+    // TODO: copy-paste
+    let mut raw_header = [0; FRAME_HEADER_LEN];
+    read.read_exact(&mut raw_header)?;
+    let header = unpack_header(&raw_header);
+
+    let total_len = FRAME_HEADER_LEN + header.0 as usize;
+    let mut full_frame = Vec::new();
+    full_frame.extend_from_slice(&raw_header);
+    full_frame.resize(total_len, 0);
+
+    read.read_exact(&mut full_frame[FRAME_HEADER_LEN..])?;
+
+    Ok(RawFrame::from(full_frame))
+}
+
 #[allow(dead_code)]
 pub fn recv_raw_frame_stream<R : Read + Send + 'static>(_read: R) -> HttpFutureStream<RawFrame> {
     // https://users.rust-lang.org/t/futures-rs-how-to-generate-a-stream-from-futures/7020
@@ -114,9 +130,8 @@ pub fn send_raw_frame<W : Write + Send + 'static>(write: W, frame: RawFrame) -> 
 }
 
 pub fn send_frame<W : Write + Send + 'static, F : FrameIR>(write: W, frame: F) -> HttpFuture<W> {
-    let mut buf = io::Cursor::new(Vec::with_capacity(16));
-    frame.serialize_into(&mut buf).unwrap();
-    Box::new(write_all(write, buf.into_inner())
+    let buf = frame.serialize_into_vec();
+    Box::new(write_all(write, buf)
         .map(|(w, _)| w)
         .map_err(|e| e.into()))
 }
