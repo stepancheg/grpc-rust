@@ -22,7 +22,7 @@ use test_misc::*;
 
 
 #[test]
-fn simple() {
+fn simple_new() {
     env_logger::init().ok();
 
     let server = HttpServerOneConn::new_fn(0, |_headers, req| {
@@ -41,8 +41,21 @@ fn simple() {
             .flatten_stream())
     });
 
-    let client = HttpClient::new("::1", server.port(), false, Default::default()).expect("connect");
-    client.start_post_simple_response("/foobar", (&b"abcd"[..]).to_owned()).wait().expect("wait");
+    let mut tester = HttpConnectionTester::connect(server.port());
+    tester.send_preface();
+    tester.settings_xchg();
+
+    let mut headers = Headers::new();
+    headers.add(":method", "GET");
+    headers.add(":path", "/aabb");
+    tester.send_headers(1, headers, false);
+
+    tester.send_data(1, b"abcd", true);
+
+    let recv_headers = tester.recv_frame_headers_check(1, false);
+    assert_eq!("200", recv_headers.get(":status"));
+
+    assert_eq!(&b"abcd"[..], &tester.recv_frame_data_check(1, true)[..]);
 
     assert_eq!(0, server.dump_state().streams.len());
 }

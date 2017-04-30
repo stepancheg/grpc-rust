@@ -5,6 +5,7 @@ use std::io::Read;
 
 use std::str;
 use std::net;
+use std::net::ToSocketAddrs;
 
 use bytes::Bytes;
 
@@ -41,11 +42,6 @@ impl HttpServerTester {
     }
 }
 
-pub struct HttpConnectionTester {
-    tcp: net::TcpStream,
-    conn: HttpConnection,
-}
-
 static PREFACE: &'static [u8] = b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
 
 #[derive(Default)]
@@ -65,12 +61,29 @@ impl Headers {
     }
 }
 
+pub struct HttpConnectionTester {
+    tcp: net::TcpStream,
+    conn: HttpConnection,
+}
+
 impl HttpConnectionTester {
+    pub fn connect(port: u16) -> HttpConnectionTester {
+        HttpConnectionTester {
+            tcp: net::TcpStream::connect(("::1", port).to_socket_addrs().unwrap().next().unwrap())
+                .expect("connect"),
+            conn: HttpConnection::new(HttpScheme::Http),
+        }
+    }
+
     pub fn recv_preface(&mut self) {
         let mut preface = Vec::new();
         preface.resize(PREFACE.len(), 0);
         self.tcp.read_exact(&mut preface).unwrap();
         assert_eq!(PREFACE, &preface[..]);
+    }
+
+    pub fn send_preface(&mut self) {
+        self.tcp.write(PREFACE).expect("send");
     }
 
     pub fn send_frame<F : FrameIR>(&mut self, frame: F) {
