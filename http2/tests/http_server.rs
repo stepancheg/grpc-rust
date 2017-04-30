@@ -1,3 +1,4 @@
+extern crate bytes;
 extern crate futures;
 extern crate tokio_core;
 extern crate tokio_tls;
@@ -8,16 +9,11 @@ extern crate env_logger;
 
 mod test_misc;
 
-use std::sync::mpsc;
-use std::net::ToSocketAddrs;
-use std::thread;
-
 use std::io::Write as _Write;
 
 use futures::Future;
 use futures::stream;
 use futures::stream::Stream;
-use tokio_core::reactor;
 
 use httpbis::solicit::Header;
 
