@@ -130,7 +130,7 @@ fn decode_integer(buf: &[u8], prefix_size: u8)
 /// Returns the decoded string in a newly allocated `Vec` and the number of
 /// bytes consumed from the given buffer.
 fn decode_string<'a>(buf: &'a [u8]) -> Result<(Cow<'a, [u8]>, usize), DecoderError> {
-    let (len, consumed) = try!(decode_integer(buf, 7));
+    let (len, consumed) = decode_integer(buf, 7)?;
     debug!("decode_string: Consumed = {}, len = {}", consumed, len);
     if consumed + len > buf.len() {
         return Err(
@@ -312,15 +312,14 @@ impl<'a> Decoder<'a> {
             let consumed = match FieldRepresentation::new(initial_octet) {
                 FieldRepresentation::Indexed => {
                     let ((name, value), consumed) =
-                        try!(self.decode_indexed(buffer_leftover));
+                        self.decode_indexed(buffer_leftover)?;
                     cb(Cow::Borrowed(name), Cow::Borrowed(value));
 
                     consumed
                 },
                 FieldRepresentation::LiteralWithIncrementalIndexing => {
                     let ((name, value), consumed) = {
-                        let ((name, value), consumed) = try!(
-                            self.decode_literal(buffer_leftover, true));
+                        let ((name, value), consumed) = self.decode_literal(buffer_leftover, true)?;
                         cb(Cow::Borrowed(&name), Cow::Borrowed(&value));
 
                         // Since we are to add the decoded header to the header table, we need to
@@ -341,7 +340,7 @@ impl<'a> Decoder<'a> {
                 },
                 FieldRepresentation::LiteralWithoutIndexing => {
                     let ((name, value), consumed) =
-                        try!(self.decode_literal(buffer_leftover, false));
+                        self.decode_literal(buffer_leftover, false)?;
                     cb(name, value);
 
                     consumed
@@ -352,7 +351,7 @@ impl<'a> Decoder<'a> {
                     // representation received here. We don't care about this
                     // for now.
                     let ((name, value), consumed) =
-                        try!(self.decode_literal(buffer_leftover, false));
+                        self.decode_literal(buffer_leftover, false)?;
                     cb(name, value);
 
                     consumed
@@ -380,7 +379,7 @@ impl<'a> Decoder<'a> {
     pub fn decode(&mut self, buf: &[u8]) -> DecoderResult {
         let mut header_list = Vec::new();
 
-        try!(self.decode_with_cb(buf, |n, v| header_list.push((n.into_owned(), v.into_owned()))));
+        self.decode_with_cb(buf, |n, v| header_list.push((n.into_owned(), v.into_owned())))?;
 
         Ok(header_list)
     }
@@ -388,10 +387,10 @@ impl<'a> Decoder<'a> {
     /// Decodes an indexed header representation.
     fn decode_indexed(&self, buf: &[u8])
             -> Result<((&[u8], &[u8]), usize), DecoderError> {
-        let (index, consumed) = try!(decode_integer(buf, 7));
+        let (index, consumed) = decode_integer(buf, 7)?;
         debug!("Decoding indexed: index = {}, consumed = {}", index, consumed);
 
-        let (name, value) = try!(self.get_from_table(index));
+        let (name, value) = self.get_from_table(index)?;
 
         Ok(((name, value), consumed))
     }
@@ -420,22 +419,22 @@ impl<'a> Decoder<'a> {
         } else {
             4
         };
-        let (table_index, mut consumed) = try!(decode_integer(buf, prefix));
+        let (table_index, mut consumed) = decode_integer(buf, prefix)?;
 
         // First read the name appropriately
         let name = if table_index == 0 {
             // Read name string as literal
-            let (name, name_len) = try!(decode_string(&buf[consumed..]));
+            let (name, name_len) = decode_string(&buf[consumed..])?;
             consumed += name_len;
             name
         } else {
             // Read name indexed from the table
-            let (name, _) = try!(self.get_from_table(table_index));
+            let (name, _) = self.get_from_table(table_index)?;
             Cow::Borrowed(name)
         };
 
         // Now read the value as a literal...
-        let (value, value_len) = try!(decode_string(&buf[consumed..]));
+        let (value, value_len) = decode_string(&buf[consumed..])?;
         consumed += value_len;
 
         Ok(((name, value), consumed))
@@ -1400,15 +1399,15 @@ mod interop_tests {
     impl Decodable for TestFixture {
         fn decode<D: JsonDecoder>(d: &mut D) -> Result<Self, D::Error> {
             d.read_struct("root", 0, |d| Ok(TestFixture {
-                wire_bytes: try!(d.read_struct_field("wire", 0, |d| {
+                wire_bytes: d.read_struct_field("wire", 0, |d| {
                     // Read the `wire` field...
                     Decodable::decode(d).and_then(|res: String| {
                         // If valid, parse out the octets from the String by
                         // considering it a hex encoded byte sequence.
                         Ok(res.from_hex().unwrap())
                     })
-                })),
-                headers: try!(d.read_struct_field("headers", 0, |d| {
+                })?,
+                headers: d.read_struct_field("headers", 0, |d| {
                     // Read the `headers` field...
                     d.read_seq(|d, len| {
                         // ...since it's an array, we step into the sequence
@@ -1417,8 +1416,8 @@ mod interop_tests {
                         for i in (0..len) {
                             // Individual elements are encoded as a simple
                             // JSON object with one key: value pair.
-                            let header: HashMap<String, String> = try!(
-                                d.read_seq_elt(i, |d| Decodable::decode(d)));
+                            let header: HashMap<String, String> =
+                                d.read_seq_elt(i, |d| Decodable::decode(d))?;
                             // We convert it to a tuple, which is a more
                             // natural representation of headers.
                             for (name, value) in header.into_iter() {
@@ -1430,7 +1429,7 @@ mod interop_tests {
                         }
                         Ok(ret)
                     })
-                })),
+                })?,
             }))
         }
     }
