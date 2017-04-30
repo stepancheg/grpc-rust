@@ -16,9 +16,10 @@ use futures::stream;
 use futures::stream::Stream;
 
 use tokio_core::net::TcpStream;
-use tokio_core::io::Io;
 use tokio_core::reactor;
 use tokio_timer::Timer;
+use tokio_io::AsyncWrite;
+use tokio_io::AsyncRead;
 
 use futures_misc::*;
 
@@ -159,7 +160,7 @@ enum ClientCommandMessage {
 }
 
 
-impl<I : Io + Send + 'static> ClientWriteLoop<I> {
+impl<I : AsyncRead + AsyncWrite + Send + 'static> ClientWriteLoop<I> {
     fn process_start(self, start: StartRequestMessage) -> HttpFuture<Self> {
         let StartRequestMessage { headers, body, response_handler } = start;
 
@@ -259,7 +260,7 @@ type ClientCommandLoop = CommandLoopData<ClientInner>;
 
 
 impl HttpClientConnectionAsync {
-    fn connected<I : Io + Send + 'static>(
+    fn connected<I : AsyncWrite + AsyncRead + Send + 'static>(
         lh: reactor::Handle, connect: HttpFutureSend<I>, _conf: HttpClientConf)
             -> (Self, HttpFuture<()>)
     {
@@ -368,7 +369,9 @@ impl HttpClientConnectionAsync {
         let req_rx = req_rx.map_err(|()| HttpError::from(io::Error::new(io::ErrorKind::Other, "req")));
 
         // TODO: future is no longer needed here
-        tx.complete(stream_with_eof_and_error(req_rx, || HttpError::from(io::Error::new(io::ErrorKind::Other, "unexpected eof"))));
+        if let Err(_) = tx.send(stream_with_eof_and_error(req_rx, || HttpError::from(io::Error::new(io::ErrorKind::Other, "unexpected eof")))) {
+            return Box::new(stream::once(Err(HttpError::from(io::Error::new(io::ErrorKind::Other, "oneshot canceled")))));
+        }
 
         let rx = rx.map_err(|_| HttpError::from(io::Error::new(io::ErrorKind::Other, "oneshot canceled")));
 
@@ -391,7 +394,7 @@ impl HttpClientConnectionAsync {
 impl ClientCommandLoop {
     fn process_dump_state(self, sender: futures::sync::oneshot::Sender<ConnectionStateSnapshot>) -> HttpFuture<Self> {
         // ignore send error, client might be already dead
-        drop(sender.complete(self.inner.with(|inner| inner.common.dump_state())));
+        drop(sender.send(self.inner.with(|inner| inner.common.dump_state())));
         Box::new(futures::finished(self))
     }
 

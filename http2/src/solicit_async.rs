@@ -1,16 +1,16 @@
 use std::io::Read;
-use std::io::Write;
 use std::net::SocketAddr;
 
 use futures::done;
 use futures::Future;
 use futures::stream::Stream;
 
-use tokio_core::io::read_exact;
-use tokio_core::io::write_all;
-use tokio_core::io::Io;
+use tokio_io::io::read_exact;
+use tokio_io::io::write_all;
 use tokio_core::net::TcpStream;
 use tokio_core::reactor;
+use tokio_io::AsyncWrite;
+use tokio_io::AsyncRead;
 
 use solicit::HttpError;
 use solicit::HttpResult;
@@ -43,7 +43,7 @@ impl<T> AsMut<[T]> for VecWithPos<T> {
     }
 }
 
-pub fn recv_raw_frame<R : Read + Send + 'static>(read: R) -> HttpFuture<(R, RawFrame)> {
+pub fn recv_raw_frame<R : AsyncRead + Send + 'static>(read: R) -> HttpFuture<(R, RawFrame)> {
     let header = read_exact(read, [0; FRAME_HEADER_LEN]);
     let frame_buf = header.and_then(|(read, raw_header)| {
         let header = unpack_header(&raw_header);
@@ -88,7 +88,7 @@ pub fn recv_raw_frame_stream<R : Read + Send + 'static>(_read: R) -> HttpFutureS
     panic!();
 }
 
-pub fn recv_settings_frame<R : Read + Send + 'static>(read: R) -> HttpFuture<(R, SettingsFrame)> {
+pub fn recv_settings_frame<R : AsyncRead + Send + 'static>(read: R) -> HttpFuture<(R, SettingsFrame)> {
     Box::new(recv_raw_frame(read)
         .then(|result| {
             result.and_then(|(read, raw_frame)| {
@@ -101,7 +101,7 @@ pub fn recv_settings_frame<R : Read + Send + 'static>(read: R) -> HttpFuture<(R,
         }))
 }
 
-pub fn recv_settings_frame_ack<R : Read + Send + 'static>(read: R) -> HttpFuture<(R, SettingsFrame)> {
+pub fn recv_settings_frame_ack<R : AsyncRead + Send + 'static>(read: R) -> HttpFuture<(R, SettingsFrame)> {
     Box::new(recv_settings_frame(read).and_then(|(read, frame)| {
         if frame.is_ack() {
             Ok((read, frame))
@@ -111,7 +111,7 @@ pub fn recv_settings_frame_ack<R : Read + Send + 'static>(read: R) -> HttpFuture
     }))
 }
 
-pub fn recv_settings_frame_set<R : Read + Send + 'static>(read: R) -> HttpFuture<(R, SettingsFrame)> {
+pub fn recv_settings_frame_set<R : AsyncRead + Send + 'static>(read: R) -> HttpFuture<(R, SettingsFrame)> {
     Box::new(recv_settings_frame(read).and_then(|(read, frame)| {
         if !frame.is_ack() {
             Ok((read, frame))
@@ -122,14 +122,14 @@ pub fn recv_settings_frame_set<R : Read + Send + 'static>(read: R) -> HttpFuture
 }
 
 #[allow(dead_code)]
-pub fn send_raw_frame<W : Write + Send + 'static>(write: W, frame: RawFrame) -> HttpFuture<W> {
+pub fn send_raw_frame<W : AsyncWrite + Send + 'static>(write: W, frame: RawFrame) -> HttpFuture<W> {
     let bytes = frame.serialize();
     Box::new(write_all(write, bytes.clone())
         .map(|(w, _)| w)
         .map_err(|e| e.into()))
 }
 
-pub fn send_frame<W : Write + Send + 'static, F : FrameIR>(write: W, frame: F) -> HttpFuture<W> {
+pub fn send_frame<W : AsyncWrite + Send + 'static, F : FrameIR>(write: W, frame: F) -> HttpFuture<W> {
     let buf = frame.serialize_into_vec();
     Box::new(write_all(write, buf)
         .map(|(w, _)| w)
@@ -139,7 +139,7 @@ pub fn send_frame<W : Write + Send + 'static, F : FrameIR>(write: W, frame: F) -
 static PREFACE: &'static [u8] = b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
 
 /// Send and receive settings frames and acks
-fn settings_xchg<I : Io + Send + 'static>(conn: I) -> HttpFuture<I> {
+fn settings_xchg<I : AsyncRead + AsyncWrite + Send + 'static>(conn: I) -> HttpFuture<I> {
     let settings = {
         let mut frame = SettingsFrame::new();
         frame.add_setting(HttpSetting::EnablePush(0));
@@ -163,7 +163,7 @@ fn settings_xchg<I : Io + Send + 'static>(conn: I) -> HttpFuture<I> {
     Box::new(recv_settings_ack)
 }
 
-pub fn client_handshake<I : Io + Send + 'static>(conn: I) -> HttpFuture<I> {
+pub fn client_handshake<I : AsyncWrite + AsyncRead + Send + 'static>(conn: I) -> HttpFuture<I> {
     let send_preface = write_all(conn, PREFACE)
         .map(|(conn, _)| conn)
         .map_err(|e| e.into());
@@ -173,7 +173,7 @@ pub fn client_handshake<I : Io + Send + 'static>(conn: I) -> HttpFuture<I> {
     Box::new(settings_xchg)
 }
 
-pub fn server_handshake<I : Io + Send + 'static>(conn: I) -> HttpFuture<I> {
+pub fn server_handshake<I : AsyncRead + AsyncWrite + Send + 'static>(conn: I) -> HttpFuture<I> {
     let mut preface_buf = Vec::with_capacity(PREFACE.len());
     preface_buf.resize(PREFACE.len(), 0);
     let recv_preface = read_exact(conn, preface_buf)

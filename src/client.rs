@@ -67,7 +67,7 @@ impl GrpcClient {
         let receiver: GrpcStreamSend<Resp> = Box::new(stream_with_eof_and_error(receiver, || GrpcError::Other("unexpected EOF")));
 
         // TODO: oneshot sender is no longer necessary as we don't use tokio queues
-        one_sender.complete((sender, receiver));
+        one_sender.send((sender, receiver)).ok().unwrap();
 
         one_receiver
     }

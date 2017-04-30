@@ -19,6 +19,7 @@ futures         = "0.*"
 #futures-cpupool = { git = "https://github.com/alexcrichton/futures-rs" }
 futures-cpupool = "0.*"
 tokio-core      = "0.*"
+tokio-io        = "0.*"
 #tokio-tls       = { git = "https://github.com/tokio-rs/tokio-tls/", features = ["force-openssl"] }
 #tokio-tls       = { git = "https://github.com/tokio-rs/tokio-tls/" }
 tokio-tls       = "0.*"

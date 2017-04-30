@@ -9,10 +9,11 @@ use futures;
 
 use bytes::Bytes;
 
-use tokio_core::io::ReadHalf;
-use tokio_core::io::WriteHalf;
-use tokio_core::io::Io;
-use tokio_core::io as tokio_io;
+use tokio_io::io::ReadHalf;
+use tokio_io::io::WriteHalf;
+use tokio_io::AsyncRead;
+use tokio_io::AsyncWrite;
+use tokio_io::io as tokio_io;
 
 use solicit::session::StreamState;
 use solicit::frame::*;
@@ -552,7 +553,7 @@ pub trait LoopInner: 'static {
 
 pub struct ReadLoopData<I, N>
     where
-        I : Io + 'static,
+        I : AsyncRead + 'static,
         N : LoopInner,
 {
     pub read: ReadHalf<I>,
@@ -561,7 +562,7 @@ pub struct ReadLoopData<I, N>
 
 pub struct WriteLoopData<I, N>
     where
-        I : Io + 'static,
+        I : AsyncWrite + 'static,
         N : LoopInner,
 {
     pub write: WriteHalf<I>,
@@ -578,7 +579,7 @@ pub struct CommandLoopData<N>
 
 impl<I, N> ReadLoopData<I, N>
     where
-        I : Io + Send + 'static,
+        I : AsyncRead + AsyncWrite + Send + 'static,
         N : LoopInner,
 {
     /// Recv a frame from the network
@@ -613,7 +614,7 @@ impl<I, N> ReadLoopData<I, N>
 
 impl<I, N> WriteLoopData<I, N>
     where
-        I : Io + Send + 'static,
+        I : AsyncWrite + Send + 'static,
         N : LoopInner,
 {
     pub fn write_all(self, buf: Vec<u8>) -> HttpFuture<Self> {

@@ -14,7 +14,8 @@ use futures;
 use futures::Future;
 use futures::stream::Stream;
 
-use tokio_core::io::Io;
+use tokio_io::AsyncRead;
+use tokio_io::AsyncWrite;
 use tokio_core::net::TcpStream;
 use tokio_core::reactor;
 
@@ -198,7 +199,7 @@ enum ServerCommandMessage {
 }
 
 
-impl<F : HttpService, I : Io + Send> ServerWriteLoop<F, I> {
+impl<F : HttpService, I : AsyncWrite + Send> ServerWriteLoop<F, I> {
     fn _loop_handle(&self) -> reactor::Handle {
         self.inner.with(move |inner: &mut ServerInner<F>| inner.session_state.loop_handle.clone())
     }
@@ -266,7 +267,7 @@ impl<F : HttpService, I : Io + Send> ServerWriteLoop<F, I> {
 impl<F : HttpService> ServerCommandLoop<F> {
     fn process_dump_state(self, sender: futures::sync::oneshot::Sender<ConnectionStateSnapshot>) -> HttpFuture<Self> {
         // ignore send error, client might be already dead
-        drop(sender.complete(self.inner.with(|inner| inner.common.dump_state())));
+        drop(sender.send(self.inner.with(|inner| inner.common.dump_state())));
         Box::new(futures::finished(self))
     }
 
@@ -296,7 +297,7 @@ impl HttpServerConnectionAsync {
                        -> (HttpServerConnectionAsync, HttpFuture<()>)
         where
             F : HttpService,
-            I : Io + Send + 'static,
+            I : AsyncRead + AsyncWrite + Send + 'static,
     {
         let lh = lh.clone();
 
