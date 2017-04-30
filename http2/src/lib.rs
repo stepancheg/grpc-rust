@@ -7,7 +7,6 @@ extern crate tokio_io;
 extern crate tokio_tls;
 extern crate tokio_timer;
 
-extern crate hpack;
 extern crate net2;
 extern crate bytes;
 
@@ -27,6 +26,7 @@ pub mod futures_misc;
 mod tokio_oneshot;
 pub mod assert_types;
 
+pub mod hpack;
 pub mod solicit_async;
 pub mod solicit_misc;
 
