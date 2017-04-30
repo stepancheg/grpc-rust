@@ -321,8 +321,6 @@ mod tests {
     use super::{unpack_header, pack_header, RawFrame, FrameIR};
     use std::io;
 
-    use bytes::Bytes;
-
     /// Tests that the `unpack_header` function correctly returns the
     /// components of HTTP/2 frame headers.
     #[test]

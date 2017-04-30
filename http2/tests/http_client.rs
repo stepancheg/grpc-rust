@@ -1,4 +1,3 @@
-use std::net;
 use std::str;
 
 extern crate bytes;

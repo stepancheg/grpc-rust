@@ -1,14 +1,9 @@
 //! The module contains some common utilities for `solicit::http` tests.
 
 use std::io;
-use std::rc::Rc;
-use std::cell::{RefCell, Cell};
-use std::borrow::Cow;
-use std::io::{Cursor, Read, Write};
+use std::io::Write;
 
-use solicit::{Header, ErrorCode};
 use solicit::frame::{RawFrame, FrameIR, FrameHeader, pack_header};
-use solicit::session::StreamState;
 
 
 /// Creates a new `RawFrame` from two separate parts: the header and the payload.
