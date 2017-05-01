@@ -1,4 +1,4 @@
-use solicit::Header;
+use solicit::header::Header;
 
 use http_common::*;
 

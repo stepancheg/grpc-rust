@@ -18,8 +18,9 @@
 use std::borrow::Cow;
 use std::borrow::Borrow;
 
-use solicit::{Header, StreamId, HttpError, HttpResult, HttpScheme, WindowSize,
+use solicit::{StreamId, HttpError, HttpResult, HttpScheme, WindowSize,
            ErrorCode, INITIAL_CONNECTION_WINDOW_SIZE};
+use solicit::header::Header;
 use solicit::frame::{Frame, FrameIR, RawFrame, DataFrame, DataFlag, HeadersFrame, HeadersFlag,
                   SettingsFrame, RstStreamFrame, PingFrame, GoawayFrame, WindowUpdateFrame};
 use hpack;

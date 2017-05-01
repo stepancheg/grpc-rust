@@ -12,6 +12,7 @@ use bytes::Bytes;
 use httpbis;
 use httpbis::solicit::StreamId;
 use httpbis::solicit::HttpScheme;
+use httpbis::solicit::header::*;
 use httpbis::solicit::frame::FrameIR;
 use httpbis::solicit::frame::settings::SettingsFrame;
 use httpbis::solicit::frame::headers::HeadersFrame;
@@ -44,23 +45,6 @@ impl HttpServerTester {
 
 static PREFACE: &'static [u8] = b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
 
-#[derive(Default)]
-pub struct Headers(Vec<(Vec<u8>, Vec<u8>)>);
-
-impl Headers {
-    pub fn new() -> Headers {
-        Default::default()
-    }
-
-    pub fn get<'a>(&'a self, name: &str) -> &'a str {
-        str::from_utf8(&self.0.iter().filter(|&&(ref n, ref _v)| &n[..] == name.as_bytes()).next().unwrap().1).unwrap()
-    }
-
-    pub fn add(&mut self, name: &str, value: &str) {
-        self.0.push((name.as_bytes().to_owned(), value.as_bytes().to_owned()));
-    }
-}
-
 pub struct HttpConnectionTester {
     tcp: net::TcpStream,
     conn: HttpConnection,
@@ -91,7 +75,7 @@ impl HttpConnectionTester {
     }
 
     pub fn send_headers(&mut self, stream_id: StreamId, headers: Headers, end: bool) {
-        let fragment = self.conn.encoder.encode(headers.0.iter().map(|&(ref n, ref v)| (&n[..], &v[..])));
+        let fragment = self.conn.encoder.encode(headers.0.iter().map(|h| (h.name(), h.value())));
         let mut headers_frame = HeadersFrame::new(fragment, stream_id);
         headers_frame.set_flag(HeadersFlag::EndHeaders);
         if end {
@@ -162,7 +146,8 @@ impl HttpConnectionTester {
         let headers = self.recv_frame_headers();
         assert_eq!(stream_id, headers.stream_id);
         assert_eq!(end, headers.is_end_of_stream());
-        Headers(self.conn.decoder.decode(headers.header_fragment()).expect("decode"))
+        let headers = self.conn.decoder.decode(headers.header_fragment()).expect("decode");
+        Headers(headers.into_iter().map(|(n, v)| Header::new(n, v)).collect())
     }
 
     pub fn recv_frame_data_check(&mut self, stream_id: StreamId, end: bool) -> Vec<u8> {

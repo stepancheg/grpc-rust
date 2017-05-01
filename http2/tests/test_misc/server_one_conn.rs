@@ -15,7 +15,7 @@ use tokio_core::reactor;
 
 //use tokio_tls;
 
-use httpbis::solicit::Header;
+use httpbis::solicit::header::Header;
 use httpbis::solicit::HttpError;
 
 use httpbis::for_test::*;

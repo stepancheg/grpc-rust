@@ -14,7 +14,7 @@ use futures::Future;
 use futures::stream;
 use futures::stream::Stream;
 
-use httpbis::solicit::Header;
+use httpbis::solicit::header::*;
 
 use httpbis::for_test::*;
 

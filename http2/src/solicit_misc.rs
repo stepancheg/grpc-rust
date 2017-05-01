@@ -4,7 +4,7 @@ use std::cmp;
 use std::str;
 use std::str::FromStr;
 
-use solicit::Header;
+use solicit::header::Header;
 use solicit::StreamId;
 use solicit::HttpResult;
 use solicit::frame::*;

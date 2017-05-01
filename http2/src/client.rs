@@ -14,7 +14,7 @@ use tokio_core::reactor;
 
 use futures_misc::*;
 
-use solicit::Header;
+use solicit::header::Header;
 use solicit::HttpResult;
 use solicit::HttpError;
 use solicit::HttpScheme;

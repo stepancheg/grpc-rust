@@ -6,7 +6,7 @@ use solicit::frame::*;
 use solicit::StreamId;
 use solicit::HttpScheme;
 use solicit::HttpError;
-use solicit::Header;
+use solicit::header::Header;
 
 use bytes::Bytes;
 

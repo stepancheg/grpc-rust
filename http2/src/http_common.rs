@@ -17,7 +17,7 @@ use tokio_io::io as tokio_io;
 
 use solicit::session::StreamState;
 use solicit::frame::*;
-use solicit::Header;
+use solicit::header::Header;
 use solicit::StreamId;
 use solicit::HttpError;
 use solicit::WindowSize;

@@ -13,6 +13,8 @@ use futures::Future;
 
 mod test_misc;
 
+use httpbis::solicit::header::*;
+
 use test_misc::*;
 use httpbis::for_test::*;
 
