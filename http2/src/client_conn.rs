@@ -45,10 +45,13 @@ impl HttpStream for HttpClientStream {
 
     fn new_data_chunk(&mut self, data: &[u8], last: bool) {
         if let Some(ref mut response_handler) = self.response_handler {
-            response_handler.send(ResultOrEof::Item(HttpStreamPart {
+            if let Err(e) = response_handler.send(ResultOrEof::Item(HttpStreamPart {
                 content: HttpStreamPartContent::Data(Bytes::from(data)),
                 last: last,
-            })).unwrap();
+            })) {
+                // TODO: remove this stream.
+                error!("client side streaming error {:?}", e);
+            }
         }
     }
 
@@ -102,25 +105,34 @@ impl LoopInner for ClientInner {
         let headers = self.session_state.decoder
                                .decode(&frame.header_fragment())
                                .map_err(HttpError::CompressionError).unwrap();
+        // TODO: hack
+        if headers.is_empty() {
+            return;
+        }
+
         let headers: Vec<Header> = headers.into_iter().map(|h| Header::new(h.0, h.1)).collect();
 
-        let mut stream: &mut HttpClientStream = match self.common.get_stream_mut(frame.get_stream_id()) {
+        let result = match self.common.get_stream_mut(frame.get_stream_id()) {
             None => {
                 // TODO(mlalic): This means that the server's header is not associated to any
                 //               request made by the client nor any server-initiated stream (pushed)
                 return;
             }
-            Some(stream) => stream,
-        };
-        // TODO: hack
-        if headers.len() != 0 {
-
-            if let Some(ref mut response_handler) = stream.response_handler {
-                response_handler.send(ResultOrEof::Item(HttpStreamPart {
-                    content: HttpStreamPartContent::Headers(headers),
-                    last: frame.is_end_of_stream(),
-                })).unwrap();
+            Some(stream) => {
+                if let Some(ref mut response_handler) = stream.response_handler {
+                    response_handler.send(ResultOrEof::Item(HttpStreamPart {
+                        content: HttpStreamPartContent::Headers(headers),
+                        last: frame.is_end_of_stream(),
+                    }))
+                } else {
+                    Ok(())
+                }
             }
+        };
+
+        if let Err(e) = result {
+            error!("client side streaming error {:?}", e);
+            self.common.remove_stream(frame.get_stream_id());
         }
     }
 }
