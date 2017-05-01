@@ -6,6 +6,8 @@ extern crate httpbis;
 extern crate log;
 extern crate env_logger;
 
+use bytes::Bytes;
+
 mod test_misc;
 
 use std::io::Write as _Write;
@@ -31,9 +33,9 @@ fn simple_new() {
             .and_then(|v| {
                 let mut r = Vec::new();
                 r.push(HttpStreamPart::intermediate_headers(
-                    vec![
+                    Headers(vec![
                         Header::new(":status", "200"),
-                    ]
+                    ])
                 ));
                 r.push(HttpStreamPart::last_data(SimpleHttpMessage::from_parts(v).body));
                 Ok(stream::iter(r.into_iter().map(Ok)))
@@ -78,16 +80,16 @@ fn response_large() {
     let server = HttpServerOneConn::new_fn(0, move |_headers, _req| {
         let mut r = Vec::new();
         r.push(HttpStreamPart::intermediate_headers(
-            vec![
+            Headers(vec![
                 Header::new(":status", "200"),
-            ]
+            ])
         ));
-        r.push(HttpStreamPart::intermediate_data(large_resp_copy.clone()));
+        r.push(HttpStreamPart::intermediate_data(Bytes::from(large_resp_copy.clone())));
         Box::new(stream::iter(r.into_iter().map(Ok)))
     });
 
     let client = HttpClient::new("::1", server.port(), false, Default::default()).expect("connect");
-    let resp = client.start_post_simple_response("/foobar", (&b""[..]).to_owned()).wait().expect("wait");
+    let resp = client.start_post_simple_response("/foobar", Bytes::from(&b""[..])).wait().expect("wait");
     assert_eq!(large_resp.len(), resp.body.len());
     assert_eq!((large_resp.len(), &large_resp[..]), (resp.body.len(), &resp.body[..]));
 

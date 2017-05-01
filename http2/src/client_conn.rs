@@ -5,7 +5,7 @@ use solicit::frame::*;
 use solicit::StreamId;
 use solicit::HttpScheme;
 use solicit::HttpError;
-use solicit::header::Header;
+use solicit::header::*;
 use hpack;
 
 use bytes::Bytes;
@@ -102,7 +102,7 @@ impl LoopInner for ClientInner {
         let headers = self.session_state.decoder
                                .decode(&frame.header_fragment())
                                .map_err(HttpError::CompressionError).unwrap();
-        let headers: Vec<Header> = headers.into_iter().map(|h| Header::new(h.0, h.1)).collect();
+        let headers = Headers(headers.into_iter().map(|h| Header::new(h.0, h.1)).collect());
 
         let mut stream: &mut HttpClientStream = match self.common.get_stream_mut(frame.get_stream_id()) {
             None => {
@@ -113,7 +113,7 @@ impl LoopInner for ClientInner {
             Some(stream) => stream,
         };
         // TODO: hack
-        if headers.len() != 0 {
+        if headers.0.len() != 0 {
 
             if let Some(ref mut response_handler) = stream.response_handler {
                 response_handler.send(ResultOrEof::Item(HttpStreamPart {
@@ -134,14 +134,14 @@ pub struct HttpClientConnectionAsync {
 unsafe impl Sync for HttpClientConnectionAsync {}
 
 struct StartRequestMessage {
-    headers: Vec<Header>,
-    body: HttpFutureStreamSend<Vec<u8>>,
+    headers: Headers,
+    body: HttpFutureStreamSend<Bytes>,
     response_handler: futures::sync::mpsc::UnboundedSender<ResultOrEof<HttpStreamPart, HttpError>>,
 }
 
 struct BodyChunkMessage {
     stream_id: StreamId,
-    chunk: Vec<u8>,
+    chunk: Bytes,
 }
 
 struct EndRequestMessage {
@@ -348,8 +348,8 @@ impl HttpClientConnectionAsync {
 
     pub fn start_request(
         &self,
-        headers: Vec<Header>,
-        body: HttpFutureStreamSend<Vec<u8>>)
+        headers: Headers,
+        body: HttpFutureStreamSend<Bytes>)
             -> HttpPartFutureStreamSend
     {
         let (tx, rx) = futures::oneshot();

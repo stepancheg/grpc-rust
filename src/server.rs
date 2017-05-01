@@ -5,8 +5,11 @@ use std::panic::catch_unwind;
 use std::panic::AssertUnwindSafe;
 use std::any::Any;
 
+use bytes::Bytes;
+
 use httpbis::HttpError;
 use httpbis::Header;
+use httpbis::Headers;
 use httpbis::server::HttpServer;
 
 use futures;
@@ -18,7 +21,6 @@ use method::*;
 use error::*;
 use futures_grpc::*;
 use httpbis::futures_misc::*;
-use httpbis::solicit_misc::*;
 use grpc::*;
 use grpc_frame::*;
 use httpbis::http_common::*;
@@ -305,16 +307,16 @@ struct GrpcHttpServerHandlerFactory {
 
 
 fn stream_500(message: &str) -> HttpPartFutureStreamSend {
-    Box::new(stream::once(Ok(HttpStreamPart::last_headers(vec![
+    Box::new(stream::once(Ok(HttpStreamPart::last_headers(Headers(vec![
         Header::new(":status", "500"),
         Header::new(HEADER_GRPC_MESSAGE, message.to_owned()),
-    ]))))
+    ])))))
 }
 
 impl HttpService for GrpcHttpServerHandlerFactory {
-    fn new_request(&self, headers: Vec<Header>, req: HttpPartFutureStreamSend) -> HttpPartFutureStreamSend {
+    fn new_request(&self, headers: Headers, req: HttpPartFutureStreamSend) -> HttpPartFutureStreamSend {
 
-        let path = match slice_get_header(&headers, ":path") {
+        let path = match headers.get_opt(":path") {
             Some(path) => path.to_owned(),
             None => return stream_500("no :path header"),
         };
@@ -324,13 +326,13 @@ impl HttpService for GrpcHttpServerHandlerFactory {
         // TODO: catch unwind
         let grpc_frames = self.service_definition.handle_method(&path, Box::new(grpc_request));
 
-        let s1 = stream::once(Ok(HttpStreamPart::intermediate_headers(vec![
+        let s1 = stream::once(Ok(HttpStreamPart::intermediate_headers(Headers(vec![
             Header::new(":status", "200"),
             Header::new("content-type", "application/grpc"),
-        ])));
+        ]))));
 
         let s2 = grpc_frames
-            .map(|frame| HttpStreamPart::intermediate_data(write_grpc_frame_to_vec(&frame)))
+            .map(|frame| HttpStreamPart::intermediate_data(Bytes::from(write_grpc_frame_to_vec(&frame))))
             .then(|result| {
                 match result {
                     Ok(part) => {
@@ -341,28 +343,28 @@ impl HttpService for GrpcHttpServerHandlerFactory {
                         Ok(HttpStreamPart::last_headers(
                             match e {
                                 GrpcError::GrpcMessage(GrpcMessageError { grpc_status, grpc_message }) => {
-                                    vec![
+                                    Headers(vec![
                                         Header::new(":status", "500"),
                                         // TODO: check nonzero
                                         Header::new(HEADER_GRPC_STATUS, format!("{}", grpc_status)),
                                         // TODO: escape invalid
                                         Header::new(HEADER_GRPC_MESSAGE, grpc_message),
-                                    ]
+                                    ])
                                 }
                                 e => {
-                                    vec![
+                                    Headers(vec![
                                         Header::new(":status", "500"),
                                         Header::new(HEADER_GRPC_MESSAGE, format!("error: {:?}", e)),
-                                    ]
+                                    ])
                                 }
                             }
                         ))
                 }
             });
 
-        let s3 = stream::once(Ok(HttpStreamPart::last_headers(vec![
+        let s3 = stream::once(Ok(HttpStreamPart::last_headers(Headers(vec![
             Header::new(HEADER_GRPC_STATUS, "0"),
-        ])));
+        ]))));
 
         let http_parts = s1.chain(s2).chain(s3);
 

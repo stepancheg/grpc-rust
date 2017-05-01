@@ -15,7 +15,6 @@ use tokio_core::reactor;
 
 //use tokio_tls;
 
-use httpbis::solicit::header::Header;
 use httpbis::solicit::HttpError;
 
 use httpbis::for_test::*;
@@ -36,7 +35,7 @@ struct FromLoop {
 
 impl HttpServerOneConn {
     pub fn new_fn<S>(port: u16, service: S) -> Self
-        where S : Fn(Vec<Header>, HttpPartFutureStreamSend) -> HttpPartFutureStreamSend + Send + 'static
+        where S : Fn(Headers, HttpPartFutureStreamSend) -> HttpPartFutureStreamSend + Send + 'static
     {
         HttpServerOneConn::new_fn_impl(port, None, service)
     }
@@ -51,7 +50,7 @@ impl HttpServerOneConn {
 
     #[allow(dead_code)]
     fn new_fn_impl<S>(port: u16, server_context: Option</* tokio_tls::ServerContext */ u32>, service: S) -> Self
-        where S : Fn(Vec<Header>, HttpPartFutureStreamSend) -> HttpPartFutureStreamSend + Send + 'static
+        where S : Fn(Headers, HttpPartFutureStreamSend) -> HttpPartFutureStreamSend + Send + 'static
     {
         let (from_loop_tx, from_loop_rx) = futures::oneshot();
         let (shutdown_tx, shutdown_rx) = futures::oneshot::<()>();
@@ -66,9 +65,9 @@ impl HttpServerOneConn {
             let listener = tokio_core::net::TcpListener::bind(&("::1", port).to_socket_addrs().unwrap().next().unwrap(), &lp.handle()).unwrap();
 
             let actual_port = listener.local_addr().unwrap().port();
-            from_loop_tx.complete(FromLoop {
+            from_loop_tx.send(FromLoop {
                 port: actual_port,
-            });
+            }).ok().unwrap();
 
             let handle = lp.handle();
 

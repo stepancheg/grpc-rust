@@ -1,4 +1,5 @@
 use std::str;
+use std::str::FromStr;
 use std::fmt;
 use std::borrow::Cow;
 use std::borrow::Borrow;
@@ -152,7 +153,7 @@ impl fmt::Debug for Header {
 }
 
 
-#[derive(Default)]
+#[derive(Default,Debug)]
 pub struct Headers(pub Vec<Header>);
 
 impl Headers {
@@ -160,11 +161,23 @@ impl Headers {
         Default::default()
     }
 
+    pub fn get_opt<'a>(&'a self, name: &str) -> Option<&'a str> {
+        self.0.iter()
+            .find(|h| h.name() == name.as_bytes())
+            .and_then(|h| str::from_utf8(h.value()).ok())
+    }
+
     pub fn get<'a>(&'a self, name: &str) -> &'a str {
-        str::from_utf8(&self.0.iter().filter(|&h| h.name() == name.as_bytes()).next().unwrap().value()).unwrap()
+        self.get_opt(name).unwrap()
+    }
+
+    pub fn get_opt_parse<I : FromStr>(&self, name: &str) -> Option<I> {
+        self.get_opt(name)
+            .and_then(|h| h.parse().ok())
     }
 
     pub fn add(&mut self, name: &str, value: &str) {
         self.0.push(Header::new(name, value));
     }
+
 }

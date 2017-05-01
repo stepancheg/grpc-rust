@@ -14,7 +14,6 @@ pub mod client;
 pub mod server;
 mod grpc;
 mod grpc_frame;
-mod bytesx;
 mod bytes_or_vec;
 pub mod method;
 pub mod grpc_protobuf;

@@ -5,6 +5,8 @@ use std::io;
 use std::net::SocketAddr;
 use std::net::ToSocketAddrs;
 
+use bytes::Bytes;
+
 use futures;
 use futures::Future;
 use futures::Stream;
@@ -14,7 +16,7 @@ use tokio_core::reactor;
 
 use futures_misc::*;
 
-use solicit::header::Header;
+use solicit::header::*;
 use solicit::HttpResult;
 use solicit::HttpError;
 use solicit::HttpScheme;
@@ -75,8 +77,8 @@ impl HttpClient {
 
     pub fn start_request(
         &self,
-        headers: Vec<Header>,
-        body: HttpFutureStreamSend<Vec<u8>>)
+        headers: Headers,
+        body: HttpFutureStreamSend<Bytes>)
             -> HttpPartFutureStreamSend
     {
         self.loop_to_client.http_conn.start_request(headers, body)
@@ -84,8 +86,8 @@ impl HttpClient {
 
     pub fn start_request_simple(
         &self,
-        headers: Vec<Header>,
-        body: Vec<u8>)
+        headers: Headers,
+        body: Bytes)
             -> HttpPartFutureStreamSend
     {
         self.start_request(
@@ -96,22 +98,22 @@ impl HttpClient {
     pub fn start_post(
         &self,
         path: &str,
-        body: Vec<u8>)
+        body: Bytes)
             -> HttpPartFutureStreamSend
     {
-        let headers = vec![
+        let headers = Headers(vec![
             Header::new(":method", "POST"),
             Header::new(":path", path.to_owned()),
             Header::new(":authority", self.host.clone()),
             Header::new(":scheme", self.http_scheme.as_bytes()),
-        ];
+        ]);
         self.start_request_simple(headers, body)
     }
 
     pub fn start_post_simple_response(
         &self,
         path: &str,
-        body: Vec<u8>)
+        body: Bytes)
             -> HttpFutureSend<SimpleHttpMessage>
     {
         Box::new(self.start_post(path, body).collect()

@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use bytes::Bytes;
+
 use futures;
 use futures::stream;
 use futures::stream::Stream;
@@ -7,6 +9,7 @@ use futures::stream::Stream;
 use httpbis::HttpScheme;
 use httpbis::HttpError;
 use httpbis::Header;
+use httpbis::Headers;
 use httpbis::client::HttpClient;
 
 
@@ -78,20 +81,20 @@ impl GrpcClient {
         let host = self.host.clone();
         let http_scheme = self.http_scheme.clone();
 
-        let headers = vec![
+        let headers = Headers(vec![
             Header::new(":method", "POST"),
             Header::new(":path", method.name.clone()),
             Header::new(":authority", host.clone()),
             Header::new(":scheme", http_scheme.as_bytes()),
             Header::new("content-type", "application/grpc"),
-        ];
+        ]);
 
         let request_frames = {
             let method = method.clone();
             req
                 .and_then(move |req| {
                     let grpc_frame = method.req_marshaller.write(&req)?;
-                    Ok(write_grpc_frame_to_vec(&grpc_frame))
+                    Ok(Bytes::from(write_grpc_frame_to_vec(&grpc_frame)))
                 })
                 .map_err(|e| HttpError::Other(Box::new(e)))
         };

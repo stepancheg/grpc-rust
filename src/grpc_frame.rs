@@ -11,7 +11,6 @@ use result::*;
 use grpc::*;
 
 use httpbis::http_common::*;
-use httpbis::solicit_misc::*;
 
 
 
@@ -203,16 +202,16 @@ impl Stream for GrpcFrameFromHttpFramesStreamResponse {
                 };
                 match headers.content {
                     HttpStreamPartContent::Headers(headers) => {
-                        if slice_get_header(&headers, ":status") != Some("200") {
+                        if headers.get_opt(":status") != Some("200") {
                             self.error = Some(stream::once(Err(GrpcError::Other("not 200"))));
                             continue;
                         }
 
                         // Check gRPC status code and message
                         // TODO: a more detailed error message.
-                        if let Some(grpc_status) = slice_get_header_parse(&headers, HEADER_GRPC_STATUS) {
+                        if let Some(grpc_status) = headers.get_opt_parse(HEADER_GRPC_STATUS) {
                             if grpc_status != GrpcStatus::Ok as i32 {
-                                let message = slice_get_header(&headers, HEADER_GRPC_MESSAGE).unwrap_or("unknown error");
+                                let message = headers.get_opt(HEADER_GRPC_MESSAGE).unwrap_or("unknown error");
                                 self.error = Some(stream::once(Err(
                                     GrpcError::GrpcMessage(GrpcMessageError{
                                         grpc_status: grpc_status,
@@ -257,11 +256,11 @@ impl Stream for GrpcFrameFromHttpFramesStreamResponse {
                         if !self.buf.is_empty() {
                             self.error = Some(stream::once(Err(GrpcError::Other("partial frame"))));
                         } else {
-                            let grpc_status = slice_get_header_parse(&headers, HEADER_GRPC_STATUS);
+                            let grpc_status = headers.get_opt_parse(HEADER_GRPC_STATUS);
                             if grpc_status == Some(GrpcStatus::Ok as i32) {
                                 return Ok(Async::Ready(None));
                             } else {
-                                self.error = Some(stream::once(Err(if let Some(message) = slice_get_header(&headers, HEADER_GRPC_MESSAGE) {
+                                self.error = Some(stream::once(Err(if let Some(message) = headers.get_opt(HEADER_GRPC_MESSAGE) {
                                     GrpcError::GrpcMessage(GrpcMessageError {
                                         grpc_status: grpc_status.unwrap_or(GrpcStatus::Unknown as i32),
                                         grpc_message: message.to_owned(),

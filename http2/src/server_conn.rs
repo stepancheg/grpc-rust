@@ -6,7 +6,7 @@ use solicit::frame::*;
 use solicit::StreamId;
 use solicit::HttpScheme;
 use solicit::HttpError;
-use solicit::header::Header;
+use solicit::header::*;
 
 use bytes::Bytes;
 
@@ -64,7 +64,7 @@ impl<F : HttpService> HttpStream for HttpServerStream<F> {
 }
 
 impl<F : HttpService> HttpServerStream<F> {
-    fn set_headers(&mut self, headers: Vec<Header>, last: bool) {
+    fn set_headers(&mut self, headers: Headers, last: bool) {
         if let Some(ref mut sender) = self.request_handler {
             let part = HttpStreamPart {
                 content: HttpStreamPartContent::Headers(headers),
@@ -90,7 +90,7 @@ struct ServerInner<F : HttpService> {
 }
 
 impl<F : HttpService> ServerInner<F> {
-    fn new_request(&mut self, stream_id: StreamId, headers: Vec<Header>)
+    fn new_request(&mut self, stream_id: StreamId, headers: Headers)
         -> futures::sync::mpsc::UnboundedSender<ResultOrEof<HttpStreamPart, HttpError>>
     {
         let (req_tx, req_rx) = futures::sync::mpsc::unbounded();
@@ -124,7 +124,7 @@ impl<F : HttpService> ServerInner<F> {
         req_tx
     }
 
-    fn new_stream(&mut self, stream_id: StreamId, headers: Vec<Header>) -> &mut HttpServerStream<F> {
+    fn new_stream(&mut self, stream_id: StreamId, headers: Headers) -> &mut HttpServerStream<F> {
         debug!("new stream: {}", stream_id);
 
         let req_tx = self.new_request(stream_id, headers);
@@ -141,7 +141,7 @@ impl<F : HttpService> ServerInner<F> {
         self.common.streams.get_mut(&stream_id).unwrap()
     }
 
-    fn get_or_create_stream(&mut self, stream_id: StreamId, headers: Vec<Header>, last: bool) -> &mut HttpServerStream<F> {
+    fn get_or_create_stream(&mut self, stream_id: StreamId, headers: Headers, last: bool) -> &mut HttpServerStream<F> {
         if self.common.get_stream_mut(stream_id).is_some() {
             // https://github.com/rust-lang/rust/issues/36403
             let stream = self.common.get_stream_mut(stream_id).unwrap();
@@ -169,7 +169,7 @@ impl<F : HttpService> LoopInner for ServerInner<F> {
         let headers = self.common.conn.decoder
                                .decode(&frame.header_fragment())
                                .map_err(HttpError::CompressionError).unwrap();
-        let headers = headers.into_iter().map(|h| Header::new(h.0, h.1)).collect();
+        let headers = Headers(headers.into_iter().map(|h| Header::new(h.0, h.1)).collect());
 
         let _stream = self.get_or_create_stream(
             frame.get_stream_id(),
@@ -358,14 +358,14 @@ impl HttpServerConnectionAsync {
     pub fn new_plain_fn<F>(lh: &reactor::Handle, socket: TcpStream, conf: HttpServerConf, f: F)
             -> (HttpServerConnectionAsync, HttpFuture<()>)
         where
-            F : Fn(Vec<Header>, HttpPartFutureStreamSend) -> HttpPartFutureStreamSend + Send + 'static,
+            F : Fn(Headers, HttpPartFutureStreamSend) -> HttpPartFutureStreamSend + Send + 'static,
     {
         struct HttpServiceFn<F>(F);
 
         impl<F> HttpService for HttpServiceFn<F>
-            where F : Fn(Vec<Header>, HttpPartFutureStreamSend) -> HttpPartFutureStreamSend + Send + 'static
+            where F : Fn(Headers, HttpPartFutureStreamSend) -> HttpPartFutureStreamSend + Send + 'static
         {
-            fn new_request(&self, headers: Vec<Header>, req: HttpPartFutureStreamSend) -> HttpPartFutureStreamSend {
+            fn new_request(&self, headers: Headers, req: HttpPartFutureStreamSend) -> HttpPartFutureStreamSend {
                 (self.0)(headers, req)
             }
         }

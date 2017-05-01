@@ -17,7 +17,7 @@ use tokio_io::io as tokio_io;
 
 use solicit::session::StreamState;
 use solicit::frame::*;
-use solicit::header::Header;
+use solicit::header::*;
 use solicit::StreamId;
 use solicit::HttpError;
 use solicit::WindowSize;
@@ -35,7 +35,7 @@ use solicit_async::*;
 
 #[derive(Debug)]
 pub enum HttpStreamPartContent {
-    Headers(Vec<Header>),
+    Headers(Headers),
     Data(Bytes),
 }
 
@@ -46,30 +46,30 @@ pub struct HttpStreamPart {
 }
 
 impl HttpStreamPart {
-    pub fn last_headers(header: Vec<Header>) -> Self {
+    pub fn last_headers(headers: Headers) -> Self {
         HttpStreamPart {
-            content: HttpStreamPartContent::Headers(header),
+            content: HttpStreamPartContent::Headers(headers),
             last: true,
         }
     }
 
-    pub fn intermediate_headers(headers: Vec<Header>) -> Self {
+    pub fn intermediate_headers(headers: Headers) -> Self {
         HttpStreamPart {
             content: HttpStreamPartContent::Headers(headers),
             last: false,
         }
     }
 
-    pub fn intermediate_data(data: Vec<u8>) -> Self {
+    pub fn intermediate_data(data: Bytes) -> Self {
         HttpStreamPart {
-            content: HttpStreamPartContent::Data(Bytes::from(data)),
+            content: HttpStreamPartContent::Data(data),
             last: false,
         }
     }
 
-    pub fn last_data(data: Vec<u8>) -> Self {
+    pub fn last_data(data: Bytes) -> Self {
         HttpStreamPart {
-            content: HttpStreamPartContent::Data(Bytes::from(data)),
+            content: HttpStreamPartContent::Data(data),
             last: true,
         }
     }
@@ -80,7 +80,7 @@ pub type HttpPartFutureStreamSend = Box<Stream<Item=HttpStreamPart, Error=HttpEr
 
 
 pub trait HttpService: Send + 'static {
-    fn new_request(&self, headers: Vec<Header>, req: HttpPartFutureStreamSend) -> HttpPartFutureStreamSend;
+    fn new_request(&self, headers: Headers, req: HttpPartFutureStreamSend) -> HttpPartFutureStreamSend;
 }
 
 
@@ -133,7 +133,7 @@ impl HttpStreamCommon {
                         None
                     } else {
                         self.close_local();
-                        Some(HttpStreamPart::last_data(Vec::new()))
+                        Some(HttpStreamPart::last_data(Bytes::new()))
                     }
                 } else {
                     None
@@ -337,7 +337,7 @@ impl<S> LoopInnerCommon<S>
             }
             HttpStreamPartContent::Headers(headers) => {
                 let headers_fragment = self
-                    .conn.encoder.encode(headers.iter().map(|h| (h.name(), h.value())));
+                    .conn.encoder.encode(headers.0.iter().map(|h| (h.name(), h.value())));
 
                 // For now, sending header fragments larger than 16kB is not supported
                 // (i.e. the encoded representation cannot be split into CONTINUATION

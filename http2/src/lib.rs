@@ -29,12 +29,14 @@ pub mod assert_types;
 pub mod hpack;
 pub mod solicit_async;
 pub mod solicit_misc;
+pub mod bytesx;
 
 mod misc;
 
 pub use solicit::HttpScheme;
 pub use solicit::HttpError;
 pub use solicit::header::Header;
+pub use solicit::header::Headers;
 
 pub mod for_test {
     pub use server_conf::*;
@@ -47,4 +49,5 @@ pub mod for_test {
     pub use solicit_async::*;
     pub use futures_misc::*;
     pub use message::*;
+    pub use solicit::header::*;
 }

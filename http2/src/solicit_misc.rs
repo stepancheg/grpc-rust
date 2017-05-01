@@ -1,8 +1,6 @@
 use std::io;
 use std::mem;
 use std::cmp;
-use std::str;
-use std::str::FromStr;
 
 use solicit::header::Header;
 use solicit::StreamId;
@@ -140,7 +138,7 @@ pub trait HttpConnectionEx {
         let end_stream = if part.last { EndStream::Yes } else { EndStream::No };
         match part.content {
             HttpStreamPartContent::Data(ref data) => self.send_data_frames(send, stream_id, &data, end_stream),
-            HttpStreamPartContent::Headers(ref headers) => self.send_headers(send, stream_id, &headers, end_stream),
+            HttpStreamPartContent::Headers(ref headers) => self.send_headers(send, stream_id, &headers.0, end_stream),
         }
     }
 
@@ -257,14 +255,3 @@ impl HttpFrameClassified {
     }
 }
 
-
-pub fn slice_get_header<'a>(headers: &'a [Header], name: &str) -> Option<&'a str> {
-    headers.iter()
-        .find(|h| h.name() == name.as_bytes())
-        .and_then(|h| str::from_utf8(h.value()).ok())
-}
-
-pub fn slice_get_header_parse<I : FromStr>(headers: &[Header], name: &str) -> Option<I> {
-    slice_get_header(headers, name)
-        .and_then(|h| h.parse().ok())
-}
