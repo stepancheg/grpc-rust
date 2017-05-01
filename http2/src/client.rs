@@ -157,7 +157,7 @@ fn run_client_event_loop(
         .then(move |_| {
             // Must complete with error,
             // so `join` with this future cancels another future.
-            futures::failed::<(), _>(HttpError::IoError(io::Error::new(io::ErrorKind::Other, "shutdown")))
+            futures::failed::<(), _>(HttpError::Shutdown)
         });
 
     // Wait for either completion of connection (i. e. error)

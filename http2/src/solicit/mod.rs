@@ -378,6 +378,8 @@ pub enum HttpError {
     UnableToConnect,
     MalformedResponse,
     ConnectionTimeout,
+    /// Shutdown of local client or server
+    Shutdown,
     Other(Box<Error + Send + Sync>),
 }
 
@@ -413,6 +415,7 @@ impl Error for HttpError {
             HttpError::UnableToConnect => "An error attempting to establish an HTTP/2 connection",
             HttpError::MalformedResponse => "The received response was malformed",
             HttpError::ConnectionTimeout => "Connection time out",
+            HttpError::Shutdown => "Local shutdown",
             HttpError::Other(_) => "An unknown error",
         }
     }
