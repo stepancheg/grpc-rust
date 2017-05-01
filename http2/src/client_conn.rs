@@ -338,7 +338,7 @@ impl HttpClientConnectionAsync {
             tokio_tls::ClientContext::new()
                 .unwrap()
                 .handshake("localhost", conn)
-        });
+        }); 
 
         let tls_conn = tls_conn.map_err(HttpError::from);
 
