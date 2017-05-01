@@ -20,6 +20,8 @@ use solicit::HttpError;
 
 use solicit_async::*;
 
+use futures_misc::*;
+
 use net2;
 
 use super::server_conn::*;
@@ -30,8 +32,7 @@ use server_conf::*;
 
 
 struct LoopToServer {
-    // used only once to send shutdown signal
-    shutdown_tx: futures::sync::mpsc::UnboundedSender<()>,
+    shutdown: ShutdownSignal,
     local_addr: SocketAddr,
 }
 
@@ -112,9 +113,7 @@ fn run_server_event_loop<S>(
 
     let mut lp = reactor::Core::new().expect("http2server");
 
-    let (shutdown_tx, shutdown_rx) = futures::sync::mpsc::unbounded();
-
-    let shutdown_rx = shutdown_rx.map_err(|()| HttpError::IoError(io::Error::new(io::ErrorKind::Other, "shutdown_rx")));
+    let (shutdown_signal, shutdown_future) = shutdown_signal();
 
     let listen = listener(&listen_addr, &lp.handle(), &conf).unwrap();
 
@@ -122,7 +121,7 @@ fn run_server_event_loop<S>(
 
     let local_addr = listen.local_addr().unwrap();
     send_to_back
-        .send(LoopToServer { shutdown_tx: shutdown_tx, local_addr: local_addr })
+        .send(LoopToServer { shutdown: shutdown_signal, local_addr: local_addr })
         .expect("send back");
 
     let loop_run = listen.incoming().map_err(HttpError::from).zip(stuff).for_each(move |((socket, peer_addr), (loop_handle, service, state, conf))| {
@@ -153,15 +152,16 @@ fn run_server_event_loop<S>(
         Ok(())
     });
 
-    let shutdown = shutdown_rx.into_future().map_err(|(e, _)| HttpError::from(e)).and_then(|_| {
-        // Must complete with error,
-        // so `join` with this future cancels another future.
-        futures::failed::<(), _>(HttpError::IoError(io::Error::new(io::ErrorKind::Other, "shutdown_rx")))
-    });
+    let shutdown_future = shutdown_future
+        .then(move |_| {
+            // Must complete with error,
+            // so `join` with this future cancels another future.
+            futures::failed::<(), _>(HttpError::IoError(io::Error::new(io::ErrorKind::Other, "shutdown")))
+        });
 
     // Wait for either completion of connection (i. e. error)
     // or shutdown signal.
-    let done = loop_run.join(shutdown);
+    let done = loop_run.join(shutdown_future);
 
     // TODO: do not ignore error
     lp.run(done).ok();
@@ -219,8 +219,7 @@ impl HttpServer {
 // We shutdown the server in the destructor.
 impl Drop for HttpServer {
     fn drop(&mut self) {
-        // ignore error because even loop may be already dead
-        self.loop_to_server.shutdown_tx.send(()).ok();
+        self.loop_to_server.shutdown.shutdown();
 
         // do not ignore errors of take
         // ignore errors of join, it means that server event loop crashed

@@ -4,6 +4,7 @@ mod stream_single;
 mod stream_merge2;
 mod stream_with_eof;
 mod stream_with_eof_and_error;
+mod shutdown_signal;
 pub mod stream_deferred;
 
 pub use self::task_data::TaskRcMut;
@@ -18,3 +19,5 @@ pub use self::stream_with_eof::*;
 pub use self::stream_with_eof_and_error::*;
 
 pub use self::stream_deferred::stream_deferred;
+
+pub use self::shutdown_signal::*;

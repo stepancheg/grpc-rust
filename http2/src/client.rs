@@ -12,6 +12,8 @@ use futures::stream;
 
 use tokio_core::reactor;
 
+use futures_misc::*;
+
 use solicit::Header;
 use solicit::HttpResult;
 use solicit::HttpError;
@@ -28,7 +30,7 @@ use message::*;
 // Data sent from event loop to Http2Client
 struct LoopToClient {
     // used only once to send shutdown signal
-    shutdown_tx: futures::sync::mpsc::UnboundedSender<()>,
+    shutdown: ShutdownSignal,
     _loop_handle: reactor::Remote,
     http_conn: Arc<HttpClientConnectionAsync>,
 }
@@ -132,7 +134,7 @@ fn run_client_event_loop(
     let mut lp = reactor::Core::new().unwrap();
 
     // Create a channel to receive shutdown signal.
-    let (shutdown_tx, shutdown_rx) = futures::sync::mpsc::unbounded();
+    let (shutdown_signal, shutdown_future) = shutdown_signal();
 
     let (http_conn, http_conn_future) =
         if tls {
@@ -145,15 +147,14 @@ fn run_client_event_loop(
     // Send channels back to Http2Client
     send_to_back
         .send(LoopToClient {
-            shutdown_tx: shutdown_tx,
+            shutdown: shutdown_signal,
             _loop_handle: lp.remote(),
             http_conn: Arc::new(http_conn),
         })
         .expect("send back");
 
-    let shutdown = shutdown_rx.into_future()
-        .map_err(|((), _)| HttpError::IoError(io::Error::new(io::ErrorKind::Other, "shutdown_rx")))
-        .and_then(move |_| {
+    let shutdown_future = shutdown_future
+        .then(move |_| {
             // Must complete with error,
             // so `join` with this future cancels another future.
             futures::failed::<(), _>(HttpError::IoError(io::Error::new(io::ErrorKind::Other, "shutdown")))
@@ -161,7 +162,7 @@ fn run_client_event_loop(
 
     // Wait for either completion of connection (i. e. error)
     // or shutdown signal.
-    let done = http_conn_future.join(shutdown);
+    let done = http_conn_future.join(shutdown_future);
 
     // TODO: do not ignore error
     lp.run(done).ok();
@@ -170,8 +171,7 @@ fn run_client_event_loop(
 // We shutdown the client in the destructor.
 impl Drop for HttpClient {
     fn drop(&mut self) {
-        // ignore error because even loop may be already dead
-        self.loop_to_client.shutdown_tx.send(()).ok();
+        self.loop_to_client.shutdown.shutdown();
 
         // do not ignore errors because we own event loop thread
         self.thread_join_handle.take().expect("handle.take")
