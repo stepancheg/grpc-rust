@@ -33,11 +33,7 @@ fn simple_new() {
             .collect()
             .and_then(|v| {
                 let mut r = Vec::new();
-                r.push(HttpStreamPart::intermediate_headers(
-                    Headers(vec![
-                        Header::new(":status", "200"),
-                    ])
-                ));
+                r.push(HttpStreamPart::intermediate_headers(Headers::ok_200()));
                 r.push(HttpStreamPart::last_data(SimpleHttpMessage::from_parts(v).body));
                 Ok(stream::iter(r.into_iter().map(Ok)))
             })
@@ -80,11 +76,7 @@ fn response_large() {
 
     let server = HttpServerOneConn::new_fn(0, move |_headers, _req| {
         let mut r = Vec::new();
-        r.push(HttpStreamPart::intermediate_headers(
-            Headers(vec![
-                Header::new(":status", "200"),
-            ])
-        ));
+        r.push(HttpStreamPart::intermediate_headers(Headers::ok_200()));
         r.push(HttpStreamPart::intermediate_data(Bytes::from(large_resp_copy.clone())));
         Box::new(stream::iter(r.into_iter().map(Ok)))
     });

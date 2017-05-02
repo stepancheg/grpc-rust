@@ -1,8 +1,12 @@
+use std::sync::Arc;
+
+use native_tls::TlsConnector;
+
 use solicit::HttpScheme;
 
 pub enum ClientTlsOption {
     Plain,
-    Tls(String), // domain
+    Tls(String, Arc<TlsConnector>), // domain
 }
 
 impl ClientTlsOption {

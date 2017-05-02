@@ -14,6 +14,8 @@ use futures::stream;
 
 use tokio_core::reactor;
 
+use native_tls::TlsConnector;
+
 use futures_misc::*;
 
 use solicit::header::*;
@@ -53,7 +55,10 @@ impl HttpClient {
         let socket_addr = (host, port).to_socket_addrs()?.next().unwrap();
 
         let tls_enabled = match tls {
-            true => ClientTlsOption::Tls(host.to_owned()),
+            true => {
+                let connector = Arc::new(TlsConnector::builder().unwrap().build().unwrap());
+                ClientTlsOption::Tls(host.to_owned(), connector)
+            },
             false => ClientTlsOption::Plain,
         };
 
@@ -107,6 +112,21 @@ impl HttpClient {
             Box::new(stream::once(Ok(body))))
     }
 
+    pub fn start_get(
+        &self,
+        path: &str,
+        authority: &str)
+            -> HttpPartFutureStreamSend
+    {
+        let headers = Headers(vec![
+            Header::new(":method", "GET"),
+            Header::new(":path", path.to_owned()),
+            Header::new(":authority", authority.to_owned()),
+            Header::new(":scheme", self.http_scheme.as_bytes()),
+        ]);
+        self.start_request_simple(headers, Bytes::new())
+    }
+
     pub fn start_post(
         &self,
         path: &str,
@@ -121,6 +141,16 @@ impl HttpClient {
             Header::new(":scheme", self.http_scheme.as_bytes()),
         ]);
         self.start_request_simple(headers, body)
+    }
+
+    pub fn start_get_simple_response(
+        &self,
+        path: &str,
+        authority: &str)
+            -> HttpFutureSend<SimpleHttpMessage>
+    {
+        Box::new(self.start_get(path, authority).collect()
+            .map(SimpleHttpMessage::from_parts))
     }
 
     pub fn start_post_simple_response(

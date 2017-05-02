@@ -138,6 +138,12 @@ impl Headers {
         Default::default()
     }
 
+    pub fn ok_200() -> Headers {
+        Headers(vec![
+            Header::new(":status", "200"),
+        ])
+    }
+
     pub fn get_opt<'a>(&'a self, name: &str) -> Option<&'a str> {
         self.0.iter()
             .find(|h| h.name() == name.as_bytes())
@@ -151,6 +157,10 @@ impl Headers {
     pub fn get_opt_parse<I : FromStr>(&self, name: &str) -> Option<I> {
         self.get_opt(name)
             .and_then(|h| h.parse().ok())
+    }
+
+    pub fn status(&self) -> u32 {
+        self.get_opt_parse(":status").unwrap()
     }
 
     pub fn add(&mut self, name: &str, value: &str) {

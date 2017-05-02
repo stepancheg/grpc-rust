@@ -1,4 +1,5 @@
 use std::net::SocketAddr;
+use std::sync::Arc;
 use std::io;
 
 use solicit::frame::*;
@@ -310,8 +311,8 @@ impl HttpClientConnectionAsync {
         match tls {
             ClientTlsOption::Plain =>
                 HttpClientConnectionAsync::new_plain(lh, addr, conf),
-            ClientTlsOption::Tls(domain) =>
-                HttpClientConnectionAsync::new_tls(lh, &domain, addr, conf),
+            ClientTlsOption::Tls(domain, connector) =>
+                HttpClientConnectionAsync::new_tls(lh, &domain, connector, addr, conf),
         }
     }
 
@@ -338,7 +339,14 @@ impl HttpClientConnectionAsync {
         HttpClientConnectionAsync::connected(lh, connect, conf)
     }
 
-    pub fn new_tls(lh: reactor::Handle, domain: &str, addr: &SocketAddr, conf: HttpClientConf) -> (Self, HttpFuture<()>) {
+    pub fn new_tls(
+        lh: reactor::Handle,
+        domain: &str,
+        connector: Arc<TlsConnector>,
+        addr: &SocketAddr,
+        conf: HttpClientConf)
+            -> (Self, HttpFuture<()>)
+    {
         let domain = domain.to_owned();
         let addr = addr.clone();
 
@@ -346,10 +354,8 @@ impl HttpClientConnectionAsync {
             .map(move |c| { info!("connected to {}", addr); c })
             .map_err(|e| e.into());
 
-        let cx = TlsConnector::builder().unwrap().build().unwrap();
-
         let tls_conn = connect.and_then(move |conn| {
-            cx.connect_async(&domain, conn).map_err(|e| {
+            connector.connect_async(&domain, conn).map_err(|e| {
                 HttpError::IoError(io::Error::new(io::ErrorKind::Other, e))
             })
         });
