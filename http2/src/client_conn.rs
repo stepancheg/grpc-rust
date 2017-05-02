@@ -15,11 +15,14 @@ use futures::Future;
 use futures::stream;
 use futures::stream::Stream;
 
+use native_tls::TlsConnector;
+
 use tokio_core::net::TcpStream;
 use tokio_core::reactor;
 use tokio_timer::Timer;
 use tokio_io::AsyncWrite;
 use tokio_io::AsyncRead;
+use tokio_tls::TlsConnectorExt;
 
 use futures_misc::*;
 
@@ -325,25 +328,25 @@ impl HttpClientConnectionAsync {
         HttpClientConnectionAsync::connected(lh, connect, conf)
     }
 
-    pub fn new_tls(_lh: reactor::Handle, _addr: &SocketAddr, _conf: HttpClientConf) -> (Self, HttpFuture<()>) {
-        unimplemented!()
-        /*
+    pub fn new_tls(lh: reactor::Handle, domain: &str, addr: &SocketAddr, conf: HttpClientConf) -> (Self, HttpFuture<()>) {
+        let domain = domain.to_owned();
         let addr = addr.clone();
 
         let connect = TcpStream::connect(&addr, &lh)
             .map(move |c| { info!("connected to {}", addr); c })
             .map_err(|e| e.into());
 
-        let tls_conn = connect.and_then(|conn| {
-            tokio_tls::ClientContext::new()
-                .unwrap()
-                .handshake("localhost", conn)
+        let cx = TlsConnector::builder().unwrap().build().unwrap();
+
+        let tls_conn = connect.and_then(move |conn| {
+            cx.connect_async(&domain, conn).map_err(|e| {
+                HttpError::IoError(io::Error::new(io::ErrorKind::Other, e))
+            })
         });
 
         let tls_conn = tls_conn.map_err(HttpError::from);
 
-        HttpClientConnectionAsync::connected(lh, Box::new(tls_conn))
-        */
+        HttpClientConnectionAsync::connected(lh, Box::new(tls_conn), conf)
     }
 
     pub fn start_request(

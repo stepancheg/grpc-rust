@@ -3,6 +3,7 @@ use std::str;
 extern crate bytes;
 extern crate httpbis;
 extern crate futures;
+extern crate native_tls;
 extern crate tokio_core;
 extern crate tokio_tls;
 #[macro_use]

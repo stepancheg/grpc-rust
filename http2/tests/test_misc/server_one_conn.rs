@@ -10,6 +10,8 @@ use futures;
 use futures::Future;
 use futures::stream::Stream;
 
+use native_tls::TlsAcceptor;
+
 use tokio_core;
 use tokio_core::reactor;
 
@@ -40,16 +42,14 @@ impl HttpServerOneConn {
         HttpServerOneConn::new_fn_impl(port, None, service)
     }
 
-    /*
-    pub fn new_tls_fn<S>(port: u16, server_context: tokio_tls::ServerContext, service: S) -> Self
-        where S : Fn(Vec<Header>, HttpStreamStreamSend) -> HttpStreamStreamSend + Send + 'static
+    pub fn new_tls_fn<S>(port: u16, server_context: TlsAcceptor, service: S) -> Self
+        where S : Fn(Headers, HttpPartFutureStreamSend) -> HttpPartFutureStreamSend + Send + 'static
     {
         HttpServerOneConn::new_fn_impl(port, Some(server_context), service)
     }
-    */
 
     #[allow(dead_code)]
-    fn new_fn_impl<S>(port: u16, server_context: Option</* tokio_tls::ServerContext */ u32>, service: S) -> Self
+    fn new_fn_impl<S>(port: u16, server_context: Option<TlsAcceptor>, service: S) -> Self
         where S : Fn(Headers, HttpPartFutureStreamSend) -> HttpPartFutureStreamSend + Send + 'static
     {
         let (from_loop_tx, from_loop_rx) = futures::oneshot();

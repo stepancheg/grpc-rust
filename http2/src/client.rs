@@ -51,6 +51,11 @@ impl HttpClient {
         // TODO: try connect to all addrs
         let socket_addr = (host, port).to_socket_addrs()?.next().unwrap();
 
+        let tls_enabled = match tls {
+            true => TlsEnabled::Tls(host.to_owned()),
+            false => TlsEnabled::Plain,
+        };
+
         // We need some data back from event loop.
         // This channel is used to exchange that data
         let (get_from_loop_tx, get_from_loop_rx) = mpsc::channel();
@@ -59,7 +64,7 @@ impl HttpClient {
         let join_handle = thread::Builder::new()
             .name(conf.thread_name.clone().unwrap_or_else(|| "http2-client-loop".to_owned()).to_string())
             .spawn(move || {
-                run_client_event_loop(socket_addr, tls, conf, get_from_loop_tx);
+                run_client_event_loop(socket_addr, tls_enabled, conf, get_from_loop_tx);
             })
             .expect("spawn");
 
@@ -125,10 +130,15 @@ impl HttpClient {
     }
 }
 
+enum TlsEnabled {
+    Plain,
+    Tls(String), // domain
+}
+
 // Event loop entry point
 fn run_client_event_loop(
     socket_addr: SocketAddr,
-    tls: bool,
+    tls: TlsEnabled,
     conf: HttpClientConf,
     send_to_back: mpsc::Sender<LoopToClient>)
 {
@@ -139,10 +149,11 @@ fn run_client_event_loop(
     let (shutdown_signal, shutdown_future) = shutdown_signal();
 
     let (http_conn, http_conn_future) =
-        if tls {
-            HttpClientConnectionAsync::new_tls(lp.handle(), &socket_addr, conf)
-        } else {
-            HttpClientConnectionAsync::new_plain(lp.handle(), &socket_addr, conf)
+        match tls {
+            TlsEnabled::Tls(domain) =>
+                HttpClientConnectionAsync::new_tls(lp.handle(), &domain, &socket_addr, conf),
+            TlsEnabled::Plain =>
+                HttpClientConnectionAsync::new_plain(lp.handle(), &socket_addr, conf),
         };
     let http_conn_future: HttpFuture<_> = Box::new(http_conn_future.map_err(HttpError::from));
 
