@@ -1,11 +1,8 @@
 //! The module contains the implementation of the `HEADERS` frame and associated flags.
 
 use std::io;
-use std::fmt;
 
 use bytes::Bytes;
-
-use misc::BsDebug;
 
 use solicit::StreamId;
 use solicit::frame::{FrameBuilder, FrameIR, Frame, FrameHeader, RawFrame, parse_padded_payload};
@@ -128,8 +125,7 @@ impl StreamDependency {
 
 /// A struct representing the HEADERS frames of HTTP/2, as defined in the
 /// HTTP/2 spec, section 6.2.
-#[derive(PartialEq)]
-#[derive(Clone)]
+#[derive(PartialEq, Clone, Debug)]
 pub struct HeadersFrame {
     /// The set of flags for the frame, packed into a single byte.
     flags: Flags<HeadersFlag>,
@@ -141,18 +137,6 @@ pub struct HeadersFrame {
     pub stream_dep: Option<StreamDependency>,
     /// The length of the padding, if any.
     pub padding_len: Option<u8>,
-}
-
-impl fmt::Debug for HeadersFrame {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        fmt.debug_struct("HeadersFrame")
-            .field("flags", &self.flags)
-            .field("stream_id", &self.stream_id)
-            .field("header_fragment", &BsDebug(&self.header_fragment))
-            .field("stream_dep", &self.stream_dep)
-            .field("padding_len", &self.padding_len)
-            .finish()
-    }
 }
 
 impl HeadersFrame {

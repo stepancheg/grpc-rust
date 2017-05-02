@@ -2,30 +2,15 @@ use std::str;
 use std::str::FromStr;
 use std::fmt;
 use std::borrow::Cow;
-use std::borrow::Borrow;
 
 use bytes::Bytes;
 
-use misc::BsDebug;
-
-/// A convenience struct representing a part of a header (either the name or the value) that can be
-/// either an owned or a borrowed byte sequence.
+/// A convenience struct representing a part of a header (either the name or the value).
 pub struct HeaderPart(Bytes);
 
 impl fmt::Debug for HeaderPart {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(fmt, "b\"")?;
-        let u8a: &[u8] = self.0.borrow();
-        for &c in u8a {
-            // ASCII printable
-            if c >= 0x20 && c < 0x7f {
-                write!(fmt, "{}", c as char)?;
-            } else {
-                write!(fmt, "\\x{:02x}", c)?;
-            }
-        }
-        write!(fmt, "\"")?;
-        Ok(())
+        fmt::Debug::fmt(&self.0, fmt)
     }
 }
 
@@ -110,7 +95,7 @@ impl<'a> From<Cow<'a, str>> for HeaderPart {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct Header {
     pub name: Bytes,
     pub value: Bytes,
@@ -144,14 +129,6 @@ impl<N: Into<HeaderPart>, V: Into<HeaderPart>> From<(N, V)> for Header {
         Header::new(p.0, p.1)
     }
 }
-
-impl fmt::Debug for Header {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(fmt, "Header {{ name: {:?}, value: {:?} }}",
-            BsDebug(self.name()), BsDebug(self.value()))
-    }
-}
-
 
 #[derive(Default,Debug)]
 pub struct Headers(pub Vec<Header>);
