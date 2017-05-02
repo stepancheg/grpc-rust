@@ -15,4 +15,4 @@ test = false
 
 [lib]
 
-doctests = false
+doctest = false
