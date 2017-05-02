@@ -90,7 +90,7 @@ fn response_large() {
     });
 
     let client = HttpClient::new("::1", server.port(), false, Default::default()).expect("connect");
-    let resp = client.start_post_simple_response("/foobar", Bytes::from(&b""[..])).wait().expect("wait");
+    let resp = client.start_post_simple_response("/foobar", "localhost", Bytes::from(&b""[..])).wait().expect("wait");
     assert_eq!(large_resp.len(), resp.body.len());
     assert_eq!((large_resp.len(), &large_resp[..]), (resp.body.len(), &resp.body[..]));
 

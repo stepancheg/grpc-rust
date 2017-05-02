@@ -39,7 +39,7 @@ fn stream_count_new() {
     let state: ConnectionStateSnapshot = client.dump_state().wait().expect("state");
     assert_eq!(0, state.streams.len());
 
-    let req = client.start_post_simple_response("/foobar", Bytes::from(&b"xxyy"[..]));
+    let req = client.start_post_simple_response("/foobar", "localhost", Bytes::from(&b"xxyy"[..]));
 
     let headers = server_tester.recv_frame_headers_check(1, false);
     assert_eq!("POST", headers.get(":method"));
@@ -79,7 +79,7 @@ fn stream_count() {
     let state: ConnectionStateSnapshot = client.dump_state().wait().expect("state");
     assert_eq!(0, state.streams.len());
 
-    let message = client.start_post_simple_response("/foobar", Bytes::from(&b"xxyy"[..]))
+    let message = client.start_post_simple_response("/foobar", "localhost", Bytes::from(&b"xxyy"[..]))
         .wait()
         .expect("r");
     assert_eq!((b"xxyy"[..]).to_owned(), message.body);

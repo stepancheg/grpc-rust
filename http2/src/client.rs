@@ -42,13 +42,12 @@ struct LoopToClient {
 pub struct HttpClient {
     loop_to_client: LoopToClient,
     thread_join_handle: Option<thread::JoinHandle<()>>,
-    host: String,
     http_scheme: HttpScheme,
 }
 
 impl HttpClient {
-    pub fn new(host: &str, port: u16, tls: bool, conf: HttpClientConf) -> HttpResult<HttpClient> {
 
+    pub fn new(host: &str, port: u16, tls: bool, conf: HttpClientConf) -> HttpResult<HttpClient> {
         // TODO: sync
         // TODO: try connect to all addrs
         let socket_addr = (host, port).to_socket_addrs()?.next().unwrap();
@@ -58,15 +57,22 @@ impl HttpClient {
             false => ClientTlsOption::Plain,
         };
 
+        HttpClient::new_expl(&socket_addr, tls_enabled, conf)
+    }
+
+    pub fn new_expl(addr: &SocketAddr, tls: ClientTlsOption, conf: HttpClientConf) -> HttpResult<HttpClient> {
         // We need some data back from event loop.
         // This channel is used to exchange that data
         let (get_from_loop_tx, get_from_loop_rx) = mpsc::channel();
+
+        let addr = addr.clone();
+        let http_scheme = tls.http_scheme();
 
         // Start event loop.
         let join_handle = thread::Builder::new()
             .name(conf.thread_name.clone().unwrap_or_else(|| "http2-client-loop".to_owned()).to_string())
             .spawn(move || {
-                run_client_event_loop(socket_addr, tls_enabled, conf, get_from_loop_tx);
+                run_client_event_loop(addr, tls, conf, get_from_loop_tx);
             })
             .expect("spawn");
 
@@ -77,8 +83,7 @@ impl HttpClient {
         Ok(HttpClient {
             loop_to_client: loop_to_client,
             thread_join_handle: Some(join_handle),
-            host: host.to_owned(),
-            http_scheme: if tls { HttpScheme::Https } else { HttpScheme::Http },
+            http_scheme: http_scheme,
         })
     }
 
@@ -105,13 +110,14 @@ impl HttpClient {
     pub fn start_post(
         &self,
         path: &str,
+        authority: &str,
         body: Bytes)
             -> HttpPartFutureStreamSend
     {
         let headers = Headers(vec![
             Header::new(":method", "POST"),
             Header::new(":path", path.to_owned()),
-            Header::new(":authority", self.host.clone()),
+            Header::new(":authority", authority.to_owned()),
             Header::new(":scheme", self.http_scheme.as_bytes()),
         ]);
         self.start_request_simple(headers, body)
@@ -120,10 +126,11 @@ impl HttpClient {
     pub fn start_post_simple_response(
         &self,
         path: &str,
+        authority: &str,
         body: Bytes)
             -> HttpFutureSend<SimpleHttpMessage>
     {
-        Box::new(self.start_post(path, body).collect()
+        Box::new(self.start_post(path, authority, body).collect()
             .map(SimpleHttpMessage::from_parts))
     }
 
@@ -146,13 +153,7 @@ fn run_client_event_loop(
     let (shutdown_signal, shutdown_future) = shutdown_signal();
 
     let (http_conn, http_conn_future) =
-        match tls {
-            ClientTlsOption::Tls(domain) =>
-                HttpClientConnectionAsync::new_tls(lp.handle(), &domain, &socket_addr, conf),
-            ClientTlsOption::Plain =>
-                HttpClientConnectionAsync::new_plain(lp.handle(), &socket_addr, conf),
-        };
-    let http_conn_future: HttpFuture<_> = Box::new(http_conn_future.map_err(HttpError::from));
+        HttpClientConnectionAsync::new(lp.handle(), &socket_addr, tls, conf);
 
     // Send channels back to Http2Client
     send_to_back

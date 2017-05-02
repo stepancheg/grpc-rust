@@ -30,6 +30,7 @@ use solicit_async::*;
 
 use http_common::*;
 use client_conf::*;
+use client_tls::*;
 
 
 struct HttpClientStream {
@@ -303,6 +304,15 @@ impl HttpClientConnectionAsync {
         });
 
         (c, Box::new(future))
+    }
+
+    pub fn new(lh: reactor::Handle, addr: &SocketAddr, tls: ClientTlsOption, conf: HttpClientConf) -> (Self, HttpFuture<()>) {
+        match tls {
+            ClientTlsOption::Plain =>
+                HttpClientConnectionAsync::new_plain(lh, addr, conf),
+            ClientTlsOption::Tls(domain) =>
+                HttpClientConnectionAsync::new_tls(lh, &domain, addr, conf),
+        }
     }
 
     pub fn new_plain(lh: reactor::Handle, addr: &SocketAddr, conf: HttpClientConf) -> (Self, HttpFuture<()>) {
