@@ -2,14 +2,6 @@ use std::mem;
 
 use bytes::*;
 
-// https://github.com/carllerche/bytes/pull/111
-pub fn bytes_into_mut(bytes: Bytes) -> BytesMut {
-    match bytes.try_mut() {
-        Ok(bytes_mut) => bytes_mut,
-        Err(bytes) => BytesMut::from(&bytes[..]),
-    }
-}
-
 // inefficient: https://github.com/carllerche/bytes/issues/85
 #[allow(dead_code)]
 pub fn bytes_concat(mut a: Bytes, b: Bytes) -> Bytes {
@@ -24,7 +16,7 @@ pub fn bytes_concat(mut a: Bytes, b: Bytes) -> Bytes {
 }
 
 pub fn bytes_extend_with_slice(target: &mut Bytes, append: &[u8]) {
-    let mut bytes_mut = bytes_into_mut(mem::replace(target, Bytes::new()));
+    let mut bytes_mut = BytesMut::from(mem::replace(target, Bytes::new()));
     bytes_mut_extend_with_slice(&mut bytes_mut, append);
     mem::replace(target, bytes_mut.freeze());
 }
