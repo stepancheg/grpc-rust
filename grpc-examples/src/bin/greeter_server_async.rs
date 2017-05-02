@@ -14,7 +14,7 @@ use grpc_examples::helloworld::*;
 
 struct GreeterImpl;
 
-impl GreeterAsync for GreeterImpl {
+impl AsyncGreeter for GreeterImpl {
     fn SayHello(&self, req: HelloRequest) -> GrpcFutureSend<HelloReply> {
         let mut r = HelloReply::new();
         let name = if req.get_name().is_empty() { "world" } else { req.get_name() };
@@ -25,7 +25,7 @@ impl GreeterAsync for GreeterImpl {
 }
 
 fn main() {
-    let _server = GreeterAsyncServer::new("[::]:50051", Default::default(), GreeterImpl);
+    let _server = AsyncGreeterServer::new("[::]:50051", Default::default(), GreeterImpl);
 
     loop {
         thread::park();

@@ -29,7 +29,7 @@ pub trait LongTests {
     fn random_strings(&self, p: super::long_tests_pb::RandomStringsRequest) -> ::grpc::iter::GrpcIterator<super::long_tests_pb::RandomStringsResponse>;
 }
 
-pub trait LongTestsAsync {
+pub trait AsyncLongTests {
     fn echo(&self, p: super::long_tests_pb::EchoRequest) -> ::grpc::futures_grpc::GrpcFutureSend<super::long_tests_pb::EchoResponse>;
 
     fn char_count(&self, p: ::grpc::futures_grpc::GrpcStreamSend<super::long_tests_pb::CharCountRequest>) -> ::grpc::futures_grpc::GrpcFutureSend<super::long_tests_pb::CharCountResponse>;
@@ -40,12 +40,12 @@ pub trait LongTestsAsync {
 // sync client
 
 pub struct LongTestsClient {
-    async_client: LongTestsAsyncClient,
+    async_client: AsyncLongTestsClient,
 }
 
 impl LongTestsClient {
     pub fn new(host: &str, port: u16, tls: bool, conf: ::grpc::client::GrpcClientConf) -> ::grpc::result::GrpcResult<Self> {
-        LongTestsAsyncClient::new(host, port, tls, conf).map(|c| {
+        AsyncLongTestsClient::new(host, port, tls, conf).map(|c| {
             LongTestsClient {
                 async_client: c,
             }
@@ -70,17 +70,17 @@ impl LongTests for LongTestsClient {
 
 // async client
 
-pub struct LongTestsAsyncClient {
+pub struct AsyncLongTestsClient {
     grpc_client: ::grpc::client::GrpcClient,
     method_echo: ::std::sync::Arc<::grpc::method::MethodDescriptor<super::long_tests_pb::EchoRequest, super::long_tests_pb::EchoResponse>>,
     method_char_count: ::std::sync::Arc<::grpc::method::MethodDescriptor<super::long_tests_pb::CharCountRequest, super::long_tests_pb::CharCountResponse>>,
     method_random_strings: ::std::sync::Arc<::grpc::method::MethodDescriptor<super::long_tests_pb::RandomStringsRequest, super::long_tests_pb::RandomStringsResponse>>,
 }
 
-impl LongTestsAsyncClient {
+impl AsyncLongTestsClient {
     pub fn new(host: &str, port: u16, tls: bool, conf: ::grpc::client::GrpcClientConf) -> ::grpc::result::GrpcResult<Self> {
         ::grpc::client::GrpcClient::new(host, port, tls, conf).map(|c| {
-            LongTestsAsyncClient {
+            AsyncLongTestsClient {
                 grpc_client: c,
                 method_echo: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
                     name: "/LongTests/echo".to_string(),
@@ -105,7 +105,7 @@ impl LongTestsAsyncClient {
     }
 }
 
-impl LongTestsAsync for LongTestsAsyncClient {
+impl AsyncLongTests for AsyncLongTestsClient {
     fn echo(&self, p: super::long_tests_pb::EchoRequest) -> ::grpc::futures_grpc::GrpcFutureSend<super::long_tests_pb::EchoResponse> {
         self.grpc_client.call_unary(p, self.method_echo.clone())
     }
@@ -122,7 +122,7 @@ impl LongTestsAsync for LongTestsAsyncClient {
 // sync server
 
 pub struct LongTestsServer {
-    async_server: LongTestsAsyncServer,
+    async_server: AsyncLongTestsServer,
 }
 
 struct LongTestsServerHandlerToAsync {
@@ -130,7 +130,7 @@ struct LongTestsServerHandlerToAsync {
     cpupool: ::futures_cpupool::CpuPool,
 }
 
-impl LongTestsAsync for LongTestsServerHandlerToAsync {
+impl AsyncLongTests for LongTestsServerHandlerToAsync {
     fn echo(&self, p: super::long_tests_pb::EchoRequest) -> ::grpc::futures_grpc::GrpcFutureSend<super::long_tests_pb::EchoResponse> {
         let h = self.handler.clone();
         ::grpc::rt::sync_to_async_unary(&self.cpupool, p, move |p| {
@@ -160,26 +160,26 @@ impl LongTestsServer {
             handler: ::std::sync::Arc::new(h),
         };
         LongTestsServer {
-            async_server: LongTestsAsyncServer::new(addr, conf, h),
+            async_server: AsyncLongTestsServer::new(addr, conf, h),
         }
     }
 }
 
 // async server
 
-pub struct LongTestsAsyncServer {
+pub struct AsyncLongTestsServer {
     grpc_server: ::grpc::server::GrpcServer,
 }
 
-impl LongTestsAsyncServer {
-    pub fn new<A : ::std::net::ToSocketAddrs, H : LongTestsAsync + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self {
-        let service_definition = LongTestsAsyncServer::new_service_def(h);
-        LongTestsAsyncServer {
+impl AsyncLongTestsServer {
+    pub fn new<A : ::std::net::ToSocketAddrs, H : AsyncLongTests + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self {
+        let service_definition = AsyncLongTestsServer::new_service_def(h);
+        AsyncLongTestsServer {
             grpc_server: ::grpc::server::GrpcServer::new(addr, conf, service_definition),
         }
     }
 
-    pub fn new_service_def<H : LongTestsAsync + 'static + Sync + Send + 'static>(handler: H) -> ::grpc::server::ServerServiceDefinition {
+    pub fn new_service_def<H : AsyncLongTests + 'static + Sync + Send + 'static>(handler: H) -> ::grpc::server::ServerServiceDefinition {
         let handler_arc = ::std::sync::Arc::new(handler);
         ::grpc::server::ServerServiceDefinition::new(
             vec![

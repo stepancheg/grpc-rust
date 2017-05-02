@@ -32,7 +32,7 @@ fn single_num_arg_or(cmd_args: &[String], or: u64) -> u64 {
 }
 
 
-fn run_echo(client: LongTestsAsyncClient, cmd_args: &[String]) {
+fn run_echo(client: AsyncLongTestsClient, cmd_args: &[String]) {
     let count = single_num_arg_or(cmd_args, 1);
 
     println!("running {} iterations of echo", count);
@@ -60,7 +60,7 @@ fn main() {
         panic!("too few args")
     }
 
-    let client = LongTestsAsyncClient::new("localhost", 23432, false, Default::default()).expect("init");
+    let client = AsyncLongTestsClient::new("localhost", 23432, false, Default::default()).expect("init");
 
     let cmd = &args[1];
     let cmd_args = &args[2..];
