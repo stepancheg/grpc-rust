@@ -4,6 +4,8 @@ use std::fmt;
 use std::convert::From;
 use std::error::Error;
 
+use native_tls;
+
 use tokio_timer::TimeoutError;
 
 use hpack::decoder::DecoderError;
@@ -182,6 +184,7 @@ impl Error for ConnectionError {
 pub enum HttpError {
     /// The underlying IO layer raised an error
     IoError(io::Error),
+    TlsError(native_tls::Error),
     /// The HTTP/2 connection received an invalid HTTP/2 frame
     InvalidFrame,
     /// The peer indicated a connection error
@@ -210,6 +213,12 @@ impl From<io::Error> for HttpError {
     }
 }
 
+impl From<native_tls::Error> for HttpError {
+    fn from(error: native_tls::Error) -> HttpError {
+        HttpError::TlsError(error)
+    }
+}
+
 impl<F> From<TimeoutError<F>> for HttpError {
     fn from(_err: TimeoutError<F>) -> HttpError {
         HttpError::ConnectionTimeout
@@ -226,6 +235,7 @@ impl Error for HttpError {
     fn description(&self) -> &str {
         match *self {
             HttpError::IoError(_) => "Encountered an IO error",
+            HttpError::TlsError(_) => "Encountered TLS error",
             HttpError::InvalidFrame => "Encountered an invalid HTTP/2 frame",
             HttpError::PeerConnectionError(ref err) => err.description(),
             HttpError::CompressionError(_) => "Encountered an error with HPACK compression",

@@ -4,6 +4,7 @@ use futures::stream;
 use futures::stream::Stream;
 
 use httpbis::server::HttpServer;
+use httpbis::server::ServerTlsOption;
 use httpbis::http_common::*;
 use httpbis::Header;
 use httpbis::Headers;
@@ -28,7 +29,7 @@ impl HttpService for EchoService {
 
 impl HttpServerEcho {
     pub fn new() -> HttpServerEcho {
-        let http_server = HttpServer::new("::1:0", Default::default(), EchoService {});
+        let http_server = HttpServer::new("::1:0", ServerTlsOption::Plain, Default::default(), EchoService {});
         let port = http_server.local_addr().port();
         HttpServerEcho {
             server: http_server,

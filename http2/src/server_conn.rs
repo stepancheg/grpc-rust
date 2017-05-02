@@ -18,14 +18,14 @@ use tokio_io::AsyncRead;
 use tokio_io::AsyncWrite;
 use tokio_core::net::TcpStream;
 use tokio_core::reactor;
-
-//use tokio_tls;
+use tokio_tls::TlsAcceptorExt;
 
 use futures_misc::*;
 
 use solicit_async::*;
 use http_common::*;
 
+use server_tls::*;
 use server_conf::*;
 
 
@@ -335,25 +335,28 @@ impl HttpServerConnectionAsync {
         }, future)
     }
 
+    pub fn new<S>(lh: &reactor::Handle, socket: TcpStream, tls: ServerTlsOption, conf: HttpServerConf, service: Arc<S>)
+                  -> (HttpServerConnectionAsync, HttpFuture<()>)
+        where
+            S : HttpService,
+    {
+        match tls {
+            ServerTlsOption::Plain =>
+                HttpServerConnectionAsync::connected(
+                    lh, Box::new(futures::finished(socket)), conf, service),
+            ServerTlsOption::Tls(acceptor) =>
+                HttpServerConnectionAsync::connected(
+                    lh, Box::new(acceptor.accept_async(socket).map_err(HttpError::from)), conf, service),
+        }
+    }
+
     pub fn new_plain<S>(lh: &reactor::Handle, socket: TcpStream, conf: HttpServerConf, service: Arc<S>)
             -> (HttpServerConnectionAsync, HttpFuture<()>)
         where
             S : HttpService,
     {
-        HttpServerConnectionAsync::connected(lh, Box::new(futures::finished(socket)), conf, service)
+        HttpServerConnectionAsync::new(lh, socket, ServerTlsOption::Plain, conf, service)
     }
-
-    /*
-    pub fn new_tls<F>(lh: &reactor::Handle, socket: TcpStream, server_context: tokio_tls::ServerContext, factory: F)
-            -> (HttpServerConnectionAsync, HttpFuture<()>)
-        where
-            F : HttpService,
-    {
-        let stream = server_context.handshake(socket).map_err(HttpError::from);
-
-        HttpServerConnectionAsync::connected(lh, Box::new(stream), factory)
-    }
-    */
 
     pub fn new_plain_fn<F>(lh: &reactor::Handle, socket: TcpStream, conf: HttpServerConf, f: F)
             -> (HttpServerConnectionAsync, HttpFuture<()>)
@@ -372,26 +375,6 @@ impl HttpServerConnectionAsync {
 
         HttpServerConnectionAsync::new_plain(lh, socket, conf, Arc::new(HttpServiceFn(f)))
     }
-
-    /*
-    pub fn new_tls_fn<F>(lh: &reactor::Handle, socket: TcpStream, server_context: tokio_tls::ServerContext, f: F)
-            -> (HttpServerConnectionAsync, HttpFuture<()>)
-        where
-            F : Fn(Vec<Header>, HttpStreamStreamSend) -> HttpStreamStreamSend + Send + 'static,
-    {
-        struct HttpServiceFn<F>(F);
-
-        impl<F> HttpService for HttpServiceFn<F>
-            where F : Fn(Vec<Header>, HttpStreamStreamSend) -> HttpStreamStreamSend + Send + 'static
-        {
-            fn new_request(&mut self, headers: Vec<Header>, req: HttpStreamStreamSend) -> HttpStreamStreamSend {
-                (self.0)(headers, req)
-            }
-        }
-
-        HttpServerConnectionAsync::new_tls(lh, socket, server_context, HttpServiceFn(f))
-    }
-    */
 
     /// For tests
     pub fn dump_state(&self) -> HttpFutureSend<ConnectionStateSnapshot> {

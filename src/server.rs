@@ -11,6 +11,7 @@ use httpbis::HttpError;
 use httpbis::Header;
 use httpbis::Headers;
 use httpbis::server::HttpServer;
+use httpbis::server::ServerTlsOption;
 
 use futures;
 use futures::Future;
@@ -286,7 +287,7 @@ impl GrpcServer {
 
         let service_definition = Arc::new(service_definition);
         GrpcServer {
-            server: HttpServer::new(addr, conf.http, GrpcHttpServerHandlerFactory {
+            server: HttpServer::new(addr, ServerTlsOption::Plain, conf.http, GrpcHttpServerHandlerFactory {
                 service_definition: service_definition.clone(),
             })
         }

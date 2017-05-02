@@ -15,9 +15,11 @@ pub mod solicit;
 
 pub mod client_conf;
 pub mod client_conn;
+mod client_tls;
 pub mod client;
 pub mod server_conf;
 pub mod server_conn;
+mod server_tls;
 pub mod server;
 pub mod http_common;
 pub mod message;

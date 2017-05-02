@@ -28,6 +28,8 @@ use client_conf::*;
 use http_common::*;
 use message::*;
 
+pub use client_tls::ClientTlsOption;
+
 
 // Data sent from event loop to Http2Client
 struct LoopToClient {
@@ -52,8 +54,8 @@ impl HttpClient {
         let socket_addr = (host, port).to_socket_addrs()?.next().unwrap();
 
         let tls_enabled = match tls {
-            true => TlsEnabled::Tls(host.to_owned()),
-            false => TlsEnabled::Plain,
+            true => ClientTlsOption::Tls(host.to_owned()),
+            false => ClientTlsOption::Plain,
         };
 
         // We need some data back from event loop.
@@ -130,15 +132,10 @@ impl HttpClient {
     }
 }
 
-enum TlsEnabled {
-    Plain,
-    Tls(String), // domain
-}
-
 // Event loop entry point
 fn run_client_event_loop(
     socket_addr: SocketAddr,
-    tls: TlsEnabled,
+    tls: ClientTlsOption,
     conf: HttpClientConf,
     send_to_back: mpsc::Sender<LoopToClient>)
 {
@@ -150,9 +147,9 @@ fn run_client_event_loop(
 
     let (http_conn, http_conn_future) =
         match tls {
-            TlsEnabled::Tls(domain) =>
+            ClientTlsOption::Tls(domain) =>
                 HttpClientConnectionAsync::new_tls(lp.handle(), &domain, &socket_addr, conf),
-            TlsEnabled::Plain =>
+            ClientTlsOption::Plain =>
                 HttpClientConnectionAsync::new_plain(lp.handle(), &socket_addr, conf),
         };
     let http_conn_future: HttpFuture<_> = Box::new(http_conn_future.map_err(HttpError::from));

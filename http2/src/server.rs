@@ -29,6 +29,7 @@ use super::http_common::*;
 
 use server_conf::*;
 
+pub use server_tls::ServerTlsOption;
 
 
 struct LoopToServer {
@@ -103,6 +104,7 @@ fn listener(
 fn run_server_event_loop<S>(
     listen_addr: SocketAddr,
     state: Arc<Mutex<HttpServerState>>,
+    tls: ServerTlsOption,
     conf: HttpServerConf,
     service: S,
     send_to_back: mpsc::Sender<LoopToServer>,
@@ -117,40 +119,41 @@ fn run_server_event_loop<S>(
 
     let listen = listener(&listen_addr, &lp.handle(), &conf).unwrap();
 
-    let stuff = stream::repeat((lp.handle(), service, state, conf));
+    let stuff = stream::repeat((lp.handle(), service, state, tls, conf));
 
     let local_addr = listen.local_addr().unwrap();
     send_to_back
         .send(LoopToServer { shutdown: shutdown_signal, local_addr: local_addr })
         .expect("send back");
 
-    let loop_run = listen.incoming().map_err(HttpError::from).zip(stuff).for_each(move |((socket, peer_addr), (loop_handle, service, state, conf))| {
-        info!("accepted connection from {}", peer_addr);
+    let loop_run = listen.incoming().map_err(HttpError::from).zip(stuff)
+        .for_each(move |((socket, peer_addr), (loop_handle, service, state, tls, conf))| {
+            info!("accepted connection from {}", peer_addr);
 
-        let no_delay = conf.no_delay.unwrap_or(true);
-        socket.set_nodelay(no_delay).expect("failed to set TCP_NODELAY");
+            let no_delay = conf.no_delay.unwrap_or(true);
+            socket.set_nodelay(no_delay).expect("failed to set TCP_NODELAY");
 
-        let (conn, future) = HttpServerConnectionAsync::new_plain(&loop_handle, socket, conf, service);
+            let (conn, future) = HttpServerConnectionAsync::new(&loop_handle, socket, tls, conf, service);
 
-        let conn_id = {
-            let mut g = state.lock().expect("lock");
-            g.last_conn_id += 1;
-            let conn_id = g.last_conn_id;
-            let prev = g.conns.insert(conn_id, conn);
-            assert!(prev.is_none());
-            conn_id
-        };
-
-        loop_handle.spawn(future
-            .then(move |r| {
+            let conn_id = {
                 let mut g = state.lock().expect("lock");
-                let removed = g.conns.remove(&conn_id);
-                assert!(removed.is_some());
-                r
-            })
-            .map_err(|e| { warn!("connection end: {:?}", e); () }));
-        Ok(())
-    });
+                g.last_conn_id += 1;
+                let conn_id = g.last_conn_id;
+                let prev = g.conns.insert(conn_id, conn);
+                assert!(prev.is_none());
+                conn_id
+            };
+
+            loop_handle.spawn(future
+                .then(move |r| {
+                    let mut g = state.lock().expect("lock");
+                    let removed = g.conns.remove(&conn_id);
+                    assert!(removed.is_some());
+                    r
+                })
+                .map_err(|e| { warn!("connection end: {:?}", e); () }));
+            Ok(())
+        });
 
     let shutdown_future = shutdown_future
         .then(move |_| {
@@ -168,7 +171,7 @@ fn run_server_event_loop<S>(
 }
 
 impl HttpServer {
-    pub fn new<A: ToSocketAddrs, S>(addr: A, conf: HttpServerConf, service: S) -> HttpServer
+    pub fn new<A: ToSocketAddrs, S>(addr: A, tls: ServerTlsOption, conf: HttpServerConf, service: S) -> HttpServer
         where S : HttpService
     {
         let listen_addr = addr.to_socket_addrs().unwrap().next().unwrap();
@@ -183,11 +186,13 @@ impl HttpServer {
         let join_handle = thread::Builder::new()
             .name(conf.thread_name.clone().unwrap_or_else(|| "http2-server-loop".to_owned()).to_string())
             .spawn(move || {
-                run_server_event_loop(listen_addr,
-                                      state_copy,
-                                      conf, service,
-                                      get_from_loop_tx,
-                                      alive_tx);
+                run_server_event_loop(
+                    listen_addr,
+                    state_copy,
+                    tls,
+                    conf, service,
+                    get_from_loop_tx,
+                    alive_tx);
             })
             .expect("spawn");
 
