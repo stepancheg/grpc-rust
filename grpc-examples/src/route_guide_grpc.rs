@@ -145,6 +145,14 @@ pub struct RouteGuideServer {
     async_server: RouteGuideAsyncServer,
 }
 
+impl ::std::ops::Deref for RouteGuideServer {
+    type Target = RouteGuideAsyncServer;
+
+    fn deref(&self) -> &Self::Target {
+        &self.async_server
+    }
+}
+
 struct RouteGuideServerHandlerToAsync {
     handler: ::std::sync::Arc<RouteGuide + Send + Sync>,
     cpupool: ::futures_cpupool::CpuPool,
@@ -181,7 +189,7 @@ impl RouteGuideAsync for RouteGuideServerHandlerToAsync {
 }
 
 impl RouteGuideServer {
-    pub fn new<A : ::std::net::ToSocketAddrs, H : RouteGuide + Send + Sync + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self {
+    pub fn new_plain<A : ::std::net::ToSocketAddrs, H : RouteGuide + Send + Sync + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self {
         let h = RouteGuideServerHandlerToAsync {
             cpupool: ::futures_cpupool::CpuPool::new_num_cpus(),
             handler: ::std::sync::Arc::new(h),
@@ -198,11 +206,19 @@ pub struct RouteGuideAsyncServer {
     grpc_server: ::grpc::server::GrpcServer,
 }
 
+impl ::std::ops::Deref for RouteGuideAsyncServer {
+    type Target = ::grpc::server::GrpcServer;
+
+    fn deref(&self) -> &Self::Target {
+        &self.grpc_server
+    }
+}
+
 impl RouteGuideAsyncServer {
     pub fn new<A : ::std::net::ToSocketAddrs, H : RouteGuideAsync + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self {
         let service_definition = RouteGuideAsyncServer::new_service_def(h);
         RouteGuideAsyncServer {
-            grpc_server: ::grpc::server::GrpcServer::new(addr, conf, service_definition),
+            grpc_server: ::grpc::server::GrpcServer::new_plain(addr, conf, service_definition),
         }
     }
 

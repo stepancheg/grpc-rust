@@ -203,6 +203,14 @@ pub struct TestServiceServer {
     async_server: TestServiceAsyncServer,
 }
 
+impl ::std::ops::Deref for TestServiceServer {
+    type Target = TestServiceAsyncServer;
+
+    fn deref(&self) -> &Self::Target {
+        &self.async_server
+    }
+}
+
 struct TestServiceServerHandlerToAsync {
     handler: ::std::sync::Arc<TestService + Send + Sync>,
     cpupool: ::futures_cpupool::CpuPool,
@@ -260,7 +268,7 @@ impl TestServiceAsync for TestServiceServerHandlerToAsync {
 }
 
 impl TestServiceServer {
-    pub fn new<A : ::std::net::ToSocketAddrs, H : TestService + Send + Sync + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self {
+    pub fn new_plain<A : ::std::net::ToSocketAddrs, H : TestService + Send + Sync + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self {
         let h = TestServiceServerHandlerToAsync {
             cpupool: ::futures_cpupool::CpuPool::new_num_cpus(),
             handler: ::std::sync::Arc::new(h),
@@ -277,11 +285,19 @@ pub struct TestServiceAsyncServer {
     grpc_server: ::grpc::server::GrpcServer,
 }
 
+impl ::std::ops::Deref for TestServiceAsyncServer {
+    type Target = ::grpc::server::GrpcServer;
+
+    fn deref(&self) -> &Self::Target {
+        &self.grpc_server
+    }
+}
+
 impl TestServiceAsyncServer {
     pub fn new<A : ::std::net::ToSocketAddrs, H : TestServiceAsync + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self {
         let service_definition = TestServiceAsyncServer::new_service_def(h);
         TestServiceAsyncServer {
-            grpc_server: ::grpc::server::GrpcServer::new(addr, conf, service_definition),
+            grpc_server: ::grpc::server::GrpcServer::new_plain(addr, conf, service_definition),
         }
     }
 
@@ -445,6 +461,14 @@ pub struct UnimplementedServiceServer {
     async_server: UnimplementedServiceAsyncServer,
 }
 
+impl ::std::ops::Deref for UnimplementedServiceServer {
+    type Target = UnimplementedServiceAsyncServer;
+
+    fn deref(&self) -> &Self::Target {
+        &self.async_server
+    }
+}
+
 struct UnimplementedServiceServerHandlerToAsync {
     handler: ::std::sync::Arc<UnimplementedService + Send + Sync>,
     cpupool: ::futures_cpupool::CpuPool,
@@ -460,7 +484,7 @@ impl UnimplementedServiceAsync for UnimplementedServiceServerHandlerToAsync {
 }
 
 impl UnimplementedServiceServer {
-    pub fn new<A : ::std::net::ToSocketAddrs, H : UnimplementedService + Send + Sync + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self {
+    pub fn new_plain<A : ::std::net::ToSocketAddrs, H : UnimplementedService + Send + Sync + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self {
         let h = UnimplementedServiceServerHandlerToAsync {
             cpupool: ::futures_cpupool::CpuPool::new_num_cpus(),
             handler: ::std::sync::Arc::new(h),
@@ -477,11 +501,19 @@ pub struct UnimplementedServiceAsyncServer {
     grpc_server: ::grpc::server::GrpcServer,
 }
 
+impl ::std::ops::Deref for UnimplementedServiceAsyncServer {
+    type Target = ::grpc::server::GrpcServer;
+
+    fn deref(&self) -> &Self::Target {
+        &self.grpc_server
+    }
+}
+
 impl UnimplementedServiceAsyncServer {
     pub fn new<A : ::std::net::ToSocketAddrs, H : UnimplementedServiceAsync + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self {
         let service_definition = UnimplementedServiceAsyncServer::new_service_def(h);
         UnimplementedServiceAsyncServer {
-            grpc_server: ::grpc::server::GrpcServer::new(addr, conf, service_definition),
+            grpc_server: ::grpc::server::GrpcServer::new_plain(addr, conf, service_definition),
         }
     }
 
@@ -592,6 +624,14 @@ pub struct ReconnectServiceServer {
     async_server: ReconnectServiceAsyncServer,
 }
 
+impl ::std::ops::Deref for ReconnectServiceServer {
+    type Target = ReconnectServiceAsyncServer;
+
+    fn deref(&self) -> &Self::Target {
+        &self.async_server
+    }
+}
+
 struct ReconnectServiceServerHandlerToAsync {
     handler: ::std::sync::Arc<ReconnectService + Send + Sync>,
     cpupool: ::futures_cpupool::CpuPool,
@@ -614,7 +654,7 @@ impl ReconnectServiceAsync for ReconnectServiceServerHandlerToAsync {
 }
 
 impl ReconnectServiceServer {
-    pub fn new<A : ::std::net::ToSocketAddrs, H : ReconnectService + Send + Sync + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self {
+    pub fn new_plain<A : ::std::net::ToSocketAddrs, H : ReconnectService + Send + Sync + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self {
         let h = ReconnectServiceServerHandlerToAsync {
             cpupool: ::futures_cpupool::CpuPool::new_num_cpus(),
             handler: ::std::sync::Arc::new(h),
@@ -631,11 +671,19 @@ pub struct ReconnectServiceAsyncServer {
     grpc_server: ::grpc::server::GrpcServer,
 }
 
+impl ::std::ops::Deref for ReconnectServiceAsyncServer {
+    type Target = ::grpc::server::GrpcServer;
+
+    fn deref(&self) -> &Self::Target {
+        &self.grpc_server
+    }
+}
+
 impl ReconnectServiceAsyncServer {
     pub fn new<A : ::std::net::ToSocketAddrs, H : ReconnectServiceAsync + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self {
         let service_definition = ReconnectServiceAsyncServer::new_service_def(h);
         ReconnectServiceAsyncServer {
-            grpc_server: ::grpc::server::GrpcServer::new(addr, conf, service_definition),
+            grpc_server: ::grpc::server::GrpcServer::new_plain(addr, conf, service_definition),
         }
     }
 

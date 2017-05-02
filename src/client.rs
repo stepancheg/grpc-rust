@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::net::SocketAddr;
 
 use bytes::Bytes;
 
@@ -11,6 +12,7 @@ use httpbis::HttpError;
 use httpbis::Header;
 use httpbis::Headers;
 use httpbis::client::HttpClient;
+use httpbis::client::ClientTlsOption;
 
 
 use method::MethodDescriptor;
@@ -53,6 +55,26 @@ impl GrpcClient {
                     client: client,
                     host: host.to_owned(),
                     http_scheme: if tls { HttpScheme::Https } else { HttpScheme::Http },
+                }
+            })
+            .map_err(GrpcError::from)
+    }
+
+    pub fn new_expl(addr: &SocketAddr, host: &str, tls: ClientTlsOption, conf: GrpcClientConf)
+        -> GrpcResult<GrpcClient>
+    {
+        let mut conf = conf;
+        conf.http.thread_name =
+            Some(conf.http.thread_name.unwrap_or_else(|| "grpc-client-loop".to_owned()));
+
+        let http_scheme = tls.http_scheme();
+
+        HttpClient::new_expl(addr, tls, conf.http)
+            .map(|client| {
+                GrpcClient {
+                    client: client,
+                    host: host.to_owned(),
+                    http_scheme: http_scheme,
                 }
             })
             .map_err(GrpcError::from)

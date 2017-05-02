@@ -337,7 +337,7 @@ impl<'a> ServiceGen<'a> {
 
         w.impl_self_block(&self.sync_server_name(), |w| {
             let sig = &format!(
-                "new<A : ::std::net::ToSocketAddrs, H : {} + Send + Sync + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self",
+                "new_plain<A : ::std::net::ToSocketAddrs, H : {} + Send + Sync + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self",
                 self.sync_intf_name());
             w.pub_fn(sig, |w| {
                 w.stmt_block(&format!("let h = {}", self.sync_handler_to_async_name()), |w| {
@@ -398,7 +398,7 @@ impl<'a> ServiceGen<'a> {
                 w.write_line(format!("let service_definition = {}::new_service_def(h);", self.async_server_name()));
 
                 w.expr_block(&self.async_server_name(), |w| {
-                    w.field_entry("grpc_server", "::grpc::server::GrpcServer::new(addr, conf, service_definition)");
+                    w.field_entry("grpc_server", "::grpc::server::GrpcServer::new_plain(addr, conf, service_definition)");
                 });
             });
             w.write_line("");

@@ -21,7 +21,7 @@ impl Greeter for GreeterImpl {
 }
 
 fn main() {
-    let _server = GreeterServer::new("[::]:50051", Default::default(), GreeterImpl);
+    let _server = GreeterServer::new_plain("[::]:50051", Default::default(), GreeterImpl);
 
     loop {
         thread::park();

@@ -280,14 +280,29 @@ pub struct GrpcServer {
 }
 
 impl GrpcServer {
-    pub fn new<A: ToSocketAddrs>(addr: A, conf: GrpcServerConf, service_definition: ServerServiceDefinition) -> GrpcServer {
+    pub fn new_plain<A : ToSocketAddrs>(
+        addr: A,
+        conf: GrpcServerConf,
+        service_definition: ServerServiceDefinition)
+            -> GrpcServer
+    {
+        GrpcServer::new(addr, ServerTlsOption::Plain, conf, service_definition)
+    }
+
+    pub fn new<A : ToSocketAddrs>(
+        addr: A,
+        tls: ServerTlsOption,
+        conf: GrpcServerConf,
+        service_definition: ServerServiceDefinition)
+            -> GrpcServer
+    {
         let mut conf = conf;
         conf.http.thread_name =
             Some(conf.http.thread_name.unwrap_or_else(|| "grpc-server-loop".to_owned()));
 
         let service_definition = Arc::new(service_definition);
         GrpcServer {
-            server: HttpServer::new(addr, ServerTlsOption::Plain, conf.http, GrpcHttpServerHandlerFactory {
+            server: HttpServer::new(addr, tls, conf.http, GrpcHttpServerHandlerFactory {
                 service_definition: service_definition.clone(),
             })
         }
