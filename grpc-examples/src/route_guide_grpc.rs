@@ -207,7 +207,7 @@ impl RouteGuideServer {
 // async server
 
 pub struct RouteGuideAsyncServer {
-    grpc_server: ::grpc::server::GrpcServer,
+    pub grpc_server: ::grpc::server::GrpcServer,
 }
 
 impl ::std::ops::Deref for RouteGuideAsyncServer {

@@ -286,7 +286,7 @@ impl TestServiceServer {
 // async server
 
 pub struct TestServiceAsyncServer {
-    grpc_server: ::grpc::server::GrpcServer,
+    pub grpc_server: ::grpc::server::GrpcServer,
 }
 
 impl ::std::ops::Deref for TestServiceAsyncServer {
@@ -506,7 +506,7 @@ impl UnimplementedServiceServer {
 // async server
 
 pub struct UnimplementedServiceAsyncServer {
-    grpc_server: ::grpc::server::GrpcServer,
+    pub grpc_server: ::grpc::server::GrpcServer,
 }
 
 impl ::std::ops::Deref for UnimplementedServiceAsyncServer {
@@ -680,7 +680,7 @@ impl ReconnectServiceServer {
 // async server
 
 pub struct ReconnectServiceAsyncServer {
-    grpc_server: ::grpc::server::GrpcServer,
+    pub grpc_server: ::grpc::server::GrpcServer,
 }
 
 impl ::std::ops::Deref for ReconnectServiceAsyncServer {

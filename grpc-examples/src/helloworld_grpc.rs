@@ -127,7 +127,7 @@ impl GreeterServer {
 // async server
 
 pub struct GreeterAsyncServer {
-    grpc_server: ::grpc::server::GrpcServer,
+    pub grpc_server: ::grpc::server::GrpcServer,
 }
 
 impl ::std::ops::Deref for GreeterAsyncServer {

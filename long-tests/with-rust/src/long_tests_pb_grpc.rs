@@ -180,7 +180,7 @@ impl LongTestsServer {
 // async server
 
 pub struct LongTestsAsyncServer {
-    grpc_server: ::grpc::server::GrpcServer,
+    pub grpc_server: ::grpc::server::GrpcServer,
 }
 
 impl ::std::ops::Deref for LongTestsAsyncServer {

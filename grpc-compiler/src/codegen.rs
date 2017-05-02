@@ -388,7 +388,7 @@ impl<'a> ServiceGen<'a> {
 
     fn write_async_server(&self, w: &mut CodeWriter) {
         w.pub_struct(&self.async_server_name(), |w| {
-            w.field_decl("grpc_server", "::grpc::server::GrpcServer");
+            w.pub_field_decl("grpc_server", "::grpc::server::GrpcServer");
         });
 
         w.write_line("");
