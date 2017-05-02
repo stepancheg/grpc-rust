@@ -59,17 +59,21 @@ pub struct GreeterAsyncClient {
 }
 
 impl GreeterAsyncClient {
+    pub fn with_client(grpc_client: ::grpc::client::GrpcClient) -> Self {
+        GreeterAsyncClient {
+            grpc_client: grpc_client,
+            method_SayHello: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
+                name: "/helloworld.Greeter/SayHello".to_string(),
+                streaming: ::grpc::method::GrpcStreaming::Unary,
+                req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+                resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+            }),
+        }
+    }
+
     pub fn new(host: &str, port: u16, tls: bool, conf: ::grpc::client::GrpcClientConf) -> ::grpc::result::GrpcResult<Self> {
         ::grpc::client::GrpcClient::new(host, port, tls, conf).map(|c| {
-            GreeterAsyncClient {
-                grpc_client: c,
-                method_SayHello: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
-                    name: "/helloworld.Greeter/SayHello".to_string(),
-                    streaming: ::grpc::method::GrpcStreaming::Unary,
-                    req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                    resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                }),
-            }
+            GreeterAsyncClient::with_client(c)
         })
     }
 }

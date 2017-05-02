@@ -256,6 +256,18 @@ impl<'a> ServiceGen<'a> {
         });
     }
 
+    fn write_async_client_object(&self, grpc_client: &str, w: &mut CodeWriter) {
+        w.expr_block(&self.async_client_name(), |w| {
+            w.field_entry("grpc_client", grpc_client);
+            for method in &self.methods {
+                method.write_descriptor(
+                    w,
+                    &format!("{}: ::std::sync::Arc::new(", method.descriptor_field_name()),
+                    "),");
+            }
+        });
+    }
+
     fn write_async_client(&self, w: &mut CodeWriter) {
         w.pub_struct(&self.async_client_name(), |w| {
             w.field_decl("grpc_client", "::grpc::client::GrpcClient");
@@ -269,22 +281,23 @@ impl<'a> ServiceGen<'a> {
         w.write_line("");
 
         w.impl_self_block(&self.async_client_name(), |w| {
+
+            let sig = "with_client(grpc_client: ::grpc::client::GrpcClient) -> Self";
+            w.pub_fn(sig, |w| {
+                self.write_async_client_object("grpc_client", w);
+            });
+
+            w.write_line("");
+
             let sig = "new(host: &str, port: u16, tls: bool, conf: ::grpc::client::GrpcClientConf) -> ::grpc::result::GrpcResult<Self>";
             w.pub_fn(sig, |w| {
                 w.write_line("::grpc::client::GrpcClient::new(host, port, tls, conf).map(|c| {");
                 w.indented(|w| {
-                    w.expr_block(&self.async_client_name(), |w| {
-                        w.field_entry("grpc_client", "c");
-                        for method in &self.methods {
-                            method.write_descriptor(
-                                w,
-                                &format!("{}: ::std::sync::Arc::new(", method.descriptor_field_name()),
-                                "),");
-                        }
-                    });
+                    w.write_line(&format!("{}::with_client(c)", self.async_client_name()));
                 });
                 w.write_line("})");
             });
+            
         });
 
         w.write_line("");

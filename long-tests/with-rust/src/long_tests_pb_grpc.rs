@@ -78,29 +78,33 @@ pub struct LongTestsAsyncClient {
 }
 
 impl LongTestsAsyncClient {
+    pub fn with_client(grpc_client: ::grpc::client::GrpcClient) -> Self {
+        LongTestsAsyncClient {
+            grpc_client: grpc_client,
+            method_echo: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
+                name: "/LongTests/echo".to_string(),
+                streaming: ::grpc::method::GrpcStreaming::Unary,
+                req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+                resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+            }),
+            method_char_count: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
+                name: "/LongTests/char_count".to_string(),
+                streaming: ::grpc::method::GrpcStreaming::ClientStreaming,
+                req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+                resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+            }),
+            method_random_strings: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
+                name: "/LongTests/random_strings".to_string(),
+                streaming: ::grpc::method::GrpcStreaming::ServerStreaming,
+                req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+                resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+            }),
+        }
+    }
+
     pub fn new(host: &str, port: u16, tls: bool, conf: ::grpc::client::GrpcClientConf) -> ::grpc::result::GrpcResult<Self> {
         ::grpc::client::GrpcClient::new(host, port, tls, conf).map(|c| {
-            LongTestsAsyncClient {
-                grpc_client: c,
-                method_echo: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
-                    name: "/LongTests/echo".to_string(),
-                    streaming: ::grpc::method::GrpcStreaming::Unary,
-                    req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                    resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                }),
-                method_char_count: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
-                    name: "/LongTests/char_count".to_string(),
-                    streaming: ::grpc::method::GrpcStreaming::ClientStreaming,
-                    req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                    resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                }),
-                method_random_strings: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
-                    name: "/LongTests/random_strings".to_string(),
-                    streaming: ::grpc::method::GrpcStreaming::ServerStreaming,
-                    req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                    resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                }),
-            }
+            LongTestsAsyncClient::with_client(c)
         })
     }
 }
@@ -123,6 +127,14 @@ impl LongTestsAsync for LongTestsAsyncClient {
 
 pub struct LongTestsServer {
     async_server: LongTestsAsyncServer,
+}
+
+impl ::std::ops::Deref for LongTestsServer {
+    type Target = LongTestsAsyncServer;
+
+    fn deref(&self) -> &Self::Target {
+        &self.async_server
+    }
 }
 
 struct LongTestsServerHandlerToAsync {
@@ -154,7 +166,7 @@ impl LongTestsAsync for LongTestsServerHandlerToAsync {
 }
 
 impl LongTestsServer {
-    pub fn new<A : ::std::net::ToSocketAddrs, H : LongTests + Send + Sync + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self {
+    pub fn new_plain<A : ::std::net::ToSocketAddrs, H : LongTests + Send + Sync + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self {
         let h = LongTestsServerHandlerToAsync {
             cpupool: ::futures_cpupool::CpuPool::new_num_cpus(),
             handler: ::std::sync::Arc::new(h),
@@ -171,11 +183,19 @@ pub struct LongTestsAsyncServer {
     grpc_server: ::grpc::server::GrpcServer,
 }
 
+impl ::std::ops::Deref for LongTestsAsyncServer {
+    type Target = ::grpc::server::GrpcServer;
+
+    fn deref(&self) -> &Self::Target {
+        &self.grpc_server
+    }
+}
+
 impl LongTestsAsyncServer {
     pub fn new<A : ::std::net::ToSocketAddrs, H : LongTestsAsync + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self {
         let service_definition = LongTestsAsyncServer::new_service_def(h);
         LongTestsAsyncServer {
-            grpc_server: ::grpc::server::GrpcServer::new(addr, conf, service_definition),
+            grpc_server: ::grpc::server::GrpcServer::new_plain(addr, conf, service_definition),
         }
     }
 

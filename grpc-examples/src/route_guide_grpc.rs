@@ -88,35 +88,39 @@ pub struct RouteGuideAsyncClient {
 }
 
 impl RouteGuideAsyncClient {
+    pub fn with_client(grpc_client: ::grpc::client::GrpcClient) -> Self {
+        RouteGuideAsyncClient {
+            grpc_client: grpc_client,
+            method_GetFeature: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
+                name: "/proto.RouteGuide/GetFeature".to_string(),
+                streaming: ::grpc::method::GrpcStreaming::Unary,
+                req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+                resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+            }),
+            method_ListFeatures: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
+                name: "/proto.RouteGuide/ListFeatures".to_string(),
+                streaming: ::grpc::method::GrpcStreaming::ServerStreaming,
+                req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+                resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+            }),
+            method_RecordRoute: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
+                name: "/proto.RouteGuide/RecordRoute".to_string(),
+                streaming: ::grpc::method::GrpcStreaming::ClientStreaming,
+                req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+                resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+            }),
+            method_RouteChat: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
+                name: "/proto.RouteGuide/RouteChat".to_string(),
+                streaming: ::grpc::method::GrpcStreaming::Bidi,
+                req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+                resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+            }),
+        }
+    }
+
     pub fn new(host: &str, port: u16, tls: bool, conf: ::grpc::client::GrpcClientConf) -> ::grpc::result::GrpcResult<Self> {
         ::grpc::client::GrpcClient::new(host, port, tls, conf).map(|c| {
-            RouteGuideAsyncClient {
-                grpc_client: c,
-                method_GetFeature: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
-                    name: "/proto.RouteGuide/GetFeature".to_string(),
-                    streaming: ::grpc::method::GrpcStreaming::Unary,
-                    req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                    resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                }),
-                method_ListFeatures: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
-                    name: "/proto.RouteGuide/ListFeatures".to_string(),
-                    streaming: ::grpc::method::GrpcStreaming::ServerStreaming,
-                    req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                    resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                }),
-                method_RecordRoute: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
-                    name: "/proto.RouteGuide/RecordRoute".to_string(),
-                    streaming: ::grpc::method::GrpcStreaming::ClientStreaming,
-                    req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                    resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                }),
-                method_RouteChat: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
-                    name: "/proto.RouteGuide/RouteChat".to_string(),
-                    streaming: ::grpc::method::GrpcStreaming::Bidi,
-                    req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                    resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                }),
-            }
+            RouteGuideAsyncClient::with_client(c)
         })
     }
 }
