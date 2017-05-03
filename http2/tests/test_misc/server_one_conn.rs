@@ -121,7 +121,7 @@ impl HttpServerOneConn {
 
 impl Drop for HttpServerOneConn {
     fn drop(&mut self) {
-        self.shutdown_tx.take().unwrap().complete(());
+        drop(self.shutdown_tx.take().unwrap().send(()));
         self.join_handle.take().unwrap().join().ok();
     }
 }
