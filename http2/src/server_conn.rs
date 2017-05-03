@@ -1,6 +1,7 @@
 use std::marker;
 use std::io;
 use std::sync::Arc;
+use std::panic;
 
 use solicit::frame::*;
 use solicit::StreamId;
@@ -12,6 +13,7 @@ use bytes::Bytes;
 
 use futures;
 use futures::Future;
+use futures::stream;
 use futures::stream::Stream;
 
 use tokio_io::AsyncRead;
@@ -98,7 +100,17 @@ impl<F : HttpService> ServerInner<F> {
         let req_rx = req_rx.map_err(|()| HttpError::from(io::Error::new(io::ErrorKind::Other, "req")));
         let req_rx = stream_with_eof_and_error(req_rx, || HttpError::from(io::Error::new(io::ErrorKind::Other, "unexpected eof")));
 
-        let response = self.session_state.factory.new_request(headers, Box::new(req_rx));
+        let response = panic::catch_unwind(panic::AssertUnwindSafe(|| {
+            self.session_state.factory.new_request(headers, Box::new(req_rx))
+        }));
+
+        let response = response.unwrap_or_else(|_| {
+            let headers = Headers::internal_error_500();
+            Box::new(stream::iter(vec![
+                Ok(HttpStreamPart::intermediate_headers(headers)),
+                Ok(HttpStreamPart::last_data(Bytes::from(format!("handler panicked")))),
+            ]))
+        });
 
         {
             let to_write_tx = self.session_state.to_write_tx.clone();

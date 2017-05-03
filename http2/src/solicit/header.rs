@@ -144,6 +144,12 @@ impl Headers {
         ])
     }
 
+    pub fn internal_error_500() -> Headers {
+        Headers(vec![
+            Header::new(":status", "500"),
+        ])
+    }
+
     pub fn get_opt<'a>(&'a self, name: &str) -> Option<&'a str> {
         self.0.iter()
             .find(|h| h.name() == name.as_bytes())
@@ -163,8 +169,16 @@ impl Headers {
         self.get_opt_parse(":status").unwrap()
     }
 
+    pub fn path(&self) -> &str {
+        self.get(":path")
+    }
+
     pub fn add(&mut self, name: &str, value: &str) {
         self.0.push(Header::new(name, value));
+    }
+
+    pub fn extend(&mut self, headers: Headers) {
+        self.0.extend(headers.0);
     }
 
 }

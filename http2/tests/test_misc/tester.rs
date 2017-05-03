@@ -10,6 +10,8 @@ use std::net::ToSocketAddrs;
 use bytes::Bytes;
 
 use httpbis;
+use httpbis::message::SimpleHttpMessage;
+use httpbis::bytesx::*;
 use httpbis::solicit::StreamId;
 use httpbis::solicit::HttpScheme;
 use httpbis::solicit::header::*;
@@ -84,6 +86,13 @@ impl HttpConnectionTester {
         self.send_frame(headers_frame);
     }
 
+    pub fn send_get(&mut self, stream_id: StreamId, path: &str) {
+        let mut headers = Headers::new();
+        headers.add(":method", "GET");
+        headers.add(":path", path);
+        self.send_headers(stream_id, headers, true);
+    }
+
     pub fn send_data(&mut self, stream_id: StreamId, data: &[u8], end: bool) {
         let mut data_frame = DataFrame::new(stream_id);
         data_frame.data = Bytes::from(data);
@@ -155,5 +164,31 @@ impl HttpConnectionTester {
         assert_eq!(stream_id, data.stream_id);
         assert_eq!(end, data.is_end_of_stream());
         (&data.data[..]).to_vec()
+    }
+
+    pub fn recv_message(&mut self, stream_id: StreamId) -> SimpleHttpMessage {
+        let mut r = SimpleHttpMessage::default();
+        loop {
+            let frame = self.recv_frame();
+            assert_eq!(stream_id, frame.get_stream_id());
+            let end_of_stream = match frame {
+                HttpFrame::HeadersFrame(headers_frame) => {
+                    let end_of_stream = headers_frame.is_end_of_stream();
+                    let headers = self.conn.decoder.decode(headers_frame.header_fragment()).expect("decode");
+                    let headers = Headers(headers.into_iter().map(|(n, v)| Header::new(n, v)).collect());
+                    r.headers.extend(headers);
+                    end_of_stream
+                }
+                HttpFrame::DataFrame(data_frame) => {
+                    let end_of_stream = data_frame.is_end_of_stream();
+                    bytes_extend_with(&mut r.body, data_frame.data);
+                    end_of_stream
+                }
+                frame => panic!("unexpected frame: {:?}", frame),
+            };
+            if end_of_stream {
+                return r;
+            }
+        }
     }
 }

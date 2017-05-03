@@ -60,6 +60,51 @@ fn simple_new() {
 }
 
 #[test]
+fn panic_in_handler() {
+    env_logger::init().ok();
+
+    let server = HttpServerOneConn::new_fn(0, |headers, _req| {
+        if headers.path() == "/panic" {
+            panic!("requested");
+        } else {
+            Box::new(stream::iter(vec![
+                Ok(HttpStreamPart::intermediate_headers(Headers::ok_200())),
+                Ok(HttpStreamPart::last_data(Bytes::from("hi there"))),
+            ]))
+        }
+    });
+
+    let mut tester = HttpConnectionTester::connect(server.port());
+    tester.send_preface();
+    tester.settings_xchg();
+
+    {
+        tester.send_get(1, "/hello");
+
+        let resp = tester.recv_message(1);
+        assert_eq!(200, resp.headers.status());
+        assert_eq!(&b"hi there"[..], &resp.body[..]);
+    }
+
+    {
+        tester.send_get(3, "/panic");
+
+        let resp = tester.recv_message(3);
+        assert_eq!(500, resp.headers.status());
+    }
+
+    {
+        tester.send_get(5, "/world");
+
+        let resp = tester.recv_message(5);
+        assert_eq!(200, resp.headers.status());
+        assert_eq!(&b"hi there"[..], &resp.body[..]);
+    }
+
+    assert_eq!(0, server.dump_state().streams.len());
+}
+
+#[test]
 fn response_large() {
     env_logger::init().ok();
 

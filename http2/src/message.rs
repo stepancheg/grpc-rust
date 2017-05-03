@@ -34,14 +34,25 @@ impl SimpleHttpMessage {
         let mut r: SimpleHttpMessage = Default::default();
         for c in iter {
             match c {
-                HttpStreamPartContent::Data(data) => {
-                    bytes_extend_with_slice(&mut r.body, &data);
-                }
                 HttpStreamPartContent::Headers(headers) => {
-                    r.headers.0.extend(headers.0);
+                    r.headers.extend(headers);
+                }
+                HttpStreamPartContent::Data(data) => {
+                    bytes_extend_with(&mut r.body, data);
                 }
             }
         }
         r
+    }
+
+    pub fn add(&mut self, part: HttpStreamPartContent) {
+        match part {
+            HttpStreamPartContent::Headers(headers) => {
+                self.headers.extend(headers);
+            }
+            HttpStreamPartContent::Data(data) => {
+                bytes_extend_with(&mut self.body, data);
+            }
+        }
     }
 }
