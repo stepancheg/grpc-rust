@@ -3,7 +3,6 @@ use std::net::SocketAddr;
 use std::net::ToSocketAddrs;
 use std::panic::catch_unwind;
 use std::panic::AssertUnwindSafe;
-use std::any::Any;
 
 use bytes::Bytes;
 
@@ -26,6 +25,7 @@ use grpc::*;
 use grpc_frame::*;
 use httpbis::http_common::*;
 use httpbis::server_conf::*;
+use httpbis::misc::any_to_string;
 
 
 pub trait MethodHandler<Req, Resp> {
@@ -179,16 +179,6 @@ trait MethodHandlerDispatch {
 struct MethodHandlerDispatchImpl<Req, Resp> {
     desc: Arc<MethodDescriptor<Req, Resp>>,
     method_handler: Box<MethodHandler<Req, Resp> + Sync + Send>,
-}
-
-fn any_to_string(any: Box<Any + Send + 'static>) -> String {
-    if any.is::<String>() {
-        *any.downcast::<String>().unwrap()
-    } else if any.is::<&str>() {
-        (*any.downcast::<&str>().unwrap()).to_owned()
-    } else {
-        "unknown any".to_owned()
-    }
 }
 
 impl<Req, Resp> MethodHandlerDispatch for MethodHandlerDispatchImpl<Req, Resp>

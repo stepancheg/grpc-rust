@@ -4,6 +4,7 @@ use std::cmp;
 
 use solicit::header::Header;
 use solicit::StreamId;
+use solicit::ErrorCode;
 use solicit::HttpResult;
 use solicit::frame::*;
 use solicit::connection::HttpFrame;
@@ -31,6 +32,24 @@ impl SendFrame for VecSendFrame {
 
 pub trait HttpConnectionEx {
     fn conn(&mut self) -> &mut HttpConnection;
+
+    fn send_rst<S : SendFrame>(
+        &mut self,
+        send: &mut S,
+        stream_id: StreamId,
+        error_code: ErrorCode)
+            -> HttpResult<()>
+    {
+        self.conn().sender(send).send_rst_stream(stream_id, error_code)
+    }
+
+    fn send_rst_to_vec(&mut self, stream_id: StreamId, error_code: ErrorCode)
+        -> HttpResult<Vec<u8>>
+    {
+        let mut send = VecSendFrame(Vec::new());
+        self.send_rst(&mut send, stream_id, error_code)?;
+        Ok(send.0)
+    }
 
     fn send_headers<S : SendFrame>(
         &mut self,
@@ -137,8 +156,12 @@ pub trait HttpConnectionEx {
     {
         let end_stream = if part.last { EndStream::Yes } else { EndStream::No };
         match part.content {
-            HttpStreamPartContent::Data(ref data) => self.send_data_frames(send, stream_id, &data, end_stream),
-            HttpStreamPartContent::Headers(ref headers) => self.send_headers(send, stream_id, &headers.0, end_stream),
+            HttpStreamPartContent::Data(ref data) => {
+                self.send_data_frames(send, stream_id, &data, end_stream)
+            },
+            HttpStreamPartContent::Headers(ref headers) => {
+                self.send_headers(send, stream_id, &headers.0, end_stream)
+            },
         }
     }
 

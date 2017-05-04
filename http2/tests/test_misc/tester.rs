@@ -13,6 +13,7 @@ use httpbis;
 use httpbis::message::SimpleHttpMessage;
 use httpbis::bytesx::*;
 use httpbis::solicit::StreamId;
+use httpbis::solicit::ErrorCode;
 use httpbis::solicit::HttpScheme;
 use httpbis::solicit::header::*;
 use httpbis::solicit::frame::FrameIR;
@@ -22,6 +23,7 @@ use httpbis::solicit::frame::headers::HeadersFlag;
 use httpbis::solicit::frame::data::DataFrame;
 use httpbis::solicit::frame::data::DataFlag;
 use httpbis::solicit::frame::RawFrame;
+use httpbis::solicit::frame::rst_stream::RstStreamFrame;
 use httpbis::solicit::connection::HttpFrame;
 use httpbis::solicit::connection::HttpConnection;
 
@@ -130,11 +132,30 @@ impl HttpConnectionTester {
         settings
     }
 
+    pub fn get(&mut self, stream_id: StreamId, path: &str) -> SimpleHttpMessage {
+        self.send_get(stream_id, path);
+
+        self.recv_message(stream_id)
+    }
+
     pub fn settings_xchg(&mut self) {
         self.send_frame(SettingsFrame::new());
         self.recv_frame_settings_set();
         self.send_frame(SettingsFrame::new_ack());
         self.recv_frame_settings_ack();
+    }
+
+    pub fn recv_rst_frame(&mut self) -> RstStreamFrame {
+        match self.recv_frame() {
+            HttpFrame::RstStreamFrame(rst) => rst,
+            f => panic!("unexpected frame: {:?}", f),
+        }
+    }
+
+    pub fn recv_rst_frame_check(&mut self, stream_id: StreamId, error_code: ErrorCode) {
+        let frame = self.recv_rst_frame();
+        assert_eq!(stream_id, frame.stream_id);
+        assert_eq!(error_code, frame.error_code());
     }
 
     pub fn recv_frame_headers(&mut self) -> HeadersFrame {

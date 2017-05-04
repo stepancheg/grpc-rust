@@ -79,24 +79,63 @@ fn panic_in_handler() {
     tester.settings_xchg();
 
     {
-        tester.send_get(1, "/hello");
+        let resp = tester.get(1, "/hello");
+        assert_eq!(200, resp.headers.status());
+        assert_eq!(&b"hi there"[..], &resp.body[..]);
+    }
 
-        let resp = tester.recv_message(1);
+    {
+        let resp = tester.get(3, "/panic");
+        assert_eq!(500, resp.headers.status());
+    }
+
+    {
+        let resp = tester.get(5, "/world");
+        assert_eq!(200, resp.headers.status());
+        assert_eq!(&b"hi there"[..], &resp.body[..]);
+    }
+
+    assert_eq!(0, server.dump_state().streams.len());
+}
+
+#[test]
+fn panic_in_stream() {
+    env_logger::init().ok();
+
+    let server = HttpServerOneConn::new_fn(0, |headers, _req| {
+        if headers.path() == "/panic" {
+            Box::new(stream::iter((0..2).map(|i| {
+                match i {
+                    0 => Ok(HttpStreamPart::intermediate_headers(Headers::ok_200())),
+                    _ => panic!("should reset stream"),
+                }
+            })))
+        } else {
+            Box::new(stream::iter(vec![
+                Ok(HttpStreamPart::intermediate_headers(Headers::ok_200())),
+                Ok(HttpStreamPart::last_data(Bytes::from("hi there"))),
+            ]))
+        }
+    });
+
+    let mut tester = HttpConnectionTester::connect(server.port());
+    tester.send_preface();
+    tester.settings_xchg();
+
+    {
+        let resp = tester.get(1, "/hello");
         assert_eq!(200, resp.headers.status());
         assert_eq!(&b"hi there"[..], &resp.body[..]);
     }
 
     {
         tester.send_get(3, "/panic");
-
-        let resp = tester.recv_message(3);
-        assert_eq!(500, resp.headers.status());
+        tester.recv_frame_headers_check(3, false);
+        tester.recv_rst_frame();
     }
 
     {
-        tester.send_get(5, "/world");
-
-        let resp = tester.recv_message(5);
+        let resp = tester.get(5, "/world");
         assert_eq!(200, resp.headers.status());
         assert_eq!(&b"hi there"[..], &resp.body[..]);
     }

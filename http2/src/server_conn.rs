@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::panic;
 
 use solicit::frame::*;
+use solicit::ErrorCode;
 use solicit::StreamId;
 use solicit::HttpScheme;
 use solicit::HttpError;
@@ -29,6 +30,8 @@ use http_common::*;
 
 use server_tls::*;
 use server_conf::*;
+
+use misc::any_to_string;
 
 
 struct HttpServerStream<F : HttpService> {
@@ -104,31 +107,53 @@ impl<F : HttpService> ServerInner<F> {
             self.session_state.factory.new_request(headers, Box::new(req_rx))
         }));
 
-        let response = response.unwrap_or_else(|_| {
+        let response = response.unwrap_or_else(|e| {
+            let e = any_to_string(e);
+            warn!("handler panicked: {}", e);
+
             let headers = Headers::internal_error_500();
             Box::new(stream::iter(vec![
                 Ok(HttpStreamPart::intermediate_headers(headers)),
-                Ok(HttpStreamPart::last_data(Bytes::from(format!("handler panicked")))),
+                Ok(HttpStreamPart::last_data(Bytes::from(format!("handler panicked: {}", e)))),
             ]))
         });
 
+        let response = panic::AssertUnwindSafe(response).catch_unwind().then(|r| {
+            match r {
+                Ok(r) => r,
+                Err(e) => {
+                    let e = any_to_string(e);
+                    // TODO: send plain text error if headers weren't sent yet
+                    warn!("handler panicked: {}", e);
+                    Err(HttpError::HandlerPanicked(e))
+                },
+            }
+        });
+
         {
-            let to_write_tx = self.session_state.to_write_tx.clone();
-            let to_write_tx2 = to_write_tx.clone();
+            let to_write_tx1 = self.session_state.to_write_tx.clone();
+            let to_write_tx2 = to_write_tx1.clone();
 
             let process_response = response.for_each(move |part: HttpStreamPart| {
                 // drop error if connection is closed
-                if let Err(e) = to_write_tx.send(ServerToWriteMessage::ResponsePart(stream_id, part)) {
+                if let Err(e) = to_write_tx1.send(ServerToWriteMessage::ResponsePart(stream_id, part)) {
                     warn!("failed to write to channel, probably connection is closed: {}", e);
                 }
                 Ok(())
-            }).and_then(move |()| {
-                // drop error if connection is closed
-                if let Err(e) = to_write_tx2.send(ServerToWriteMessage::ResponseStreamEnd(stream_id)) {
+            }).then(move |r| {
+                let error_code =
+                    match r {
+                        Ok(()) => ErrorCode::NoError,
+                        Err(e) => {
+                            warn!("handler stream error: {:?}", e);
+                            ErrorCode::InternalError
+                        }
+                    };
+                if let Err(e) = to_write_tx2.send(ServerToWriteMessage::ResponseStreamEnd(stream_id, error_code)) {
                     warn!("failed to write to channel, probably connection is closed: {}", e);
                 }
                 Ok(())
-            }).map_err(|e| panic!("{:?}", e)); // TODO: handle
+            });
 
             self.session_state.loop_handle.spawn(process_response);
         }
@@ -202,7 +227,7 @@ enum ServerToWriteMessage<F : HttpService> {
     _Dummy(F),
     ResponsePart(StreamId, HttpStreamPart),
     // send when user provided handler completed the stream
-    ResponseStreamEnd(StreamId),
+    ResponseStreamEnd(StreamId, ErrorCode),
     Common(CommonToWriteMessage),
 }
 
@@ -223,7 +248,7 @@ impl<F : HttpService, I : AsyncWrite + Send> ServerWriteLoop<F, I> {
                 if !stream.common.state.is_closed_local() {
                     stream.common.outgoing.push_back(part.content);
                     if part.last {
-                        stream.common.outgoing_end = true;
+                        stream.common.outgoing_end = Some(ErrorCode::NoError);
                     }
                     Some(stream_id)
                 } else {
@@ -240,11 +265,13 @@ impl<F : HttpService, I : AsyncWrite + Send> ServerWriteLoop<F, I> {
         }
     }
 
-    fn process_response_end(self, stream_id: StreamId) -> HttpFuture<Self> {
+    fn process_response_end(self, stream_id: StreamId, error_code: ErrorCode) -> HttpFuture<Self> {
         let stream_id = self.inner.with(move |inner: &mut ServerInner<F>| {
             let stream = inner.common.get_stream_mut(stream_id);
             if let Some(stream) = stream {
-                stream.common.outgoing_end = true;
+                if stream.common.outgoing_end.is_none() {
+                    stream.common.outgoing_end = Some(error_code);
+                }
                 Some(stream_id)
             } else {
                 None
@@ -259,10 +286,18 @@ impl<F : HttpService, I : AsyncWrite + Send> ServerWriteLoop<F, I> {
 
     fn process_message(self, message: ServerToWriteMessage<F>) -> HttpFuture<Self> {
         match message {
-            ServerToWriteMessage::ResponsePart(stream_id, response) => self.process_response_part(stream_id, response),
-            ServerToWriteMessage::ResponseStreamEnd(stream_id) => self.process_response_end(stream_id),
-            ServerToWriteMessage::Common(common) => self.process_common(common),
-            ServerToWriteMessage::_Dummy(..) => panic!(),
+            ServerToWriteMessage::ResponsePart(stream_id, response) => {
+                self.process_response_part(stream_id, response)
+            },
+            ServerToWriteMessage::ResponseStreamEnd(stream_id, error_code) => {
+                self.process_response_end(stream_id, error_code)
+            },
+            ServerToWriteMessage::Common(common) => {
+                self.process_common(common)
+            },
+            ServerToWriteMessage::_Dummy(..) => {
+                panic!()
+            },
         }
     }
 

@@ -14,7 +14,7 @@ pub const RST_STREAM_FRAME_TYPE: u8 = 0x3;
 #[derive(Clone, Debug, PartialEq)]
 pub struct RstStreamFrame {
     raw_error_code: u32,
-    stream_id: StreamId,
+    pub stream_id: StreamId,
     flags: Flags<NoFlag>,
 }
 

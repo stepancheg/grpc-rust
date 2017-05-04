@@ -2,6 +2,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::io;
 
+use solicit::ErrorCode;
 use solicit::frame::*;
 use solicit::StreamId;
 use solicit::HttpScheme;
@@ -234,7 +235,7 @@ impl<I : AsyncRead + AsyncWrite + Send + 'static> ClientWriteLoop<I> {
                 .expect(&format!("stream not found: {}", stream_id));
 
             // TODO: check stream state
-            stream.common.outgoing_end = true;
+            stream.common.outgoing_end = Some(ErrorCode::NoError);
         });
 
         self.send_outg_stream(stream_id)

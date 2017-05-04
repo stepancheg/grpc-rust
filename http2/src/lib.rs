@@ -34,7 +34,7 @@ pub mod solicit_async;
 pub mod solicit_misc;
 pub mod bytesx;
 
-mod misc;
+pub mod misc;
 
 pub use solicit::HttpScheme;
 pub use solicit::HttpError;

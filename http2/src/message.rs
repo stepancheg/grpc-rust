@@ -12,6 +12,7 @@ pub struct SimpleHttpMessage {
     pub body: Bytes,
 }
 
+// TODO: https://github.com/carllerche/bytes/commit/37f6cabd96a6200b0b3cb1d743be9c0cf75d1085
 impl Default for SimpleHttpMessage {
     fn default() -> Self {
         SimpleHttpMessage {
@@ -33,14 +34,7 @@ impl SimpleHttpMessage {
     {
         let mut r: SimpleHttpMessage = Default::default();
         for c in iter {
-            match c {
-                HttpStreamPartContent::Headers(headers) => {
-                    r.headers.extend(headers);
-                }
-                HttpStreamPartContent::Data(data) => {
-                    bytes_extend_with(&mut r.body, data);
-                }
-            }
+            r.add(c);
         }
         r
     }

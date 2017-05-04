@@ -39,7 +39,7 @@ fn test_tls_connector() -> TlsConnector {
     let root_ca = Certificate::from_der(root_ca).unwrap();
 
     let mut builder = TlsConnector::builder().unwrap();
-    builder.add_root_certificate(root_ca);
+    builder.add_root_certificate(root_ca).expect("add_root_certificate");
     builder.build().unwrap()
 }
 
@@ -50,7 +50,7 @@ fn tls() {
     }
 
     impl HttpService for ServiceImpl {
-        fn new_request(&self, headers: Headers, req: HttpPartFutureStreamSend) -> HttpPartFutureStreamSend {
+        fn new_request(&self, _headers: Headers, _req: HttpPartFutureStreamSend) -> HttpPartFutureStreamSend {
             Box::new(stream::iter(vec![
                 Ok(HttpStreamPart::intermediate_headers(Headers::ok_200())),
                 Ok(HttpStreamPart::last_data(Bytes::from("hello"))),

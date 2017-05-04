@@ -210,7 +210,7 @@ impl<'a, S> HttpConnectionSender<'a, S>
     }
 
     /// Send a RST_STREAM frame for the given frame id
-    pub fn rst_stream(&mut self, id: StreamId, code: ErrorCode) -> HttpResult<()> {
+    pub fn send_rst_stream(&mut self, id: StreamId, code: ErrorCode) -> HttpResult<()> {
         self.send_frame(RstStreamFrame::new(id, code))
     }
 

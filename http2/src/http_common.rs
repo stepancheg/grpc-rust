@@ -16,6 +16,7 @@ use tokio_io::AsyncWrite;
 use tokio_io::io as tokio_io;
 
 use solicit::session::StreamState;
+use solicit::ErrorCode;
 use solicit::frame::*;
 use solicit::header::*;
 use solicit::StreamId;
@@ -73,6 +74,27 @@ impl HttpStreamPart {
             last: true,
         }
     }
+
+    fn into_command(self) -> HttpStreamCommand {
+        let end_stream = match self.last {
+            true => EndStream::Yes,
+            false => EndStream::No,
+        };
+        match self.content {
+            HttpStreamPartContent::Data(data) => {
+                HttpStreamCommand::Data(data, end_stream)
+            },
+            HttpStreamPartContent::Headers(headers) => {
+                HttpStreamCommand::Headers(headers, end_stream)
+            },
+        }
+    }
+}
+
+pub enum HttpStreamCommand {
+    Headers(Headers, EndStream),
+    Data(Bytes, EndStream),
+    Rst(ErrorCode),
 }
 
 pub type HttpPartFutureStream = Box<Stream<Item=HttpStreamPart, Error=HttpError>>;
@@ -96,7 +118,7 @@ pub struct HttpStreamCommon {
     pub in_window_size: WindowSize,
     pub outgoing: VecDeque<HttpStreamPartContent>,
     // Means nothing will be added to `outgoing`
-    pub outgoing_end: bool,
+    pub outgoing_end: Option<ErrorCode>,
 }
 
 impl HttpStreamCommon {
@@ -106,7 +128,7 @@ impl HttpStreamCommon {
             in_window_size: WindowSize::new(INITIAL_CONNECTION_WINDOW_SIZE),
             out_window_size: WindowSize::new(INITIAL_CONNECTION_WINDOW_SIZE),
             outgoing: VecDeque::new(),
-            outgoing_end: false,
+            outgoing_end: None,
         }
     }
 
@@ -125,15 +147,15 @@ impl HttpStreamCommon {
         };
     }
 
-    pub fn pop_outg(&mut self, conn_out_window_size: &mut WindowSize) -> Option<HttpStreamPart> {
+    pub fn pop_outg(&mut self, conn_out_window_size: &mut WindowSize) -> Option<HttpStreamCommand> {
         if self.outgoing.is_empty() {
             return
-                if self.outgoing_end {
+                if let Some(error_code) = self.outgoing_end {
                     if self.state.is_closed_local() {
                         None
                     } else {
                         self.close_local();
-                        Some(HttpStreamPart::last_data(Bytes::new()))
+                        Some(HttpStreamCommand::Rst(error_code))
                     }
                 } else {
                     None
@@ -148,14 +170,14 @@ impl HttpStreamCommon {
             };
         if pop_headers {
             let r = self.outgoing.pop_front().unwrap();
-            let last = self.outgoing_end && self.outgoing.is_empty();
+            let last = self.outgoing_end == Some(ErrorCode::NoError) && self.outgoing.is_empty();
             if last {
                 self.close_local();
             }
             return Some(HttpStreamPart {
                 content: r,
                 last: last,
-            })
+            }.into_command())
         }
 
         if self.out_window_size.size() <= 0 {
@@ -182,7 +204,7 @@ impl HttpStreamCommon {
         self.out_window_size.try_decrease(data.len() as i32).unwrap();
         conn_out_window_size.try_decrease(data.len() as i32).unwrap();
 
-        let last = self.outgoing_end && self.outgoing.is_empty();
+        let last = self.outgoing_end == Some(ErrorCode::NoError) && self.outgoing.is_empty();
         if last {
             self.close_local();
         }
@@ -190,10 +212,10 @@ impl HttpStreamCommon {
         Some(HttpStreamPart {
             content: HttpStreamPartContent::Data(data),
             last: last,
-        })
+        }.into_command())
     }
 
-    pub fn pop_outg_all(&mut self, conn_out_window_size: &mut WindowSize) -> Vec<HttpStreamPart> {
+    pub fn pop_outg_all(&mut self, conn_out_window_size: &mut WindowSize) -> Vec<HttpStreamCommand> {
         let mut r = Vec::new();
         while let Some(p) = self.pop_outg(conn_out_window_size) {
             r.push(p);
@@ -255,7 +277,7 @@ impl<S> LoopInnerCommon<S>
     }
 
 
-    pub fn pop_outg_for_stream(&mut self, stream_id: StreamId) -> Option<HttpStreamPart> {
+    pub fn pop_outg_for_stream(&mut self, stream_id: StreamId) -> Option<HttpStreamCommand> {
         let r = {
             if let Some(stream) = self.streams.get_mut(&stream_id) {
                 stream.common_mut().pop_outg(&mut self.conn.out_window_size)
@@ -269,7 +291,7 @@ impl<S> LoopInnerCommon<S>
         r
     }
 
-    pub fn pop_outg_for_conn(&mut self) -> Option<(StreamId, HttpStreamPart)> {
+    pub fn pop_outg_for_conn(&mut self) -> Option<(StreamId, HttpStreamCommand)> {
         // TODO: lame
         let stream_ids: Vec<StreamId> = self.streams.keys().cloned().collect();
         for stream_id in stream_ids {
@@ -281,7 +303,7 @@ impl<S> LoopInnerCommon<S>
         None
     }
 
-    pub fn pop_outg_all_for_stream(&mut self, stream_id: StreamId) -> Vec<HttpStreamPart> {
+    pub fn pop_outg_all_for_stream(&mut self, stream_id: StreamId) -> Vec<HttpStreamCommand> {
         let mut r = Vec::new();
         while let Some(p) = self.pop_outg_for_stream(stream_id) {
             r.push(p);
@@ -289,7 +311,7 @@ impl<S> LoopInnerCommon<S>
         r
     }
 
-    pub fn pop_outg_all_for_conn(&mut self) -> Vec<(StreamId, HttpStreamPart)> {
+    pub fn pop_outg_all_for_conn(&mut self) -> Vec<(StreamId, HttpStreamCommand)> {
         let mut r = Vec::new();
         while let Some(p) = self.pop_outg_for_conn() {
             r.push(p);
@@ -297,12 +319,13 @@ impl<S> LoopInnerCommon<S>
         r
     }
 
-    fn write_part(&mut self, target: &mut VecSendFrame, stream_id: StreamId, part: HttpStreamPart) {
-        match part.content {
-            HttpStreamPartContent::Data(data) => {
+    fn write_part(&mut self, target: &mut VecSendFrame, stream_id: StreamId, part: HttpStreamCommand) {
+        match part {
+            HttpStreamCommand::Data(data, end_stream) => {
                 // if client requested end of stream,
                 // we must send at least one frame with end stream flag
-                if part.last && data.len() == 0 {
+                if end_stream == EndStream::Yes && data.len() == 0 {
+                    // probably should send RST_STREAM
                     let mut frame = DataFrame::with_data(stream_id, Vec::new());
                     frame.set_flag(DataFlag::EndStream);
 
@@ -316,15 +339,15 @@ impl<S> LoopInnerCommon<S>
                 while pos < data.len() {
                     let end = cmp::min(data.len(), pos + MAX_CHUNK_SIZE);
 
-                    let end_stream =
-                        if end == data.len() && part.last {
+                    let end_stream_in_frame =
+                        if end == data.len() && end_stream == EndStream::Yes {
                             EndStream::Yes
                         } else {
                             EndStream::No
                         };
 
                     let mut frame = DataFrame::with_data(stream_id, &data[pos..end]);
-                    if end_stream == EndStream::Yes {
+                    if end_stream_in_frame == EndStream::Yes {
                         frame.set_flag(DataFlag::EndStream);
                     }
 
@@ -335,7 +358,7 @@ impl<S> LoopInnerCommon<S>
                     pos = end;
                 }
             }
-            HttpStreamPartContent::Headers(headers) => {
+            HttpStreamCommand::Headers(headers, end_stream) => {
                 let headers_fragment = self
                     .conn.encoder.encode(headers.0.iter().map(|h| (h.name(), h.value())));
 
@@ -345,9 +368,16 @@ impl<S> LoopInnerCommon<S>
                 let mut frame = HeadersFrame::new(headers_fragment, stream_id);
                 frame.set_flag(HeadersFlag::EndHeaders);
 
-                if part.last {
+                if end_stream == EndStream::Yes {
                     frame.set_flag(HeadersFlag::EndStream);
                 }
+
+                debug!("sending frame {:?}", frame);
+
+                target.send_frame(frame).unwrap();
+            }
+            HttpStreamCommand::Rst(error_code) => {
+                let frame = RstStreamFrame::new(stream_id, error_code);
 
                 debug!("sending frame {:?}", frame);
 

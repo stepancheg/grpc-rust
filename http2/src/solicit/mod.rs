@@ -185,6 +185,7 @@ pub enum HttpError {
     /// The underlying IO layer raised an error
     IoError(io::Error),
     TlsError(native_tls::Error),
+    CodeError(ErrorCode),
     /// The HTTP/2 connection received an invalid HTTP/2 frame
     InvalidFrame,
     /// The peer indicated a connection error
@@ -202,6 +203,7 @@ pub enum HttpError {
     ConnectionTimeout,
     /// Shutdown of local client or server
     Shutdown,
+    HandlerPanicked(String),
     Other(Box<Error + Send + Sync>),
 }
 
@@ -236,6 +238,7 @@ impl Error for HttpError {
         match *self {
             HttpError::IoError(_) => "Encountered an IO error",
             HttpError::TlsError(_) => "Encountered TLS error",
+            HttpError::CodeError(_) => "Encountered HTTP named error",
             HttpError::InvalidFrame => "Encountered an invalid HTTP/2 frame",
             HttpError::PeerConnectionError(ref err) => err.description(),
             HttpError::CompressionError(_) => "Encountered an error with HPACK compression",
@@ -245,6 +248,7 @@ impl Error for HttpError {
             HttpError::MalformedResponse => "The received response was malformed",
             HttpError::ConnectionTimeout => "Connection time out",
             HttpError::Shutdown => "Local shutdown",
+            HttpError::HandlerPanicked(_) => "Handler panicked",
             HttpError::Other(_) => "An unknown error",
         }
     }

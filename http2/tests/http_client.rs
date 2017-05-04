@@ -20,6 +20,7 @@ use httpbis::solicit::header::*;
 
 use test_misc::*;
 use httpbis::for_test::*;
+use httpbis::solicit::ErrorCode;
 
 #[test]
 fn stream_count_new() {
@@ -48,8 +49,7 @@ fn stream_count_new() {
     let data = server_tester.recv_frame_data_check(1, false);
     assert_eq!(b"xxyy", &data[..]);
 
-    let headers = server_tester.recv_frame_data_check(1, true);
-    assert!(headers.is_empty());
+    server_tester.recv_rst_frame_check(1, ErrorCode::NoError);
 
     let mut resp_headers = Headers::new();
     resp_headers.add(":status", "200");

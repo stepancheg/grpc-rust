@@ -59,7 +59,7 @@ impl HttpServerOneConn {
 
         let conn_for_thread = conn.clone();
 
-        let join_handle = thread::spawn(move || {
+        let join_handle = thread::Builder::new().name("server_one_conn".to_owned()).spawn(move || {
             let mut lp = reactor::Core::new().unwrap();
 
             let listener = tokio_core::net::TcpListener::bind(&("::1", port).to_socket_addrs().unwrap().next().unwrap(), &lp.handle()).unwrap();
@@ -95,7 +95,7 @@ impl HttpServerOneConn {
             let future = future.then(|_| futures::finished::<_, ()>(()));
 
             lp.run(shutdown_rx.select(future)).ok();
-        });
+        }).expect("spawn");
 
         HttpServerOneConn {
             from_loop: from_loop_rx.wait().unwrap(),
