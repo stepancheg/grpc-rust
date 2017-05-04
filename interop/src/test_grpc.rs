@@ -22,35 +22,35 @@
 // interface
 
 pub trait TestService {
-    fn EmptyCall(&self, p: super::empty::Empty) -> ::grpc::result::GrpcResult<super::empty::Empty>;
+    fn empty_call(&self, p: super::empty::Empty) -> ::grpc::result::GrpcResult<super::empty::Empty>;
 
-    fn UnaryCall(&self, p: super::messages::SimpleRequest) -> ::grpc::result::GrpcResult<super::messages::SimpleResponse>;
+    fn unary_call(&self, p: super::messages::SimpleRequest) -> ::grpc::result::GrpcResult<super::messages::SimpleResponse>;
 
-    fn CacheableUnaryCall(&self, p: super::messages::SimpleRequest) -> ::grpc::result::GrpcResult<super::messages::SimpleResponse>;
+    fn cacheable_unary_call(&self, p: super::messages::SimpleRequest) -> ::grpc::result::GrpcResult<super::messages::SimpleResponse>;
 
-    fn StreamingOutputCall(&self, p: super::messages::StreamingOutputCallRequest) -> ::grpc::iter::GrpcIterator<super::messages::StreamingOutputCallResponse>;
+    fn streaming_output_call(&self, p: super::messages::StreamingOutputCallRequest) -> ::grpc::iter::GrpcIterator<super::messages::StreamingOutputCallResponse>;
 
-    fn StreamingInputCall(&self, p: ::grpc::iter::GrpcIterator<super::messages::StreamingInputCallRequest>) -> ::grpc::result::GrpcResult<super::messages::StreamingInputCallResponse>;
+    fn streaming_input_call(&self, p: ::grpc::iter::GrpcIterator<super::messages::StreamingInputCallRequest>) -> ::grpc::result::GrpcResult<super::messages::StreamingInputCallResponse>;
 
-    fn FullDuplexCall(&self, p: ::grpc::iter::GrpcIterator<super::messages::StreamingOutputCallRequest>) -> ::grpc::iter::GrpcIterator<super::messages::StreamingOutputCallResponse>;
+    fn full_duplex_call(&self, p: ::grpc::iter::GrpcIterator<super::messages::StreamingOutputCallRequest>) -> ::grpc::iter::GrpcIterator<super::messages::StreamingOutputCallResponse>;
 
-    fn HalfDuplexCall(&self, p: ::grpc::iter::GrpcIterator<super::messages::StreamingOutputCallRequest>) -> ::grpc::iter::GrpcIterator<super::messages::StreamingOutputCallResponse>;
+    fn half_duplex_call(&self, p: ::grpc::iter::GrpcIterator<super::messages::StreamingOutputCallRequest>) -> ::grpc::iter::GrpcIterator<super::messages::StreamingOutputCallResponse>;
 }
 
 pub trait TestServiceAsync {
-    fn EmptyCall(&self, p: super::empty::Empty) -> ::grpc::futures_grpc::GrpcFutureSend<super::empty::Empty>;
+    fn empty_call(&self, p: super::empty::Empty) -> ::grpc::futures_grpc::GrpcFutureSend<super::empty::Empty>;
 
-    fn UnaryCall(&self, p: super::messages::SimpleRequest) -> ::grpc::futures_grpc::GrpcFutureSend<super::messages::SimpleResponse>;
+    fn unary_call(&self, p: super::messages::SimpleRequest) -> ::grpc::futures_grpc::GrpcFutureSend<super::messages::SimpleResponse>;
 
-    fn CacheableUnaryCall(&self, p: super::messages::SimpleRequest) -> ::grpc::futures_grpc::GrpcFutureSend<super::messages::SimpleResponse>;
+    fn cacheable_unary_call(&self, p: super::messages::SimpleRequest) -> ::grpc::futures_grpc::GrpcFutureSend<super::messages::SimpleResponse>;
 
-    fn StreamingOutputCall(&self, p: super::messages::StreamingOutputCallRequest) -> ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingOutputCallResponse>;
+    fn streaming_output_call(&self, p: super::messages::StreamingOutputCallRequest) -> ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingOutputCallResponse>;
 
-    fn StreamingInputCall(&self, p: ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingInputCallRequest>) -> ::grpc::futures_grpc::GrpcFutureSend<super::messages::StreamingInputCallResponse>;
+    fn streaming_input_call(&self, p: ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingInputCallRequest>) -> ::grpc::futures_grpc::GrpcFutureSend<super::messages::StreamingInputCallResponse>;
 
-    fn FullDuplexCall(&self, p: ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingOutputCallRequest>) -> ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingOutputCallResponse>;
+    fn full_duplex_call(&self, p: ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingOutputCallRequest>) -> ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingOutputCallResponse>;
 
-    fn HalfDuplexCall(&self, p: ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingOutputCallRequest>) -> ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingOutputCallResponse>;
+    fn half_duplex_call(&self, p: ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingOutputCallRequest>) -> ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingOutputCallResponse>;
 }
 
 // sync client
@@ -70,35 +70,35 @@ impl TestServiceClient {
 }
 
 impl TestService for TestServiceClient {
-    fn EmptyCall(&self, p: super::empty::Empty) -> ::grpc::result::GrpcResult<super::empty::Empty> {
-        ::futures::Future::wait(self.async_client.EmptyCall(p))
+    fn empty_call(&self, p: super::empty::Empty) -> ::grpc::result::GrpcResult<super::empty::Empty> {
+        ::futures::Future::wait(self.async_client.empty_call(p))
     }
 
-    fn UnaryCall(&self, p: super::messages::SimpleRequest) -> ::grpc::result::GrpcResult<super::messages::SimpleResponse> {
-        ::futures::Future::wait(self.async_client.UnaryCall(p))
+    fn unary_call(&self, p: super::messages::SimpleRequest) -> ::grpc::result::GrpcResult<super::messages::SimpleResponse> {
+        ::futures::Future::wait(self.async_client.unary_call(p))
     }
 
-    fn CacheableUnaryCall(&self, p: super::messages::SimpleRequest) -> ::grpc::result::GrpcResult<super::messages::SimpleResponse> {
-        ::futures::Future::wait(self.async_client.CacheableUnaryCall(p))
+    fn cacheable_unary_call(&self, p: super::messages::SimpleRequest) -> ::grpc::result::GrpcResult<super::messages::SimpleResponse> {
+        ::futures::Future::wait(self.async_client.cacheable_unary_call(p))
     }
 
-    fn StreamingOutputCall(&self, p: super::messages::StreamingOutputCallRequest) -> ::grpc::iter::GrpcIterator<super::messages::StreamingOutputCallResponse> {
-        ::grpc::rt::stream_to_iter(self.async_client.StreamingOutputCall(p))
+    fn streaming_output_call(&self, p: super::messages::StreamingOutputCallRequest) -> ::grpc::iter::GrpcIterator<super::messages::StreamingOutputCallResponse> {
+        ::grpc::rt::stream_to_iter(self.async_client.streaming_output_call(p))
     }
 
-    fn StreamingInputCall(&self, p: ::grpc::iter::GrpcIterator<super::messages::StreamingInputCallRequest>) -> ::grpc::result::GrpcResult<super::messages::StreamingInputCallResponse> {
+    fn streaming_input_call(&self, p: ::grpc::iter::GrpcIterator<super::messages::StreamingInputCallRequest>) -> ::grpc::result::GrpcResult<super::messages::StreamingInputCallResponse> {
         let p = ::futures::stream::Stream::boxed(::futures::stream::iter(::std::iter::IntoIterator::into_iter(p)));
-        ::futures::Future::wait(self.async_client.StreamingInputCall(p))
+        ::futures::Future::wait(self.async_client.streaming_input_call(p))
     }
 
-    fn FullDuplexCall(&self, p: ::grpc::iter::GrpcIterator<super::messages::StreamingOutputCallRequest>) -> ::grpc::iter::GrpcIterator<super::messages::StreamingOutputCallResponse> {
+    fn full_duplex_call(&self, p: ::grpc::iter::GrpcIterator<super::messages::StreamingOutputCallRequest>) -> ::grpc::iter::GrpcIterator<super::messages::StreamingOutputCallResponse> {
         let p = ::futures::stream::Stream::boxed(::futures::stream::iter(::std::iter::IntoIterator::into_iter(p)));
-        ::grpc::rt::stream_to_iter(self.async_client.FullDuplexCall(p))
+        ::grpc::rt::stream_to_iter(self.async_client.full_duplex_call(p))
     }
 
-    fn HalfDuplexCall(&self, p: ::grpc::iter::GrpcIterator<super::messages::StreamingOutputCallRequest>) -> ::grpc::iter::GrpcIterator<super::messages::StreamingOutputCallResponse> {
+    fn half_duplex_call(&self, p: ::grpc::iter::GrpcIterator<super::messages::StreamingOutputCallRequest>) -> ::grpc::iter::GrpcIterator<super::messages::StreamingOutputCallResponse> {
         let p = ::futures::stream::Stream::boxed(::futures::stream::iter(::std::iter::IntoIterator::into_iter(p)));
-        ::grpc::rt::stream_to_iter(self.async_client.HalfDuplexCall(p))
+        ::grpc::rt::stream_to_iter(self.async_client.half_duplex_call(p))
     }
 }
 
@@ -172,31 +172,31 @@ impl TestServiceAsyncClient {
 }
 
 impl TestServiceAsync for TestServiceAsyncClient {
-    fn EmptyCall(&self, p: super::empty::Empty) -> ::grpc::futures_grpc::GrpcFutureSend<super::empty::Empty> {
+    fn empty_call(&self, p: super::empty::Empty) -> ::grpc::futures_grpc::GrpcFutureSend<super::empty::Empty> {
         self.grpc_client.call_unary(p, self.method_EmptyCall.clone())
     }
 
-    fn UnaryCall(&self, p: super::messages::SimpleRequest) -> ::grpc::futures_grpc::GrpcFutureSend<super::messages::SimpleResponse> {
+    fn unary_call(&self, p: super::messages::SimpleRequest) -> ::grpc::futures_grpc::GrpcFutureSend<super::messages::SimpleResponse> {
         self.grpc_client.call_unary(p, self.method_UnaryCall.clone())
     }
 
-    fn CacheableUnaryCall(&self, p: super::messages::SimpleRequest) -> ::grpc::futures_grpc::GrpcFutureSend<super::messages::SimpleResponse> {
+    fn cacheable_unary_call(&self, p: super::messages::SimpleRequest) -> ::grpc::futures_grpc::GrpcFutureSend<super::messages::SimpleResponse> {
         self.grpc_client.call_unary(p, self.method_CacheableUnaryCall.clone())
     }
 
-    fn StreamingOutputCall(&self, p: super::messages::StreamingOutputCallRequest) -> ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingOutputCallResponse> {
+    fn streaming_output_call(&self, p: super::messages::StreamingOutputCallRequest) -> ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingOutputCallResponse> {
         self.grpc_client.call_server_streaming(p, self.method_StreamingOutputCall.clone())
     }
 
-    fn StreamingInputCall(&self, p: ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingInputCallRequest>) -> ::grpc::futures_grpc::GrpcFutureSend<super::messages::StreamingInputCallResponse> {
+    fn streaming_input_call(&self, p: ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingInputCallRequest>) -> ::grpc::futures_grpc::GrpcFutureSend<super::messages::StreamingInputCallResponse> {
         self.grpc_client.call_client_streaming(p, self.method_StreamingInputCall.clone())
     }
 
-    fn FullDuplexCall(&self, p: ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingOutputCallRequest>) -> ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingOutputCallResponse> {
+    fn full_duplex_call(&self, p: ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingOutputCallRequest>) -> ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingOutputCallResponse> {
         self.grpc_client.call_bidi(p, self.method_FullDuplexCall.clone())
     }
 
-    fn HalfDuplexCall(&self, p: ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingOutputCallRequest>) -> ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingOutputCallResponse> {
+    fn half_duplex_call(&self, p: ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingOutputCallRequest>) -> ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingOutputCallResponse> {
         self.grpc_client.call_bidi(p, self.method_HalfDuplexCall.clone())
     }
 }
@@ -221,52 +221,52 @@ struct TestServiceServerHandlerToAsync {
 }
 
 impl TestServiceAsync for TestServiceServerHandlerToAsync {
-    fn EmptyCall(&self, p: super::empty::Empty) -> ::grpc::futures_grpc::GrpcFutureSend<super::empty::Empty> {
+    fn empty_call(&self, p: super::empty::Empty) -> ::grpc::futures_grpc::GrpcFutureSend<super::empty::Empty> {
         let h = self.handler.clone();
         ::grpc::rt::sync_to_async_unary(&self.cpupool, p, move |p| {
-            h.EmptyCall(p)
+            h.empty_call(p)
         })
     }
 
-    fn UnaryCall(&self, p: super::messages::SimpleRequest) -> ::grpc::futures_grpc::GrpcFutureSend<super::messages::SimpleResponse> {
+    fn unary_call(&self, p: super::messages::SimpleRequest) -> ::grpc::futures_grpc::GrpcFutureSend<super::messages::SimpleResponse> {
         let h = self.handler.clone();
         ::grpc::rt::sync_to_async_unary(&self.cpupool, p, move |p| {
-            h.UnaryCall(p)
+            h.unary_call(p)
         })
     }
 
-    fn CacheableUnaryCall(&self, p: super::messages::SimpleRequest) -> ::grpc::futures_grpc::GrpcFutureSend<super::messages::SimpleResponse> {
+    fn cacheable_unary_call(&self, p: super::messages::SimpleRequest) -> ::grpc::futures_grpc::GrpcFutureSend<super::messages::SimpleResponse> {
         let h = self.handler.clone();
         ::grpc::rt::sync_to_async_unary(&self.cpupool, p, move |p| {
-            h.CacheableUnaryCall(p)
+            h.cacheable_unary_call(p)
         })
     }
 
-    fn StreamingOutputCall(&self, p: super::messages::StreamingOutputCallRequest) -> ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingOutputCallResponse> {
+    fn streaming_output_call(&self, p: super::messages::StreamingOutputCallRequest) -> ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingOutputCallResponse> {
         let h = self.handler.clone();
         ::grpc::rt::sync_to_async_server_streaming(&self.cpupool, p, move |p| {
-            h.StreamingOutputCall(p)
+            h.streaming_output_call(p)
         })
     }
 
-    fn StreamingInputCall(&self, p: ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingInputCallRequest>) -> ::grpc::futures_grpc::GrpcFutureSend<super::messages::StreamingInputCallResponse> {
+    fn streaming_input_call(&self, p: ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingInputCallRequest>) -> ::grpc::futures_grpc::GrpcFutureSend<super::messages::StreamingInputCallResponse> {
         let h = self.handler.clone();
         ::grpc::rt::sync_to_async_client_streaming(&self.cpupool, p, move |p| {
-            h.StreamingInputCall(p)
+            h.streaming_input_call(p)
         })
     }
 
-    fn FullDuplexCall(&self, p: ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingOutputCallRequest>) -> ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingOutputCallResponse> {
+    fn full_duplex_call(&self, p: ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingOutputCallRequest>) -> ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingOutputCallResponse> {
         let h = self.handler.clone();
         ::grpc::rt::sync_to_async_bidi(&self.cpupool, p, move |p| {
-            h.FullDuplexCall(p)
+            h.full_duplex_call(p)
         })
     }
 
-    fn HalfDuplexCall(&self, p: ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingOutputCallRequest>) -> ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingOutputCallResponse> {
+    fn half_duplex_call(&self, p: ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingOutputCallRequest>) -> ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingOutputCallResponse> {
         let h = self.handler.clone();
         ::grpc::rt::sync_to_async_bidi(&self.cpupool, p, move |p| {
-            h.HalfDuplexCall(p)
+            h.half_duplex_call(p)
         })
     }
 }
@@ -318,7 +318,7 @@ impl TestServiceAsyncServer {
                     }),
                     {
                         let handler_copy = handler_arc.clone();
-                        ::grpc::server::MethodHandlerUnary::new(move |p| handler_copy.EmptyCall(p))
+                        ::grpc::server::MethodHandlerUnary::new(move |p| handler_copy.empty_call(p))
                     },
                 ),
                 ::grpc::server::ServerMethod::new(
@@ -330,7 +330,7 @@ impl TestServiceAsyncServer {
                     }),
                     {
                         let handler_copy = handler_arc.clone();
-                        ::grpc::server::MethodHandlerUnary::new(move |p| handler_copy.UnaryCall(p))
+                        ::grpc::server::MethodHandlerUnary::new(move |p| handler_copy.unary_call(p))
                     },
                 ),
                 ::grpc::server::ServerMethod::new(
@@ -342,7 +342,7 @@ impl TestServiceAsyncServer {
                     }),
                     {
                         let handler_copy = handler_arc.clone();
-                        ::grpc::server::MethodHandlerUnary::new(move |p| handler_copy.CacheableUnaryCall(p))
+                        ::grpc::server::MethodHandlerUnary::new(move |p| handler_copy.cacheable_unary_call(p))
                     },
                 ),
                 ::grpc::server::ServerMethod::new(
@@ -354,7 +354,7 @@ impl TestServiceAsyncServer {
                     }),
                     {
                         let handler_copy = handler_arc.clone();
-                        ::grpc::server::MethodHandlerServerStreaming::new(move |p| handler_copy.StreamingOutputCall(p))
+                        ::grpc::server::MethodHandlerServerStreaming::new(move |p| handler_copy.streaming_output_call(p))
                     },
                 ),
                 ::grpc::server::ServerMethod::new(
@@ -366,7 +366,7 @@ impl TestServiceAsyncServer {
                     }),
                     {
                         let handler_copy = handler_arc.clone();
-                        ::grpc::server::MethodHandlerClientStreaming::new(move |p| handler_copy.StreamingInputCall(p))
+                        ::grpc::server::MethodHandlerClientStreaming::new(move |p| handler_copy.streaming_input_call(p))
                     },
                 ),
                 ::grpc::server::ServerMethod::new(
@@ -378,7 +378,7 @@ impl TestServiceAsyncServer {
                     }),
                     {
                         let handler_copy = handler_arc.clone();
-                        ::grpc::server::MethodHandlerBidi::new(move |p| handler_copy.FullDuplexCall(p))
+                        ::grpc::server::MethodHandlerBidi::new(move |p| handler_copy.full_duplex_call(p))
                     },
                 ),
                 ::grpc::server::ServerMethod::new(
@@ -390,7 +390,7 @@ impl TestServiceAsyncServer {
                     }),
                     {
                         let handler_copy = handler_arc.clone();
-                        ::grpc::server::MethodHandlerBidi::new(move |p| handler_copy.HalfDuplexCall(p))
+                        ::grpc::server::MethodHandlerBidi::new(move |p| handler_copy.half_duplex_call(p))
                     },
                 ),
             ],
@@ -401,11 +401,11 @@ impl TestServiceAsyncServer {
 // interface
 
 pub trait UnimplementedService {
-    fn UnimplementedCall(&self, p: super::empty::Empty) -> ::grpc::result::GrpcResult<super::empty::Empty>;
+    fn unimplemented_call(&self, p: super::empty::Empty) -> ::grpc::result::GrpcResult<super::empty::Empty>;
 }
 
 pub trait UnimplementedServiceAsync {
-    fn UnimplementedCall(&self, p: super::empty::Empty) -> ::grpc::futures_grpc::GrpcFutureSend<super::empty::Empty>;
+    fn unimplemented_call(&self, p: super::empty::Empty) -> ::grpc::futures_grpc::GrpcFutureSend<super::empty::Empty>;
 }
 
 // sync client
@@ -425,8 +425,8 @@ impl UnimplementedServiceClient {
 }
 
 impl UnimplementedService for UnimplementedServiceClient {
-    fn UnimplementedCall(&self, p: super::empty::Empty) -> ::grpc::result::GrpcResult<super::empty::Empty> {
-        ::futures::Future::wait(self.async_client.UnimplementedCall(p))
+    fn unimplemented_call(&self, p: super::empty::Empty) -> ::grpc::result::GrpcResult<super::empty::Empty> {
+        ::futures::Future::wait(self.async_client.unimplemented_call(p))
     }
 }
 
@@ -458,7 +458,7 @@ impl UnimplementedServiceAsyncClient {
 }
 
 impl UnimplementedServiceAsync for UnimplementedServiceAsyncClient {
-    fn UnimplementedCall(&self, p: super::empty::Empty) -> ::grpc::futures_grpc::GrpcFutureSend<super::empty::Empty> {
+    fn unimplemented_call(&self, p: super::empty::Empty) -> ::grpc::futures_grpc::GrpcFutureSend<super::empty::Empty> {
         self.grpc_client.call_unary(p, self.method_UnimplementedCall.clone())
     }
 }
@@ -483,10 +483,10 @@ struct UnimplementedServiceServerHandlerToAsync {
 }
 
 impl UnimplementedServiceAsync for UnimplementedServiceServerHandlerToAsync {
-    fn UnimplementedCall(&self, p: super::empty::Empty) -> ::grpc::futures_grpc::GrpcFutureSend<super::empty::Empty> {
+    fn unimplemented_call(&self, p: super::empty::Empty) -> ::grpc::futures_grpc::GrpcFutureSend<super::empty::Empty> {
         let h = self.handler.clone();
         ::grpc::rt::sync_to_async_unary(&self.cpupool, p, move |p| {
-            h.UnimplementedCall(p)
+            h.unimplemented_call(p)
         })
     }
 }
@@ -538,7 +538,7 @@ impl UnimplementedServiceAsyncServer {
                     }),
                     {
                         let handler_copy = handler_arc.clone();
-                        ::grpc::server::MethodHandlerUnary::new(move |p| handler_copy.UnimplementedCall(p))
+                        ::grpc::server::MethodHandlerUnary::new(move |p| handler_copy.unimplemented_call(p))
                     },
                 ),
             ],
@@ -549,15 +549,15 @@ impl UnimplementedServiceAsyncServer {
 // interface
 
 pub trait ReconnectService {
-    fn Start(&self, p: super::messages::ReconnectParams) -> ::grpc::result::GrpcResult<super::empty::Empty>;
+    fn start(&self, p: super::messages::ReconnectParams) -> ::grpc::result::GrpcResult<super::empty::Empty>;
 
-    fn Stop(&self, p: super::empty::Empty) -> ::grpc::result::GrpcResult<super::messages::ReconnectInfo>;
+    fn stop(&self, p: super::empty::Empty) -> ::grpc::result::GrpcResult<super::messages::ReconnectInfo>;
 }
 
 pub trait ReconnectServiceAsync {
-    fn Start(&self, p: super::messages::ReconnectParams) -> ::grpc::futures_grpc::GrpcFutureSend<super::empty::Empty>;
+    fn start(&self, p: super::messages::ReconnectParams) -> ::grpc::futures_grpc::GrpcFutureSend<super::empty::Empty>;
 
-    fn Stop(&self, p: super::empty::Empty) -> ::grpc::futures_grpc::GrpcFutureSend<super::messages::ReconnectInfo>;
+    fn stop(&self, p: super::empty::Empty) -> ::grpc::futures_grpc::GrpcFutureSend<super::messages::ReconnectInfo>;
 }
 
 // sync client
@@ -577,12 +577,12 @@ impl ReconnectServiceClient {
 }
 
 impl ReconnectService for ReconnectServiceClient {
-    fn Start(&self, p: super::messages::ReconnectParams) -> ::grpc::result::GrpcResult<super::empty::Empty> {
-        ::futures::Future::wait(self.async_client.Start(p))
+    fn start(&self, p: super::messages::ReconnectParams) -> ::grpc::result::GrpcResult<super::empty::Empty> {
+        ::futures::Future::wait(self.async_client.start(p))
     }
 
-    fn Stop(&self, p: super::empty::Empty) -> ::grpc::result::GrpcResult<super::messages::ReconnectInfo> {
-        ::futures::Future::wait(self.async_client.Stop(p))
+    fn stop(&self, p: super::empty::Empty) -> ::grpc::result::GrpcResult<super::messages::ReconnectInfo> {
+        ::futures::Future::wait(self.async_client.stop(p))
     }
 }
 
@@ -621,11 +621,11 @@ impl ReconnectServiceAsyncClient {
 }
 
 impl ReconnectServiceAsync for ReconnectServiceAsyncClient {
-    fn Start(&self, p: super::messages::ReconnectParams) -> ::grpc::futures_grpc::GrpcFutureSend<super::empty::Empty> {
+    fn start(&self, p: super::messages::ReconnectParams) -> ::grpc::futures_grpc::GrpcFutureSend<super::empty::Empty> {
         self.grpc_client.call_unary(p, self.method_Start.clone())
     }
 
-    fn Stop(&self, p: super::empty::Empty) -> ::grpc::futures_grpc::GrpcFutureSend<super::messages::ReconnectInfo> {
+    fn stop(&self, p: super::empty::Empty) -> ::grpc::futures_grpc::GrpcFutureSend<super::messages::ReconnectInfo> {
         self.grpc_client.call_unary(p, self.method_Stop.clone())
     }
 }
@@ -650,17 +650,17 @@ struct ReconnectServiceServerHandlerToAsync {
 }
 
 impl ReconnectServiceAsync for ReconnectServiceServerHandlerToAsync {
-    fn Start(&self, p: super::messages::ReconnectParams) -> ::grpc::futures_grpc::GrpcFutureSend<super::empty::Empty> {
+    fn start(&self, p: super::messages::ReconnectParams) -> ::grpc::futures_grpc::GrpcFutureSend<super::empty::Empty> {
         let h = self.handler.clone();
         ::grpc::rt::sync_to_async_unary(&self.cpupool, p, move |p| {
-            h.Start(p)
+            h.start(p)
         })
     }
 
-    fn Stop(&self, p: super::empty::Empty) -> ::grpc::futures_grpc::GrpcFutureSend<super::messages::ReconnectInfo> {
+    fn stop(&self, p: super::empty::Empty) -> ::grpc::futures_grpc::GrpcFutureSend<super::messages::ReconnectInfo> {
         let h = self.handler.clone();
         ::grpc::rt::sync_to_async_unary(&self.cpupool, p, move |p| {
-            h.Stop(p)
+            h.stop(p)
         })
     }
 }
@@ -712,7 +712,7 @@ impl ReconnectServiceAsyncServer {
                     }),
                     {
                         let handler_copy = handler_arc.clone();
-                        ::grpc::server::MethodHandlerUnary::new(move |p| handler_copy.Start(p))
+                        ::grpc::server::MethodHandlerUnary::new(move |p| handler_copy.start(p))
                     },
                 ),
                 ::grpc::server::ServerMethod::new(
@@ -724,7 +724,7 @@ impl ReconnectServiceAsyncServer {
                     }),
                     {
                         let handler_copy = handler_arc.clone();
-                        ::grpc::server::MethodHandlerUnary::new(move |p| handler_copy.Stop(p))
+                        ::grpc::server::MethodHandlerUnary::new(move |p| handler_copy.stop(p))
                     },
                 ),
             ],
