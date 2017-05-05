@@ -19,9 +19,9 @@ clap            = "2.20.0"
 
 [[bin]]
 name = "grpc-rust-interop-server"
-path = "src/server.rs"
+path = "src/bin/server.rs"
 
 [[bin]]
 name = "grpc-rust-interop-client"
-path = "src/client.rs"
+path = "src/bin/client.rs"
 

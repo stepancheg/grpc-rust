@@ -2,23 +2,16 @@ extern crate protobuf;
 extern crate grpc;
 extern crate futures;
 extern crate futures_cpupool;
-#[macro_use]
 extern crate log;
 extern crate env_logger;
 extern crate chrono;
 extern crate clap;
 
-pub mod empty;
-pub mod messages;
-pub mod test_grpc;
+extern crate grpc_interop;
+use grpc_interop::*;
 
 use chrono::*;
 use clap::{App, Arg};
-
-use empty::*;
-use messages::{Payload, ResponseParameters, SimpleRequest,
-               StreamingInputCallRequest, StreamingOutputCallRequest};
-use test_grpc::*;
 
 fn empty_unary(client: TestServiceClient) {
     client.EmptyCall(Empty::new()).expect("failed to get EmptyUnary result");
@@ -127,7 +120,7 @@ fn empty_stream(client: TestServiceClient) {
 // The flags we use are defined in the gRPC Interopability doc
 // https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md
 fn main() {
-    drop(env_logger::init().unwrap());
+    env_logger::init().expect("env_logger::init");
 
     let options = App::new("gRPC interopability client")
         .version("0.1")
@@ -174,7 +167,7 @@ fn main() {
         .get_matches();
 
     let hostname = options.value_of("server_host").unwrap_or("localhost");
-    let serverport = options.value_of("server_port").unwrap_or("60011").parse::<u16>().unwrap();
+    let serverport = options.value_of("server_port").map(|s| s.parse().unwrap()).unwrap_or(DEFAULT_PORT);
 
     let client = TestServiceClient::new(hostname, serverport, false, Default::default())
         .expect("init");

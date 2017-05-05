@@ -4,20 +4,14 @@ extern crate futures;
 extern crate futures_cpupool;
 extern crate env_logger;
 
-pub mod empty;
-pub mod messages;
-pub mod test_grpc;
+extern crate grpc_interop;
+use grpc_interop::*;
 
 use std::thread;
 
 use futures::stream::Stream;
 use futures::stream;
 use futures::Future;
-
-use empty::*;
-use messages::{Payload, SimpleRequest, SimpleResponse, StreamingOutputCallRequest, 
-  StreamingOutputCallResponse, StreamingInputCallRequest, StreamingInputCallResponse};
-use test_grpc::*;
 
 use grpc::futures_grpc::{GrpcFutureSend, GrpcStreamSend};
 use grpc::error::*;
@@ -122,9 +116,9 @@ impl TestServiceAsync for TestServerImpl {
 }
 
 fn main() {
-    drop(env_logger::init().unwrap());
+    env_logger::init().expect("env_logger::init");
 
-    let _server = TestServiceAsyncServer::new("[::]:10000", Default::default(), TestServerImpl {});
+    let _server = TestServiceAsyncServer::new(("::", DEFAULT_PORT), Default::default(), TestServerImpl {});
 
     loop {
         thread::park();
