@@ -49,7 +49,7 @@ fn stream_count_new() {
     let data = server_tester.recv_frame_data_check(1, false);
     assert_eq!(b"xxyy", &data[..]);
 
-    server_tester.recv_rst_frame_check(1, ErrorCode::NoError);
+    server_tester.recv_frame_data_check_empty_end(1);
 
     let mut resp_headers = Headers::new();
     resp_headers.add(":status", "200");

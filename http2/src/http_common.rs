@@ -155,7 +155,10 @@ impl HttpStreamCommon {
                         None
                     } else {
                         self.close_local();
-                        Some(HttpStreamCommand::Rst(error_code))
+                        Some(match error_code {
+                            ErrorCode::NoError => HttpStreamCommand::Data(Bytes::new(), EndStream::Yes),
+                            error_code => HttpStreamCommand::Rst(error_code),
+                        })
                     }
                 } else {
                     None

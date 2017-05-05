@@ -187,6 +187,11 @@ impl HttpConnectionTester {
         (&data.data[..]).to_vec()
     }
 
+    pub fn recv_frame_data_check_empty_end(&mut self, stream_id: StreamId) {
+        let data = self.recv_frame_data_check(stream_id, true);
+        assert!(data.is_empty());
+    }
+
     pub fn recv_message(&mut self, stream_id: StreamId) -> SimpleHttpMessage {
         let mut r = SimpleHttpMessage::default();
         loop {
