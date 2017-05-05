@@ -30,7 +30,7 @@ use native_tls::Certificate;
 fn test_tls_acceptor() -> TlsAcceptor {
     let buf = include_bytes!("identity.p12");
     let pkcs12 = Pkcs12::from_der(buf, "mypass").unwrap();
-    let mut builder = TlsAcceptor::builder(pkcs12).unwrap();
+    let builder = TlsAcceptor::builder(pkcs12).unwrap();
     builder.build().unwrap()
 }
 
