@@ -208,6 +208,7 @@ fn run_client_event_loop(
 
     match lp.run(done) {
         Ok(_) => {}
+        Err(HttpError::Shutdown) => {}
         Err(e) => {
             error!("Core::run failed: {:?}", e);
         }
