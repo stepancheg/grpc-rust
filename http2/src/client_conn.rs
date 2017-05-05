@@ -389,7 +389,7 @@ impl HttpClientConnectionAsync {
         let req_rx = req_rx.map_err(|()| HttpError::from(io::Error::new(io::ErrorKind::Other, "req")));
 
         // TODO: future is no longer needed here
-        if let Err(_) = tx.send(stream_with_eof_and_error(req_rx, || HttpError::from(io::Error::new(io::ErrorKind::Other, "unexpected eof")))) {
+        if let Err(_) = tx.send(stream_with_eof_and_error(req_rx, || HttpError::from(io::Error::new(io::ErrorKind::Other, "client is likely died")))) {
             return Box::new(stream::once(Err(HttpError::from(io::Error::new(io::ErrorKind::Other, "oneshot canceled")))));
         }
 

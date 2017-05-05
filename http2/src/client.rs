@@ -98,6 +98,7 @@ impl HttpClient {
         body: HttpFutureStreamSend<Bytes>)
             -> HttpPartFutureStreamSend
     {
+        debug!("start request {:?}", headers);
         self.loop_to_client.http_conn.start_request(headers, body)
     }
 
@@ -205,8 +206,12 @@ fn run_client_event_loop(
     // or shutdown signal.
     let done = http_conn_future.join(shutdown_future);
 
-    // TODO: do not ignore error
-    lp.run(done).ok();
+    match lp.run(done) {
+        Ok(_) => {}
+        Err(e) => {
+            error!("Core::run failed: {:?}", e);
+        }
+    }
 }
 
 // We shutdown the client in the destructor.

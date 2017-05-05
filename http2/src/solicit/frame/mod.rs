@@ -192,7 +192,11 @@ pub trait Frame: Sized {
 pub struct RawFrame {
     /// The raw frame representation, including both the raw header representation
     /// (in the first 9 bytes), followed by the raw payload representation.
-    raw_content: Bytes,
+    pub raw_content: Bytes,
+}
+
+pub struct RawFrameRef<'a> {
+    pub raw_content: &'a [u8],
 }
 
 impl RawFrame {
@@ -255,6 +259,16 @@ impl RawFrame {
         Some(raw.into())
     }
 
+    pub fn as_frame_ref(&self) -> RawFrameRef {
+        RawFrameRef {
+            raw_content: &self.raw_content,
+        }
+    }
+
+    pub fn frame_type(&self) -> u8 {
+        self.as_frame_ref().frame_type()
+    }
+
     /// Returns the total length of the `RawFrame`, including both headers, as well as the entire
     /// payload.
     #[inline]
@@ -285,6 +299,12 @@ impl RawFrame {
     /// Returns a slice representing the payload of the `RawFrame`.
     pub fn payload(&self) -> Bytes {
         self.raw_content.slice_from(9)
+    }
+}
+
+impl<'a> RawFrameRef<'a> {
+    pub fn frame_type(&self) -> u8 {
+        self.raw_content[3]
     }
 }
 

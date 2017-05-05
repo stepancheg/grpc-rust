@@ -187,7 +187,7 @@ pub enum HttpError {
     TlsError(native_tls::Error),
     CodeError(ErrorCode),
     /// The HTTP/2 connection received an invalid HTTP/2 frame
-    InvalidFrame,
+    InvalidFrame(String),
     /// The peer indicated a connection error
     PeerConnectionError(ConnectionError),
     /// The HPACK decoder was unable to decode a header chunk and raised an error.
@@ -239,7 +239,7 @@ impl Error for HttpError {
             HttpError::IoError(_) => "Encountered an IO error",
             HttpError::TlsError(_) => "Encountered TLS error",
             HttpError::CodeError(_) => "Encountered HTTP named error",
-            HttpError::InvalidFrame => "Encountered an invalid HTTP/2 frame",
+            HttpError::InvalidFrame(..) => "Encountered an invalid or unexpected HTTP/2 frame",
             HttpError::PeerConnectionError(ref err) => err.description(),
             HttpError::CompressionError(_) => "Encountered an error with HPACK compression",
             HttpError::WindowSizeOverflow => "The connection flow control window overflowed",
@@ -264,14 +264,14 @@ impl Error for HttpError {
 }
 
 /// Implementation of the `PartialEq` trait as a convenience for tests.
-#[cfg(test)]
+/// TODO: drop it
 impl PartialEq for HttpError {
     fn eq(&self, other: &HttpError) -> bool {
         match (self, other) {
             (&HttpError::IoError(ref e1), &HttpError::IoError(ref e2)) => {
                 e1.kind() == e2.kind() && e1.description() == e2.description()
             }
-            (&HttpError::InvalidFrame, &HttpError::InvalidFrame) => true,
+            (&HttpError::InvalidFrame(ref a), &HttpError::InvalidFrame(ref b)) => a == b,
             (&HttpError::CompressionError(ref e1),
              &HttpError::CompressionError(ref e2)) => e1 == e2,
             (&HttpError::UnknownStreamId, &HttpError::UnknownStreamId) => true,

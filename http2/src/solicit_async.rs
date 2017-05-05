@@ -16,6 +16,7 @@ use solicit::HttpError;
 use solicit::HttpResult;
 use solicit::frame::FRAME_HEADER_LEN;
 use solicit::frame::RawFrame;
+use solicit::frame::RawFrameRef;
 use solicit::frame::FrameIR;
 use solicit::frame::unpack_header;
 use solicit::frame::settings::SettingsFrame;
@@ -94,7 +95,7 @@ pub fn recv_settings_frame<R : AsyncRead + Send + 'static>(read: R) -> HttpFutur
             result.and_then(|(read, raw_frame)| {
                 match HttpFrame::from_raw(&raw_frame) {
                     Ok(HttpFrame::SettingsFrame(f)) => Ok((read, f)),
-                    Ok(_) => Err(HttpError::InvalidFrame),
+                    Ok(f) => Err(HttpError::InvalidFrame(format!("unexpected frame, expected SETTINGS, got {:?}", f.frame_type()))),
                     Err(e) => Err(e),
                 }
             })
@@ -106,7 +107,7 @@ pub fn recv_settings_frame_ack<R : AsyncRead + Send + 'static>(read: R) -> HttpF
         if frame.is_ack() {
             Ok((read, frame))
         } else {
-            Err(HttpError::InvalidFrame)
+            Err(HttpError::InvalidFrame("expecting SETTINGS with ack, got without ack".to_owned()))
         }
     }))
 }
@@ -116,7 +117,7 @@ pub fn recv_settings_frame_set<R : AsyncRead + Send + 'static>(read: R) -> HttpF
         if !frame.is_ack() {
             Ok((read, frame))
         } else {
-            Err(HttpError::InvalidFrame)
+            Err(HttpError::InvalidFrame("expecting SETTINGS without ack, got with ack".to_owned()))
         }
     }))
 }
@@ -131,6 +132,7 @@ pub fn send_raw_frame<W : AsyncWrite + Send + 'static>(write: W, frame: RawFrame
 
 pub fn send_frame<W : AsyncWrite + Send + 'static, F : FrameIR>(write: W, frame: F) -> HttpFuture<W> {
     let buf = frame.serialize_into_vec();
+    debug!("send frame {}", RawFrameRef { raw_content: &buf }.frame_type());
     Box::new(write_all(write, buf)
         .map(|(w, _)| w)
         .map_err(|e| e.into()))
@@ -138,39 +140,25 @@ pub fn send_frame<W : AsyncWrite + Send + 'static, F : FrameIR>(write: W, frame:
 
 static PREFACE: &'static [u8] = b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
 
-/// Send and receive settings frames and acks
-fn settings_xchg<I : AsyncRead + AsyncWrite + Send + 'static>(conn: I) -> HttpFuture<I> {
+fn send_settings<W : AsyncWrite + Send + 'static>(conn: W) -> HttpFuture<W> {
     let settings = {
         let mut frame = SettingsFrame::new();
         frame.add_setting(HttpSetting::EnablePush(0));
         frame
     };
 
-    let send_settings = send_frame(conn, settings);
-
-    let recv_settings = send_settings.and_then(|conn| {
-        recv_settings_frame_set(conn).map(|(conn, _)| conn)
-    });
-
-    let send_settings_ack = recv_settings.and_then(|conn| {
-        send_frame(conn, SettingsFrame::new_ack())
-    });
-
-    let recv_settings_ack = send_settings_ack.and_then(|conn| {
-        recv_settings_frame_ack(conn).map(|(conn, _)| conn)
-    });
-
-    Box::new(recv_settings_ack)
+    Box::new(send_frame(conn, settings))
 }
 
 pub fn client_handshake<I : AsyncWrite + AsyncRead + Send + 'static>(conn: I) -> HttpFuture<I> {
+    debug!("send PREFACE");
     let send_preface = write_all(conn, PREFACE)
         .map(|(conn, _)| conn)
         .map_err(|e| e.into());
 
-    let settings_xchg = send_preface.and_then(settings_xchg);
+    let send_settings = send_preface.and_then(send_settings);
 
-    Box::new(settings_xchg)
+    Box::new(send_settings)
 }
 
 pub fn server_handshake<I : AsyncRead + AsyncWrite + Send + 'static>(conn: I) -> HttpFuture<I> {
@@ -182,13 +170,13 @@ pub fn server_handshake<I : AsyncRead + AsyncWrite + Send + 'static>(conn: I) ->
             done(if preface_buf == PREFACE {
                 Ok((conn))
             } else {
-                Err(HttpError::InvalidFrame)
+                Err(HttpError::InvalidFrame("wrong preface".to_owned()))
             })
         });
 
-    let settings_xchg = recv_preface.and_then(settings_xchg);
+    let send_settings = recv_preface.and_then(send_settings);
 
-    Box::new(settings_xchg)
+    Box::new(send_settings)
 }
 
 pub fn connect_and_handshake(lh: &reactor::Handle, addr: &SocketAddr) -> HttpFuture<TcpStream> {

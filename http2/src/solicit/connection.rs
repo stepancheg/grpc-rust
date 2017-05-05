@@ -25,6 +25,18 @@ use solicit::frame::{Frame, FrameIR, RawFrame, DataFrame, DataFlag, HeadersFrame
                   SettingsFrame, RstStreamFrame, PingFrame, GoawayFrame, WindowUpdateFrame};
 use hpack;
 
+#[derive(Debug)]
+pub enum HttpFrameType {
+    Data,
+    Headers,
+    RstStream,
+    Settings,
+    Ping,
+    Goaway,
+    WindowUpdate,
+    Unknown(u8),
+}
+
 /// An enum representing all frame variants that can be returned by an `HttpConnection` can handle.
 ///
 /// The variants wrap the appropriate `Frame` implementation, except for the `UnknownFrame`
@@ -71,7 +83,7 @@ impl HttpFrame{
         // TODO: The reason behind being unable to decode the frame should be
         //       extracted to allow an appropriate connection-level action to be
         //       taken (e.g. responding with a PROTOCOL_ERROR).
-        Frame::from_raw(&raw_frame).ok_or(HttpError::InvalidFrame)
+        Frame::from_raw(&raw_frame).ok_or(HttpError::InvalidFrame("failed to parse frame".to_owned()))
     }
 
     /// Get stream id, zero for special frames
@@ -85,6 +97,19 @@ impl HttpFrame{
             &HttpFrame::GoawayFrame(ref f) => f.get_stream_id(),
             &HttpFrame::WindowUpdateFrame(ref f) => f.get_stream_id(),
             &HttpFrame::UnknownFrame(ref f) => f.get_stream_id(),
+        }
+    }
+
+    pub fn frame_type(&self) -> HttpFrameType {
+        match self {
+            &HttpFrame::DataFrame(..) => HttpFrameType::Data,
+            &HttpFrame::HeadersFrame(..) => HttpFrameType::Headers,
+            &HttpFrame::RstStreamFrame(..) => HttpFrameType::RstStream,
+            &HttpFrame::SettingsFrame(..) => HttpFrameType::Settings,
+            &HttpFrame::PingFrame(..) => HttpFrameType::Ping,
+            &HttpFrame::GoawayFrame(..) => HttpFrameType::Goaway,
+            &HttpFrame::WindowUpdateFrame(..) => HttpFrameType::WindowUpdate,
+            &HttpFrame::UnknownFrame(ref f) => HttpFrameType::Unknown(f.frame_type()),
         }
     }
 }
