@@ -5,6 +5,10 @@ mod stream_merge2;
 mod stream_with_eof;
 mod stream_with_eof_and_error;
 mod shutdown_signal;
+
+mod sender_with_last;
+pub use self::sender_with_last::*;
+
 pub mod stream_deferred;
 
 pub use self::task_data::TaskRcMut;
