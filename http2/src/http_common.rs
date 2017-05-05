@@ -436,7 +436,10 @@ pub trait LoopInner: 'static {
 
     fn process_headers_frame(&mut self, frame: HeadersFrame);
 
-    fn process_settings_global(&mut self, _frame: SettingsFrame) {
+    fn process_settings_global(&mut self, frame: SettingsFrame) {
+        if frame.is_ack() {
+            return;
+        }
         // TODO: apply settings
 
         self.ack_settings();
