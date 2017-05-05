@@ -100,6 +100,8 @@ impl GrpcClient {
     pub fn call_impl<Req : Send + 'static, Resp : Send + 'static>(&self, req: GrpcStreamSend<Req>, method: Arc<MethodDescriptor<Req, Resp>>)
         -> GrpcStreamSend<Resp>
     {
+        info!("start call {}", method.name);
+
         let host = self.host.clone();
         let http_scheme = self.http_scheme.clone();
 
