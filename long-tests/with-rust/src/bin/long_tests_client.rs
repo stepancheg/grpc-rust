@@ -34,7 +34,7 @@ fn run_echo(client: LongTestsAsyncClient, cmd_args: &[String]) {
         let mut req = EchoRequest::new();
         req.set_payload(payload.clone());
 
-        let r = client.echo(GrpcMetadata::new(), req).wait_drop_metadata().expect("failed to get echo response");
+        let r = client.echo(GrpcRequestOptions::new(), req).wait_drop_metadata().expect("failed to get echo response");
 
         assert!(payload == r.get_payload());
     }

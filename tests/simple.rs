@@ -51,21 +51,21 @@ fn new_server<H>(name: &str, handler: H) -> GrpcServer
 
 /// Single unary method server
 fn new_server_unary<H>(name: &str, handler: H) -> GrpcServer
-    where H : Fn(GrpcMetadata, String) -> GrpcSingleResponse<String> + Sync + Send + 'static
+    where H : Fn(GrpcRequestOptions, String) -> GrpcSingleResponse<String> + Sync + Send + 'static
 {
     new_server(name, MethodHandlerUnary::new(handler))
 }
 
 /// Single server streaming method server
 fn new_server_server_streaming<H>(name: &str, handler: H) -> GrpcServer
-    where H : Fn(GrpcMetadata, String) -> GrpcStreamingResponse<String> + Sync + Send + 'static
+    where H : Fn(GrpcRequestOptions, String) -> GrpcStreamingResponse<String> + Sync + Send + 'static
 {
     new_server(name, MethodHandlerServerStreaming::new(handler))
 }
 
 /// Single server streaming method server
 fn new_server_client_streaming<H>(name: &str, handler: H) -> GrpcServer
-    where H : Fn(GrpcMetadata, GrpcStreamSend<String>) -> GrpcSingleResponse<String> + Sync + Send + 'static
+    where H : Fn(GrpcRequestOptions, GrpcStreamSend<String>) -> GrpcSingleResponse<String> + Sync + Send + 'static
 {
     new_server(name, MethodHandlerClientStreaming::new(handler))
 }
@@ -80,7 +80,7 @@ struct TesterUnary {
 
 impl TesterUnary {
     fn new<H>(handler: H) -> TesterUnary
-        where H : Fn(GrpcMetadata, String) -> GrpcSingleResponse<String> + Sync + Send + 'static
+        where H : Fn(GrpcRequestOptions, String) -> GrpcSingleResponse<String> + Sync + Send + 'static
     {
         let name = "/text/Unary";
         let server = new_server_unary(name, handler);
@@ -94,7 +94,7 @@ impl TesterUnary {
 
     fn call(&self, param: &str) -> GrpcFutureSend<String> {
         self.client.call_unary(
-            GrpcMetadata::new(),
+            GrpcRequestOptions::new(),
             param.to_owned(),
             string_string_method(&self.name, GrpcStreaming::Unary))
                 .drop_metadata()
@@ -131,7 +131,7 @@ struct TesterServerStreaming {
 
 impl TesterServerStreaming {
     fn new<H>(handler: H) -> Self
-        where H : Fn(GrpcMetadata, String) -> GrpcStreamingResponse<String> + Sync + Send + 'static
+        where H : Fn(GrpcRequestOptions, String) -> GrpcStreamingResponse<String> + Sync + Send + 'static
     {
         let name = "/test/ServerStreaming";
         let server = new_server_server_streaming(name, handler);
@@ -145,7 +145,7 @@ impl TesterServerStreaming {
 
     fn call(&self, param: &str) -> GrpcStream<String> {
         self.client.call_server_streaming(
-            GrpcMetadata::new(),
+            GrpcRequestOptions::new(),
             param.to_owned(),
             string_string_method(&self.name, GrpcStreaming::ServerStreaming)).drop_metadata()
     }
@@ -160,7 +160,7 @@ struct TesterClientStreaming {
 
 impl TesterClientStreaming {
     fn new<H>(handler: H) -> Self
-        where H : Fn(GrpcMetadata, GrpcStreamSend<String>) -> GrpcSingleResponse<String> + Sync + Send + 'static
+        where H : Fn(GrpcRequestOptions, GrpcStreamSend<String>) -> GrpcSingleResponse<String> + Sync + Send + 'static
     {
         let name = "/test/ClientStreaming";
         let server = new_server_client_streaming(name, handler);
@@ -177,7 +177,7 @@ impl TesterClientStreaming {
         (
             tx,
             self.client.call_client_streaming(
-                GrpcMetadata::new(),
+                GrpcRequestOptions::new(),
                 Box::new(rx),
                 string_string_method(&self.name, GrpcStreaming::ClientStreaming)).drop_metadata(),
         )
@@ -199,7 +199,7 @@ fn server_is_not_running() {
     // TODO: https://github.com/tokio-rs/tokio-core/issues/12
     if false {
         let result = client.call_unary(
-            GrpcMetadata::new(),
+            GrpcRequestOptions::new(),
             "aa".to_owned(),
             string_string_method("/does/not/matter", GrpcStreaming::Unary)).wait();
         assert!(result.is_err(), result);

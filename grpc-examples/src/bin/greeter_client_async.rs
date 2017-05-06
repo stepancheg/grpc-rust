@@ -7,8 +7,6 @@ use grpc::*;
 use grpc_examples::helloworld_grpc::*;
 use grpc_examples::helloworld::*;
 
-use futures::Future as _Future;
-
 use std::env;
 
 
@@ -20,7 +18,7 @@ fn main() {
     let mut req = HelloRequest::new();
     req.set_name(name);
 
-    let resp = client.SayHello(GrpcMetadata::new(), req);
+    let resp = client.SayHello(GrpcRequestOptions::new(), req);
 
     println!("{:?}", resp.wait());
 }

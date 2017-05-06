@@ -16,7 +16,7 @@ use chrono::*;
 use clap::{App, Arg};
 
 fn empty_unary(client: TestServiceClient) {
-    client.EmptyCall(GrpcMetadata::new(), Empty::new()).expect("failed to get EmptyUnary result");
+    client.EmptyCall(GrpcRequestOptions::new(), Empty::new()).expect("failed to get EmptyUnary result");
     println!("{} EmptyUnary done", Local::now().to_rfc3339());
 }
 
@@ -27,7 +27,7 @@ fn large_unary(client: TestServiceClient) {
     let mut request = SimpleRequest::new();
     request.set_payload(payload);
     request.set_response_size(314159);
-    let response = client.UnaryCall(GrpcMetadata::new(), request).expect("expected full frame");
+    let response = client.UnaryCall(GrpcRequestOptions::new(), request).expect("expected full frame");
     assert!(response.get_payload().body.len() == 314159);
     println!("{} LargeUnary done", Local::now().to_rfc3339());
 }
@@ -42,7 +42,7 @@ fn client_streaming(client: TestServiceClient) {
         requests.push(Ok(request));
     }
 
-    let response = client.StreamingInputCall(GrpcMetadata::new(), Box::new(requests.into_iter()))
+    let response = client.StreamingInputCall(GrpcRequestOptions::new(), Box::new(requests.into_iter()))
         .expect("expected response");
     assert!(response.aggregated_payload_size == 74922);
     println!("{} ClientStreaming done", Local::now().to_rfc3339());
@@ -60,7 +60,7 @@ fn server_streaming(client: TestServiceClient) {
     }
     req.set_response_parameters(::protobuf::RepeatedField::from_vec(params));
 
-    let response_stream = client.StreamingOutputCall(GrpcMetadata::new(), req);
+    let response_stream = client.StreamingOutputCall(GrpcRequestOptions::new(), req);
 
     let mut response_sizes = Vec::new();
 
@@ -94,7 +94,7 @@ fn ping_pong(client: TestServiceClient) {
         req.set_payload(payload);
         requests.push(Ok(req));
     }
-    let response = client.FullDuplexCall(GrpcMetadata::new(), Box::new(requests.into_iter()));
+    let response = client.FullDuplexCall(GrpcRequestOptions::new(), Box::new(requests.into_iter()));
     let mut response_sizes = Vec::new();
     {
         // this scope is to satisfy the borrow checker.
@@ -114,7 +114,7 @@ fn ping_pong(client: TestServiceClient) {
 }
 
 fn empty_stream(client: TestServiceClient) {
-    let response = client.FullDuplexCall(GrpcMetadata::new(), Box::new(Vec::new().into_iter()));
+    let response = client.FullDuplexCall(GrpcRequestOptions::new(), Box::new(Vec::new().into_iter()));
     assert!(response.count() == 0);
     println!("{} EmptyStream done", Local::now().to_rfc3339());
 }

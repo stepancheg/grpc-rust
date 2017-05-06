@@ -21,7 +21,7 @@ struct LongTestsServerImpl {
 }
 
 impl LongTestsAsync for LongTestsServerImpl {
-    fn echo(&self, _m: GrpcMetadata, mut p: EchoRequest)
+    fn echo(&self, _o: GrpcRequestOptions, mut p: EchoRequest)
         -> GrpcSingleResponse<EchoResponse>
     {
         let mut resp = EchoResponse::new();
@@ -29,7 +29,7 @@ impl LongTestsAsync for LongTestsServerImpl {
         GrpcSingleResponse::completed(resp)
     }
 
-    fn char_count(&self, _m: GrpcMetadata, p: GrpcStreamSend<CharCountRequest>)
+    fn char_count(&self, _o: GrpcRequestOptions, p: GrpcStreamSend<CharCountRequest>)
         -> GrpcSingleResponse<CharCountResponse>
     {
         let r = p
@@ -43,7 +43,7 @@ impl LongTestsAsync for LongTestsServerImpl {
         GrpcSingleResponse::no_metadata(r)
     }
 
-    fn random_strings(&self, _m: GrpcMetadata, p: RandomStringsRequest)
+    fn random_strings(&self, _o: GrpcRequestOptions, p: RandomStringsRequest)
         -> GrpcStreamingResponse<RandomStringsResponse>
     {
         let iter = iter::repeat(())

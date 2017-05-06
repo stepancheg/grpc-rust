@@ -22,11 +22,11 @@
 // interface
 
 pub trait Greeter {
-    fn SayHello(&self, m: ::grpc::GrpcMetadata, p: super::helloworld::HelloRequest) -> ::grpc::result::GrpcResult<super::helloworld::HelloReply>;
+    fn SayHello(&self, o: ::grpc::GrpcRequestOptions, p: super::helloworld::HelloRequest) -> ::grpc::result::GrpcResult<super::helloworld::HelloReply>;
 }
 
 pub trait GreeterAsync {
-    fn SayHello(&self, m: ::grpc::GrpcMetadata, p: super::helloworld::HelloRequest) -> ::grpc::GrpcSingleResponse<super::helloworld::HelloReply>;
+    fn SayHello(&self, o: ::grpc::GrpcRequestOptions, p: super::helloworld::HelloRequest) -> ::grpc::GrpcSingleResponse<super::helloworld::HelloReply>;
 }
 
 // sync client
@@ -46,8 +46,8 @@ impl GreeterClient {
 }
 
 impl Greeter for GreeterClient {
-    fn SayHello(&self, m: ::grpc::GrpcMetadata, p: super::helloworld::HelloRequest) -> ::grpc::result::GrpcResult<super::helloworld::HelloReply> {
-        ::grpc::GrpcSingleResponse::wait_drop_metadata(self.async_client.SayHello(m, p))
+    fn SayHello(&self, o: ::grpc::GrpcRequestOptions, p: super::helloworld::HelloRequest) -> ::grpc::result::GrpcResult<super::helloworld::HelloReply> {
+        ::grpc::GrpcSingleResponse::wait_drop_metadata(self.async_client.SayHello(o, p))
     }
 }
 
@@ -79,8 +79,8 @@ impl GreeterAsyncClient {
 }
 
 impl GreeterAsync for GreeterAsyncClient {
-    fn SayHello(&self, m: ::grpc::GrpcMetadata, p: super::helloworld::HelloRequest) -> ::grpc::GrpcSingleResponse<super::helloworld::HelloReply> {
-        self.grpc_client.call_unary(m, p, self.method_SayHello.clone())
+    fn SayHello(&self, o: ::grpc::GrpcRequestOptions, p: super::helloworld::HelloRequest) -> ::grpc::GrpcSingleResponse<super::helloworld::HelloReply> {
+        self.grpc_client.call_unary(o, p, self.method_SayHello.clone())
     }
 }
 
@@ -104,10 +104,10 @@ struct GreeterServerHandlerToAsync {
 }
 
 impl GreeterAsync for GreeterServerHandlerToAsync {
-    fn SayHello(&self, m: ::grpc::GrpcMetadata, p: super::helloworld::HelloRequest) -> ::grpc::GrpcSingleResponse<super::helloworld::HelloReply> {
+    fn SayHello(&self, o: ::grpc::GrpcRequestOptions, p: super::helloworld::HelloRequest) -> ::grpc::GrpcSingleResponse<super::helloworld::HelloReply> {
         let h = self.handler.clone();
         ::grpc::rt::sync_to_async_unary(&self.cpupool, p, move |p| {
-            h.SayHello(m, p)
+            h.SayHello(o, p)
         })
     }
 }
@@ -159,7 +159,7 @@ impl GreeterAsyncServer {
                     }),
                     {
                         let handler_copy = handler_arc.clone();
-                        ::grpc::server::MethodHandlerUnary::new(move |m, p| handler_copy.SayHello(m, p))
+                        ::grpc::server::MethodHandlerUnary::new(move |o, p| handler_copy.SayHello(o, p))
                     },
                 ),
             ],
