@@ -17,6 +17,7 @@ use futures::Future;
 mod test_misc;
 
 use httpbis::solicit::header::*;
+use httpbis::solicit::HttpError;
 
 use test_misc::*;
 use httpbis::for_test::*;
@@ -64,3 +65,35 @@ fn stream_count() {
     assert_eq!(0, state.streams.len(), "{:?}", state);
 }
 
+#[test]
+fn rst_is_error() {
+    env_logger::init().ok();
+
+    let server = HttpServerTester::new();
+
+    debug!("started server on {}", server.port());
+
+    let client: HttpClient =
+        HttpClient::new("::1", server.port(), false, Default::default()).expect("connect");
+
+    let mut server_tester = server.accept();
+    server_tester.recv_preface();
+    server_tester.settings_xchg();
+
+    let req = client.start_get_simple_response("/fgfg", "localhost");
+
+    let get = server_tester.recv_message(1);
+    assert_eq!("GET", get.headers.method());
+
+    server_tester.send_headers(1, Headers::ok_200(), false);
+    server_tester.send_rst(1, ErrorCode::InadequateSecurity);
+
+    match req.wait() {
+        Ok(..) => panic!("expected error"),
+        Err(HttpError::CodeError(ErrorCode::InadequateSecurity)) => {},
+        Err(e) => panic!("wrong error: {:?}", e),
+    }
+
+    let state: ConnectionStateSnapshot = client.dump_state().wait().expect("state");
+    assert_eq!(0, state.streams.len(), "{:?}", state);
+}

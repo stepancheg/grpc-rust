@@ -104,6 +104,10 @@ impl HttpConnectionTester {
         self.send_frame(data_frame);
     }
 
+    pub fn send_rst(&mut self, stream_id: StreamId, error_code: ErrorCode) {
+        self.send_frame(RstStreamFrame::new(stream_id, error_code));
+    }
+
     pub fn recv_raw_frame(&mut self) -> RawFrame {
         httpbis::solicit_async::recv_raw_frame_sync(&mut self.tcp).expect("recv_raw_frame")
     }

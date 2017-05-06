@@ -52,5 +52,4 @@ pub mod for_test {
     pub use solicit_async::*;
     pub use futures_misc::*;
     pub use message::*;
-    pub use solicit::header::*;
 }

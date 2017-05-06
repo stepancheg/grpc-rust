@@ -173,6 +173,10 @@ impl Headers {
         self.get(":path")
     }
 
+    pub fn method(&self) -> &str {
+        self.get(":method")
+    }
+
     pub fn add(&mut self, name: &str, value: &str) {
         self.0.push(Header::new(name, value));
     }

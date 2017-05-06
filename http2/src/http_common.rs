@@ -232,6 +232,7 @@ pub trait HttpStream {
     fn common(&self) -> &HttpStreamCommon;
     fn common_mut(&mut self) -> &mut HttpStreamCommon;
     fn new_data_chunk(&mut self, data: &[u8], last: bool);
+    fn rst(&mut self, error_code: ErrorCode);
     fn closed_remote(&mut self);
 }
 
@@ -474,7 +475,10 @@ pub trait LoopInner: 'static {
         self.out_window_increased(None);
     }
 
-    fn process_rst_stream_frame(&mut self, _frame: RstStreamFrame) {
+    fn process_rst_stream_frame(&mut self, frame: RstStreamFrame) {
+        let stream = self.common().get_stream_mut(frame.get_stream_id())
+            .expect(&format!("stream not found: {}", frame.get_stream_id()));
+        stream.rst(frame.error_code());
     }
 
     fn process_data_frame(&mut self, frame: DataFrame) {
@@ -548,6 +552,12 @@ pub trait LoopInner: 'static {
     fn process_stream_frame(&mut self, frame: HttpFrameStream) {
         let stream_id = frame.get_stream_id();
         let end_of_stream = frame.is_end_of_stream();
+
+        let close_local = match frame {
+            HttpFrameStream::RstStream(..) => true,
+            _ => false,
+        };
+
         match frame {
             HttpFrameStream::Data(data) => self.process_data_frame(data),
             HttpFrameStream::Headers(headers) => self.process_headers_frame(headers),
@@ -556,6 +566,9 @@ pub trait LoopInner: 'static {
         };
         if end_of_stream {
             self.close_remote(stream_id);
+        }
+        if close_local {
+            self.close_local(stream_id);
         }
     }
 
@@ -577,6 +590,21 @@ pub trait LoopInner: 'static {
             if let Some(stream) = self.common().get_stream_mut(stream_id) {
                 stream.common_mut().close_remote();
                 stream.closed_remote();
+            } else {
+                return;
+            }
+        }
+
+        self.common().remove_stream_if_closed(stream_id);
+    }
+
+    fn close_local(&mut self, stream_id: StreamId) {
+        debug!("close local: {}", stream_id);
+
+        {
+            if let Some(stream) = self.common().get_stream_mut(stream_id) {
+                stream.common_mut().close_local();
+                //stream.closed_local();
             } else {
                 return;
             }

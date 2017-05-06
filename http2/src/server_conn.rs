@@ -60,6 +60,13 @@ impl<F : HttpService> HttpStream for HttpServerStream<F> {
         }
     }
 
+    fn rst(&mut self, error_code: ErrorCode) {
+        if let Some(ref mut sender) = self.request_handler {
+            // ignore error
+            sender.send(ResultOrEof::Error(HttpError::CodeError(error_code))).ok();
+        }
+    }
+
     fn closed_remote(&mut self) {
         if let Some(sender) = self.request_handler.take() {
             // ignore error

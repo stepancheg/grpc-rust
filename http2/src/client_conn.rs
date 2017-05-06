@@ -58,6 +58,13 @@ impl HttpStream for HttpClientStream {
         }
     }
 
+    fn rst(&mut self, error_code: ErrorCode) {
+        if let Some(ref mut response_handler) = self.response_handler {
+            response_handler.send(ResultOrEof::Error(HttpError::CodeError(error_code)))
+                .unwrap();
+        }
+    }
+
     fn closed_remote(&mut self) {
         if let Some(response_handler) = self.response_handler.take() {
             // it is OK to ignore error: handler may be already dead
