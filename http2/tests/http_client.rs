@@ -23,7 +23,7 @@ use httpbis::for_test::*;
 use httpbis::solicit::ErrorCode;
 
 #[test]
-fn stream_count_new() {
+fn stream_count() {
     env_logger::init().ok();
 
     let server = HttpServerTester::new();
@@ -64,26 +64,3 @@ fn stream_count_new() {
     assert_eq!(0, state.streams.len(), "{:?}", state);
 }
 
-
-#[test]
-fn stream_count() {
-    env_logger::init().ok();
-
-    let server = HttpServerEcho::new();
-
-    debug!("started server on {}", server.port);
-
-    let client: HttpClient =
-        HttpClient::new("::1", server.port, false, Default::default()).expect("connect");
-
-    let state: ConnectionStateSnapshot = client.dump_state().wait().expect("state");
-    assert_eq!(0, state.streams.len());
-
-    let message = client.start_post_simple_response("/foobar", "localhost", Bytes::from(&b"xxyy"[..]))
-        .wait()
-        .expect("r");
-    assert_eq!((b"xxyy"[..]).to_owned(), message.body);
-
-    let state: ConnectionStateSnapshot = client.dump_state().wait().expect("state");
-    assert_eq!(0, state.streams.len(), "{:?}", state);
-}
