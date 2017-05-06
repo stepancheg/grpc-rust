@@ -6,6 +6,7 @@ extern crate bytes;
 extern crate futures_cpupool;
 extern crate tokio_core;
 extern crate tokio_tls;
+extern crate base64;
 
 extern crate protobuf;
 
@@ -24,6 +25,8 @@ pub mod result;
 pub mod error;
 pub mod iter;
 pub mod rt;
+pub mod metadata;
+mod chars;
 
 pub mod for_test {
     pub use httpbis::server_conn::*;

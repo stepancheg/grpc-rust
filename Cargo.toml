@@ -23,6 +23,7 @@ tokio-io        = "0.*"
 tokio-tls       = "0.*"
 httpbis         = { path = "http2", version = "0.1.3" }
 bytes = "0.*"
+base64          = "0.*"
 
 [lib]
 doctest = false

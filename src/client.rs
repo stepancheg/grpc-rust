@@ -23,6 +23,7 @@ use result::*;
 use httpbis::futures_misc::*;
 use httpbis::client_conf::*;
 use futures_grpc::*;
+use metadata::Metadata;
 
 use grpc_frame::*;
 
@@ -97,21 +98,24 @@ impl GrpcClient {
         one_receiver
     }
 
-    pub fn call_impl<Req : Send + 'static, Resp : Send + 'static>(&self, req: GrpcStreamSend<Req>, method: Arc<MethodDescriptor<Req, Resp>>)
+    fn call_impl<Req, Resp, S>(&self, metadata: Metadata, req: S, method: Arc<MethodDescriptor<Req, Resp>>)
         -> GrpcStreamSend<Resp>
+            where
+                Req : Send + 'static,
+                Resp : Send + 'static,
+                S : Stream<Item=Req, Error=GrpcError> + Send + 'static,
     {
         info!("start call {}", method.name);
 
-        let host = self.host.clone();
-        let http_scheme = self.http_scheme.clone();
-
-        let headers = Headers(vec![
-            Header::new(":method", "POST"),
-            Header::new(":path", method.name.clone()),
-            Header::new(":authority", host.clone()),
-            Header::new(":scheme", http_scheme.as_bytes()),
-            Header::new("content-type", "application/grpc"),
+        let mut headers = Headers(vec![
+            Header::new(Bytes::from_static(b":method"), Bytes::from_static(b"POST")),
+            Header::new(Bytes::from_static(b":path"), method.name.clone()),
+            Header::new(Bytes::from_static(b":authority"), self.host.clone()),
+            Header::new(Bytes::from_static(b":scheme"), Bytes::from_static(self.http_scheme.as_bytes())),
+            Header::new(Bytes::from_static(b"content-type"), Bytes::from_static(b"application/grpc")),
         ]);
+
+        headers.extend(metadata.into_headers());
 
         let request_frames = {
             let method = method.clone();
@@ -138,24 +142,24 @@ impl GrpcClient {
     pub fn call_unary<Req : Send + 'static, Resp : Send + 'static>(&self, req: Req, method: Arc<MethodDescriptor<Req, Resp>>)
         -> GrpcFutureSend<Resp>
     {
-        Box::new(stream_single(self.call_impl(Box::new(stream::once(Ok(req))), method)))
+        Box::new(stream_single(self.call_impl(Metadata::new(), stream::once(Ok(req)), method)))
     }
 
     pub fn call_server_streaming<Req : Send + 'static, Resp : Send + 'static>(&self, req: Req, method: Arc<MethodDescriptor<Req, Resp>>)
         -> GrpcStreamSend<Resp>
     {
-        self.call_impl(stream::once(Ok(req)).boxed(), method)
+        self.call_impl(Metadata::new(), stream::once(Ok(req)), method)
     }
 
     pub fn call_client_streaming<Req : Send + 'static, Resp : Send + 'static>(&self, req: GrpcStreamSend<Req>, method: Arc<MethodDescriptor<Req, Resp>>)
         -> GrpcFutureSend<Resp>
     {
-        Box::new(stream_single(self.call_impl(req, method)))
+        Box::new(stream_single(self.call_impl(Metadata::new(), req, method)))
     }
 
     pub fn call_bidi<Req : Send + 'static, Resp : Send + 'static>(&self, req: GrpcStreamSend<Req>, method: Arc<MethodDescriptor<Req, Resp>>)
         -> GrpcStreamSend<Resp>
     {
-        self.call_impl(req, method)
+        self.call_impl(Metadata::new(), req, method)
     }
 }

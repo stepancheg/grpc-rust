@@ -20,6 +20,12 @@ impl From<Vec<u8>> for HeaderPart {
     }
 }
 
+impl From<Bytes> for HeaderPart {
+    fn from(bytes: Bytes) -> HeaderPart {
+        HeaderPart(bytes)
+    }
+}
+
 impl<'a> From<&'a [u8]> for HeaderPart {
     fn from(buf: &'a [u8]) -> HeaderPart {
         HeaderPart(Bytes::from(buf))
