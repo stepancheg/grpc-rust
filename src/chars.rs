@@ -22,6 +22,12 @@ impl Chars {
     pub fn into_inner(self) -> Bytes {
         self.0
     }
+
+    pub fn try_from<B : Into<Bytes>>(b: B) -> Result<Chars, str::Utf8Error> {
+        let bytes = b.into();
+        str::from_utf8(&bytes)?;
+        Ok(Chars(bytes))
+    }
 }
 
 impl AsRef<str> for Chars {

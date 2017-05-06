@@ -2,6 +2,8 @@ extern crate grpc_examples;
 extern crate grpc;
 extern crate futures;
 
+use grpc::*;
+
 use grpc_examples::helloworld_grpc::*;
 use grpc_examples::helloworld::*;
 
@@ -18,7 +20,7 @@ fn main() {
     let mut req = HelloRequest::new();
     req.set_name(name);
 
-    let resp = client.SayHello(req);
+    let resp = client.SayHello(GrpcMetadata::new(), req);
 
     println!("{:?}", resp.wait());
 }

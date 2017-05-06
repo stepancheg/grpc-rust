@@ -23,7 +23,7 @@ use result::*;
 use httpbis::futures_misc::*;
 use httpbis::client_conf::*;
 use futures_grpc::*;
-use metadata::Metadata;
+use metadata::GrpcMetadata;
 
 use grpc_frame::*;
 
@@ -100,8 +100,8 @@ impl GrpcClient {
         one_receiver
     }
 
-    fn call_impl<Req, Resp, S>(&self, metadata: Metadata, req: S, method: Arc<MethodDescriptor<Req, Resp>>)
-        -> GrpcStreamingResponse<Resp>
+    fn call_impl<Req, Resp, S>(&self, metadata: GrpcMetadata, req: S, method: Arc<MethodDescriptor<Req, Resp>>)
+                               -> GrpcStreamingResponse<Resp>
             where
                 Req : Send + 'static,
                 Resp : Send + 'static,
@@ -141,27 +141,31 @@ impl GrpcClient {
         GrpcStreamingResponse::no_metadata(grpc_messages)
     }
 
-    pub fn call_unary<Req : Send + 'static, Resp : Send + 'static>(&self, req: Req, method: Arc<MethodDescriptor<Req, Resp>>)
+    pub fn call_unary<Req, Resp>(&self, m: GrpcMetadata, req: Req, method: Arc<MethodDescriptor<Req, Resp>>)
         -> GrpcSingleResponse<Resp>
+            where Req: Send + 'static, Resp: Send + 'static
     {
-        self.call_impl(Metadata::new(), stream::once(Ok(req)), method).single()
+        self.call_impl(m, stream::once(Ok(req)), method).single()
     }
 
-    pub fn call_server_streaming<Req : Send + 'static, Resp : Send + 'static>(&self, req: Req, method: Arc<MethodDescriptor<Req, Resp>>)
+    pub fn call_server_streaming<Req, Resp>(&self, m: GrpcMetadata, req: Req, method: Arc<MethodDescriptor<Req, Resp>>)
         -> GrpcStreamingResponse<Resp>
+            where Req: Send + 'static, Resp: Send + 'static
     {
-        self.call_impl(Metadata::new(), stream::once(Ok(req)), method)
+        self.call_impl(m, stream::once(Ok(req)), method)
     }
 
-    pub fn call_client_streaming<Req : Send + 'static, Resp : Send + 'static>(&self, req: GrpcStreamSend<Req>, method: Arc<MethodDescriptor<Req, Resp>>)
+    pub fn call_client_streaming<Req, Resp>(&self, m: GrpcMetadata, req: GrpcStreamSend<Req>, method: Arc<MethodDescriptor<Req, Resp>>)
         -> GrpcSingleResponse<Resp>
+            where Req: Send + 'static, Resp: Send + 'static
     {
-        self.call_impl(Metadata::new(), req, method).single()
+        self.call_impl(m, req, method).single()
     }
 
-    pub fn call_bidi<Req : Send + 'static, Resp : Send + 'static>(&self, req: GrpcStreamSend<Req>, method: Arc<MethodDescriptor<Req, Resp>>)
+    pub fn call_bidi<Req, Resp>(&self, m: GrpcMetadata, req: GrpcStreamSend<Req>, method: Arc<MethodDescriptor<Req, Resp>>)
         -> GrpcStreamingResponse<Resp>
+            where Req: Send + 'static, Resp: Send + 'static
     {
-        self.call_impl(Metadata::new(), req, method)
+        self.call_impl(m, req, method)
     }
 }

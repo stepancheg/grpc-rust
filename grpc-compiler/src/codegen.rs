@@ -58,12 +58,12 @@ impl<'a> MethodGen<'a> {
     }
 
     fn sync_sig(&self) -> String {
-        format!("{}(&self, p: {}) -> {}",
+        format!("{}(&self, m: ::grpc::GrpcMetadata, p: {}) -> {}",
             self.proto.get_name(), self.input_sync(), self.output_sync())
     }
 
     fn async_sig(&self) -> String {
-        format!("{}(&self, p: {}) -> {}",
+        format!("{}(&self, m: ::grpc::GrpcMetadata, p: {}) -> {}",
                 self.proto.get_name(), self.input_async(), self.output_async())
     }
 
@@ -84,7 +84,7 @@ impl<'a> MethodGen<'a> {
             if self.proto.get_client_streaming() {
                 w.write_line("let p = ::futures::stream::Stream::boxed(::futures::stream::iter(::std::iter::IntoIterator::into_iter(p)));");
             }
-            w.write_line(&format!("{}(self.async_client.{}(p))", wait, self.proto.get_name()));
+            w.write_line(&format!("{}(self.async_client.{}(m, p))", wait, self.proto.get_name()));
         });
     }
 
@@ -116,7 +116,7 @@ impl<'a> MethodGen<'a> {
 
     fn write_async_client(&self, w: &mut CodeWriter) {
         w.def_fn(&self.async_sig(), |w| {
-            w.write_line(&format!("self.grpc_client.call_{}(p, self.{}.clone())",
+            w.write_line(&format!("self.grpc_client.call_{}(m, p, self.{}.clone())",
                 self.streaming_lower(),
                 self.descriptor_field_name()))
         });
@@ -135,7 +135,7 @@ impl<'a> MethodGen<'a> {
         w.def_fn(&self.async_sig(), |w| {
             w.write_line("let h = self.handler.clone();");
             w.write_line(format!("::grpc::rt::sync_to_async_{}(&self.cpupool, p, move |p| {{", self.streaming_lower()));
-            w.write_line(format!("    h.{}(p)", self.proto.get_name()));
+            w.write_line(format!("    h.{}(m, p)", self.proto.get_name()));
             w.write_line(format!("}})"));
         });
     }
@@ -376,7 +376,7 @@ impl<'a> ServiceGen<'a> {
                             method.write_descriptor(w, "::std::sync::Arc::new(", "),");
                             w.block("{", "},", |w| {
                                 w.write_line(&format!("let handler_copy = {}.clone();", handler));
-                                w.write_line(&format!("::grpc::server::MethodHandler{}::new(move |p| handler_copy.{}(p))",
+                                w.write_line(&format!("::grpc::server::MethodHandler{}::new(move |m, p| handler_copy.{}(m, p))",
                                     method.streaming_upper(),
                                     method.proto.get_name()));
                             });

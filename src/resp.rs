@@ -13,35 +13,35 @@ use metadata::*;
 
 /// Single message response
 // TODO: trailers metadata
-pub struct GrpcSingleResponse<T : Send + 'static>(pub GrpcFutureSend<(Metadata, GrpcFutureSend<T>)>);
+pub struct GrpcSingleResponse<T : Send + 'static>(pub GrpcFutureSend<(GrpcMetadata, GrpcFutureSend<T>)>);
 
 impl<T : Send + 'static> GrpcSingleResponse<T> {
     // constructors
 
-    pub fn metadata_and_future<F>(metadata: Metadata, result: F) -> GrpcSingleResponse<T>
+    pub fn metadata_and_future<F>(metadata: GrpcMetadata, result: F) -> GrpcSingleResponse<T>
         where F : Future<Item=T, Error=GrpcError> + Send + 'static
     {
         let boxed: GrpcFutureSend<T> = Box::new(result);
         GrpcSingleResponse(Box::new(future::ok((metadata, boxed))))
     }
 
-    pub fn completed_with_metadata(metadata: Metadata, r: T) -> GrpcSingleResponse<T> {
+    pub fn completed_with_metadata(metadata: GrpcMetadata, r: T) -> GrpcSingleResponse<T> {
         GrpcSingleResponse::metadata_and_future(metadata, future::ok(r))
     }
 
     pub fn completed(r: T) -> GrpcSingleResponse<T> {
-        GrpcSingleResponse::completed_with_metadata(Metadata::new(), r)
+        GrpcSingleResponse::completed_with_metadata(GrpcMetadata::new(), r)
     }
 
     pub fn no_metadata<F>(r: F) -> GrpcSingleResponse<T>
         where F : Future<Item=T, Error=GrpcError> + Send + 'static
     {
-        GrpcSingleResponse::metadata_and_future(Metadata::new(), r)
+        GrpcSingleResponse::metadata_and_future(GrpcMetadata::new(), r)
     }
 
     // getters
 
-    pub fn join_metadata_result(self) -> GrpcFutureSend<(Metadata, T)> {
+    pub fn join_metadata_result(self) -> GrpcFutureSend<(GrpcMetadata, T)> {
         Box::new(self.0.and_then(|(metadata, result)| result.map(|result| (metadata, result))))
     }
 
@@ -57,7 +57,7 @@ impl<T : Send + 'static> GrpcSingleResponse<T> {
             })))
     }
 
-    pub fn wait(self) -> GrpcResult<(Metadata, T)> {
+    pub fn wait(self) -> GrpcResult<(GrpcMetadata, T)> {
         self.join_metadata_result().wait()
     }
 
@@ -69,42 +69,42 @@ impl<T : Send + 'static> GrpcSingleResponse<T> {
 
 /// Streaming response
 // TODO: trailers metadata
-pub struct GrpcStreamingResponse<T : Send + 'static>(pub GrpcFutureSend<(Metadata, GrpcStreamSend<T>)>);
+pub struct GrpcStreamingResponse<T : Send + 'static>(pub GrpcFutureSend<(GrpcMetadata, GrpcStreamSend<T>)>);
 
 impl<T : Send + 'static> GrpcStreamingResponse<T> {
     // constructors
 
-    pub fn metadata_and_stream<S>(metadata: Metadata, result: S) -> GrpcStreamingResponse<T>
+    pub fn metadata_and_stream<S>(metadata: GrpcMetadata, result: S) -> GrpcStreamingResponse<T>
         where S : Stream<Item=T, Error=GrpcError> + Send + 'static
     {
         let boxed: GrpcStreamSend<T> = Box::new(result);
         GrpcStreamingResponse(Box::new(future::ok((metadata, boxed))))
     }
 
-    pub fn completed_with_metadata(metadata: Metadata, r: Vec<T>) -> GrpcStreamingResponse<T> {
+    pub fn completed_with_metadata(metadata: GrpcMetadata, r: Vec<T>) -> GrpcStreamingResponse<T> {
         GrpcStreamingResponse::iter_with_metadata(metadata, r.into_iter())
     }
 
-    pub fn iter_with_metadata<I>(metadata: Metadata, iter: I) -> GrpcStreamingResponse<T>
+    pub fn iter_with_metadata<I>(metadata: GrpcMetadata, iter: I) -> GrpcStreamingResponse<T>
         where I: Iterator<Item=T> + Send + 'static
     {
         GrpcStreamingResponse::metadata_and_stream(metadata, stream::iter(iter.map(Ok)))
     }
 
     pub fn completed(r: Vec<T>) -> GrpcStreamingResponse<T> {
-        GrpcStreamingResponse::completed_with_metadata(Metadata::new(), r)
+        GrpcStreamingResponse::completed_with_metadata(GrpcMetadata::new(), r)
     }
 
     pub fn iter<I>(iter: I) -> GrpcStreamingResponse<T>
         where I : Iterator<Item=T> + Send + 'static
     {
-        GrpcStreamingResponse::iter_with_metadata(Metadata::new(), iter)
+        GrpcStreamingResponse::iter_with_metadata(GrpcMetadata::new(), iter)
     }
 
     pub fn no_metadata<F>(r: F) -> GrpcStreamingResponse<T>
         where F : Stream<Item=T, Error=GrpcError> + Send + 'static
     {
-        GrpcStreamingResponse::metadata_and_stream(Metadata::new(), r)
+        GrpcStreamingResponse::metadata_and_stream(GrpcMetadata::new(), r)
     }
 
     // getters
@@ -130,7 +130,7 @@ impl<T : Send + 'static> GrpcStreamingResponse<T> {
             })))
     }
 
-    pub fn wait(self) -> GrpcResult<(Metadata, GrpcIterator<T>)> {
+    pub fn wait(self) -> GrpcResult<(GrpcMetadata, GrpcIterator<T>)> {
         let (metadata, stream) = self.0.wait()?;
         Ok((metadata, Box::new(stream.wait())))
     }

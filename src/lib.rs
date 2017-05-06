@@ -33,6 +33,8 @@ mod chars;
 pub use resp::GrpcSingleResponse;
 pub use resp::GrpcStreamingResponse;
 
+pub use metadata::GrpcMetadata;
+
 
 pub mod for_test {
     pub use httpbis::server_conn::*;
