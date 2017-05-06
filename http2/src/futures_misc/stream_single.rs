@@ -1,14 +1,23 @@
+use std::mem;
+
 use futures::stream::Stream;
 use futures::Future;
 use futures::Poll;
 use futures::Async;
 
 
+enum State<I> {
+    Init,
+    First(I),
+    Eof,
+}
+
+
 pub struct StreamSingle<S>
     where S : Stream
 {
     stream: S,
-    state: Option<S::Item>,
+    state: State<S::Item>,
 }
 
 
@@ -19,7 +28,7 @@ pub fn stream_single<S>(stream: S) -> StreamSingle<S>
 {
     StreamSingle {
         stream: stream,
-        state: None,
+        state: State::Init,
     }
 }
 
@@ -32,13 +41,19 @@ impl<S> Future for StreamSingle<S>
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
         loop {
             match try_ready!(self.stream.poll()) {
-                // TODO: better errors
-                None => return Ok(Async::Ready(self.state.take().expect("expecting one element, found none"))),
+                None => {
+                    return match mem::replace(&mut self.state, State::Eof) {
+                        State::Init => panic!("expecting one element, found none"),
+                        State::Eof => panic!("Future::poll after EOF"),
+                        State::First(f) => Ok(Async::Ready(f)),
+                    };
+                },
                 Some(item) => {
-                    if self.state.is_some() {
-                        panic!("more than one element");
+                    match mem::replace(&mut self.state, State::First(item)) {
+                        State::Init => {},
+                        State::First(_) => panic!("more than one element"),
+                        State::Eof => panic!("poll after EOF"),
                     }
-                    self.state = Some(item);
                 }
             }
         }
