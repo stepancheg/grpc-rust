@@ -195,7 +195,7 @@ impl HttpStreamCommon {
             };
 
         // Max of connection and stream window size
-        let max_window = cmp::max(self.out_window_size.size(), conn_out_window_size.size());
+        let max_window = cmp::min(self.out_window_size.size(), conn_out_window_size.size());
 
         if data.len() as usize > max_window as usize {
             trace!("truncating data of len {} to {}", data.len(), max_window);
