@@ -20,8 +20,6 @@ native-tls      = "0.*"
 tokio-core      = "0.*"
 tokio-io        = "0.*"
 tokio-timer     = "0.*"
-#tokio-tls       = { git = "https://github.com/tokio-rs/tokio-tls/", features = ["force-openssl"] }
-#tokio-tls       = { git = "https://github.com/tokio-rs/tokio-tls/" }
 tokio-tls       = "0.*"
 net2 = "0.2"
 bytes = "0.*"
