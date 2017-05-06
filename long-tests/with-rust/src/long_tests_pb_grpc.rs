@@ -30,11 +30,11 @@ pub trait LongTests {
 }
 
 pub trait LongTestsAsync {
-    fn echo(&self, p: super::long_tests_pb::EchoRequest) -> ::grpc::futures_grpc::GrpcFutureSend<super::long_tests_pb::EchoResponse>;
+    fn echo(&self, p: super::long_tests_pb::EchoRequest) -> ::grpc::GrpcSingleResponse<super::long_tests_pb::EchoResponse>;
 
-    fn char_count(&self, p: ::grpc::futures_grpc::GrpcStreamSend<super::long_tests_pb::CharCountRequest>) -> ::grpc::futures_grpc::GrpcFutureSend<super::long_tests_pb::CharCountResponse>;
+    fn char_count(&self, p: ::grpc::futures_grpc::GrpcStreamSend<super::long_tests_pb::CharCountRequest>) -> ::grpc::GrpcSingleResponse<super::long_tests_pb::CharCountResponse>;
 
-    fn random_strings(&self, p: super::long_tests_pb::RandomStringsRequest) -> ::grpc::futures_grpc::GrpcStreamSend<super::long_tests_pb::RandomStringsResponse>;
+    fn random_strings(&self, p: super::long_tests_pb::RandomStringsRequest) -> ::grpc::GrpcStreamingResponse<super::long_tests_pb::RandomStringsResponse>;
 }
 
 // sync client
@@ -55,12 +55,12 @@ impl LongTestsClient {
 
 impl LongTests for LongTestsClient {
     fn echo(&self, p: super::long_tests_pb::EchoRequest) -> ::grpc::result::GrpcResult<super::long_tests_pb::EchoResponse> {
-        ::futures::Future::wait(self.async_client.echo(p))
+        ::grpc::GrpcSingleResponse::wait_drop_metadata(self.async_client.echo(p))
     }
 
     fn char_count(&self, p: ::grpc::iter::GrpcIterator<super::long_tests_pb::CharCountRequest>) -> ::grpc::result::GrpcResult<super::long_tests_pb::CharCountResponse> {
         let p = ::futures::stream::Stream::boxed(::futures::stream::iter(::std::iter::IntoIterator::into_iter(p)));
-        ::futures::Future::wait(self.async_client.char_count(p))
+        ::grpc::GrpcSingleResponse::wait_drop_metadata(self.async_client.char_count(p))
     }
 
     fn random_strings(&self, p: super::long_tests_pb::RandomStringsRequest) -> ::grpc::iter::GrpcIterator<super::long_tests_pb::RandomStringsResponse> {
@@ -110,15 +110,15 @@ impl LongTestsAsyncClient {
 }
 
 impl LongTestsAsync for LongTestsAsyncClient {
-    fn echo(&self, p: super::long_tests_pb::EchoRequest) -> ::grpc::futures_grpc::GrpcFutureSend<super::long_tests_pb::EchoResponse> {
+    fn echo(&self, p: super::long_tests_pb::EchoRequest) -> ::grpc::GrpcSingleResponse<super::long_tests_pb::EchoResponse> {
         self.grpc_client.call_unary(p, self.method_echo.clone())
     }
 
-    fn char_count(&self, p: ::grpc::futures_grpc::GrpcStreamSend<super::long_tests_pb::CharCountRequest>) -> ::grpc::futures_grpc::GrpcFutureSend<super::long_tests_pb::CharCountResponse> {
+    fn char_count(&self, p: ::grpc::futures_grpc::GrpcStreamSend<super::long_tests_pb::CharCountRequest>) -> ::grpc::GrpcSingleResponse<super::long_tests_pb::CharCountResponse> {
         self.grpc_client.call_client_streaming(p, self.method_char_count.clone())
     }
 
-    fn random_strings(&self, p: super::long_tests_pb::RandomStringsRequest) -> ::grpc::futures_grpc::GrpcStreamSend<super::long_tests_pb::RandomStringsResponse> {
+    fn random_strings(&self, p: super::long_tests_pb::RandomStringsRequest) -> ::grpc::GrpcStreamingResponse<super::long_tests_pb::RandomStringsResponse> {
         self.grpc_client.call_server_streaming(p, self.method_random_strings.clone())
     }
 }
@@ -143,21 +143,21 @@ struct LongTestsServerHandlerToAsync {
 }
 
 impl LongTestsAsync for LongTestsServerHandlerToAsync {
-    fn echo(&self, p: super::long_tests_pb::EchoRequest) -> ::grpc::futures_grpc::GrpcFutureSend<super::long_tests_pb::EchoResponse> {
+    fn echo(&self, p: super::long_tests_pb::EchoRequest) -> ::grpc::GrpcSingleResponse<super::long_tests_pb::EchoResponse> {
         let h = self.handler.clone();
         ::grpc::rt::sync_to_async_unary(&self.cpupool, p, move |p| {
             h.echo(p)
         })
     }
 
-    fn char_count(&self, p: ::grpc::futures_grpc::GrpcStreamSend<super::long_tests_pb::CharCountRequest>) -> ::grpc::futures_grpc::GrpcFutureSend<super::long_tests_pb::CharCountResponse> {
+    fn char_count(&self, p: ::grpc::futures_grpc::GrpcStreamSend<super::long_tests_pb::CharCountRequest>) -> ::grpc::GrpcSingleResponse<super::long_tests_pb::CharCountResponse> {
         let h = self.handler.clone();
         ::grpc::rt::sync_to_async_client_streaming(&self.cpupool, p, move |p| {
             h.char_count(p)
         })
     }
 
-    fn random_strings(&self, p: super::long_tests_pb::RandomStringsRequest) -> ::grpc::futures_grpc::GrpcStreamSend<super::long_tests_pb::RandomStringsResponse> {
+    fn random_strings(&self, p: super::long_tests_pb::RandomStringsRequest) -> ::grpc::GrpcStreamingResponse<super::long_tests_pb::RandomStringsResponse> {
         let h = self.handler.clone();
         ::grpc::rt::sync_to_async_server_streaming(&self.cpupool, p, move |p| {
             h.random_strings(p)

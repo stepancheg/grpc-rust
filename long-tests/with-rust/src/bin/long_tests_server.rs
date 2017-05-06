@@ -8,30 +8,29 @@ extern crate long_tests;
 extern crate futures;
 
 use futures::stream::Stream;
-use futures::stream;
 use futures::Future;
 
 use long_tests::long_tests_pb::*;
 use long_tests::long_tests_pb_grpc::*;
 
-use grpc::futures_grpc::GrpcStreamSend;
-use grpc::futures_grpc::GrpcFutureSend;
+use grpc::futures_grpc::*;
 use grpc::error::GrpcError;
+use grpc::*;
 
 struct LongTestsServerImpl {
 }
 
 impl LongTestsAsync for LongTestsServerImpl {
     fn echo(&self, mut p: EchoRequest)
-        -> GrpcFutureSend<EchoResponse>
+        -> GrpcSingleResponse<EchoResponse>
     {
         let mut resp = EchoResponse::new();
         resp.set_payload(p.take_payload());
-        Box::new(futures::finished(resp))
+        GrpcSingleResponse::completed(resp)
     }
 
     fn char_count(&self, p: GrpcStreamSend<CharCountRequest>)
-        -> GrpcFutureSend<CharCountResponse>
+        -> GrpcSingleResponse<CharCountResponse>
     {
         let r = p
             .map(|c| c.part.len() as u64)
@@ -41,21 +40,21 @@ impl LongTestsAsync for LongTestsServerImpl {
                 r.char_count = s;
                 r
             });
-        Box::new(r)
+        GrpcSingleResponse::no_metadata(r)
     }
 
     fn random_strings(&self, p: RandomStringsRequest)
-        -> GrpcStreamSend<RandomStringsResponse>
+        -> GrpcStreamingResponse<RandomStringsResponse>
     {
         let iter = iter::repeat(())
             .map(|_| {
                 let s = "aabb".to_owned();
                 let mut resp = RandomStringsResponse::new();
                 resp.set_s(s);
-                Ok(resp)
+                resp
             })
             .take(p.count as usize);
-        Box::new(stream::iter(iter))
+        GrpcStreamingResponse::iter(iter)
     }
 }
 

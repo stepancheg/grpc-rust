@@ -26,7 +26,13 @@ pub mod error;
 pub mod iter;
 pub mod rt;
 pub mod metadata;
+mod resp;
 mod chars;
+
+
+pub use resp::GrpcSingleResponse;
+pub use resp::GrpcStreamingResponse;
+
 
 pub mod for_test {
     pub use httpbis::server_conn::*;

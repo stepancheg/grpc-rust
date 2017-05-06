@@ -5,9 +5,7 @@ extern crate grpc;
 
 use std::thread;
 
-use futures::Future;
-
-use grpc::futures_grpc::*;
+use grpc::*;
 use grpc::server::GrpcServerConf;
 
 use grpc_examples::helloworld_grpc::*;
@@ -16,12 +14,12 @@ use grpc_examples::helloworld::*;
 struct GreeterImpl;
 
 impl GreeterAsync for GreeterImpl {
-    fn SayHello(&self, req: HelloRequest) -> GrpcFutureSend<HelloReply> {
+    fn SayHello(&self, req: HelloRequest) -> GrpcSingleResponse<HelloReply> {
         let mut r = HelloReply::new();
         let name = if req.get_name().is_empty() { "world" } else { req.get_name() };
         println!("greeting request from {}", name);
         r.set_message(format!("Hello {}", name));
-        Box::new(futures::finished(r))
+        GrpcSingleResponse::completed(r)
     }
 }
 

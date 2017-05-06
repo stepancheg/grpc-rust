@@ -12,41 +12,42 @@ use futures_grpc::*;
 use error::*;
 use result::*;
 use iter::*;
+use resp::*;
 
 
-pub fn stream_to_iter<T : 'static>(s: GrpcStreamSend<T>) -> GrpcIterator<T> {
-    Box::new(s.wait())
+pub fn stream_to_iter<T : Send + 'static>(s: GrpcStreamingResponse<T>) -> GrpcIterator<T> {
+    s.wait_drop_metadata()
 }
 
 pub fn iter_to_stream<T : Send + 'static>(i: GrpcIterator<T>) -> GrpcStreamSend<T> {
     Box::new(stream::iter(i))
 }
 
-pub fn sync_to_async_unary<Req, Resp, H>(cpupool: &CpuPool, req: Req, sync_handler: H) -> GrpcFutureSend<Resp>
+pub fn sync_to_async_unary<Req, Resp, H>(cpupool: &CpuPool, req: Req, sync_handler: H) -> GrpcSingleResponse<Resp>
     where
         Req : Send + 'static,
         Resp : Send + 'static,
         H : FnOnce(Req) -> GrpcResult<Resp> + Send + 'static,
 {
-    Box::new(cpupool
+    GrpcSingleResponse::no_metadata(cpupool
         .spawn(futures::lazy(move || {
             sync_handler(req)
         })))
 }
 
-pub fn sync_to_async_client_streaming<Req, Resp, H>(cpupool: &CpuPool, req: GrpcStreamSend<Req>, sync_handler: H) -> GrpcFutureSend<Resp>
+pub fn sync_to_async_client_streaming<Req, Resp, H>(cpupool: &CpuPool, req: GrpcStreamSend<Req>, sync_handler: H) -> GrpcSingleResponse<Resp>
     where
         Req : Send + 'static,
         Resp : Send + 'static,
         H : FnOnce(GrpcIterator<Req>) -> GrpcResult<Resp> + Send + 'static,
 {
-    Box::new(cpupool
+    GrpcSingleResponse::no_metadata(cpupool
         .spawn(futures::lazy(move || {
             sync_handler(Box::new(req.wait()))
         })))
 }
 
-pub fn sync_to_async_server_streaming<Req, Resp, H>(cpupool: &CpuPool, req: Req, sync_handler: H) -> GrpcStreamSend<Resp>
+pub fn sync_to_async_server_streaming<Req, Resp, H>(cpupool: &CpuPool, req: Req, sync_handler: H) -> GrpcStreamingResponse<Resp>
     where
         Req : Send + 'static,
         Resp : Send + 'static,
@@ -70,10 +71,10 @@ pub fn sync_to_async_server_streaming<Req, Resp, H>(cpupool: &CpuPool, req: Req,
         }
     });
 
-    Box::new(receiver)
+    GrpcStreamingResponse::no_metadata(receiver)
 }
 
-pub fn sync_to_async_bidi<Req, Resp, H>(cpupool: &CpuPool, req: GrpcStreamSend<Req>, sync_handler: H) -> GrpcStreamSend<Resp>
+pub fn sync_to_async_bidi<Req, Resp, H>(cpupool: &CpuPool, req: GrpcStreamSend<Req>, sync_handler: H) -> GrpcStreamingResponse<Resp>
     where
         Req : Send + 'static,
         Resp : Send + 'static,
@@ -97,5 +98,5 @@ pub fn sync_to_async_bidi<Req, Resp, H>(cpupool: &CpuPool, req: GrpcStreamSend<R
         }
     });
 
-    Box::new(receiver)
+    GrpcStreamingResponse::no_metadata(receiver)
 }

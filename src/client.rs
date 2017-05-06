@@ -27,6 +27,8 @@ use metadata::Metadata;
 
 use grpc_frame::*;
 
+use resp::*;
+
 #[derive(Default, Debug, Clone)]
 pub struct GrpcClientConf {
     pub http: HttpClientConf,
@@ -99,7 +101,7 @@ impl GrpcClient {
     }
 
     fn call_impl<Req, Resp, S>(&self, metadata: Metadata, req: S, method: Arc<MethodDescriptor<Req, Resp>>)
-        -> GrpcStreamSend<Resp>
+        -> GrpcStreamingResponse<Resp>
             where
                 Req : Send + 'static,
                 Resp : Send + 'static,
@@ -136,29 +138,29 @@ impl GrpcClient {
 
         let grpc_messages = grpc_frames.and_then(move |frame| method.resp_marshaller.read(&frame));
 
-        Box::new(grpc_messages)
+        GrpcStreamingResponse::no_metadata(grpc_messages)
     }
 
     pub fn call_unary<Req : Send + 'static, Resp : Send + 'static>(&self, req: Req, method: Arc<MethodDescriptor<Req, Resp>>)
-        -> GrpcFutureSend<Resp>
+        -> GrpcSingleResponse<Resp>
     {
-        Box::new(stream_single(self.call_impl(Metadata::new(), stream::once(Ok(req)), method)))
+        self.call_impl(Metadata::new(), stream::once(Ok(req)), method).single()
     }
 
     pub fn call_server_streaming<Req : Send + 'static, Resp : Send + 'static>(&self, req: Req, method: Arc<MethodDescriptor<Req, Resp>>)
-        -> GrpcStreamSend<Resp>
+        -> GrpcStreamingResponse<Resp>
     {
         self.call_impl(Metadata::new(), stream::once(Ok(req)), method)
     }
 
     pub fn call_client_streaming<Req : Send + 'static, Resp : Send + 'static>(&self, req: GrpcStreamSend<Req>, method: Arc<MethodDescriptor<Req, Resp>>)
-        -> GrpcFutureSend<Resp>
+        -> GrpcSingleResponse<Resp>
     {
-        Box::new(stream_single(self.call_impl(Metadata::new(), req, method)))
+        self.call_impl(Metadata::new(), req, method).single()
     }
 
     pub fn call_bidi<Req : Send + 'static, Resp : Send + 'static>(&self, req: GrpcStreamSend<Req>, method: Arc<MethodDescriptor<Req, Resp>>)
-        -> GrpcStreamSend<Resp>
+        -> GrpcStreamingResponse<Resp>
     {
         self.call_impl(Metadata::new(), req, method)
     }

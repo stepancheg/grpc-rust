@@ -13,8 +13,9 @@ use futures::stream::Stream;
 use futures::stream;
 use futures::Future;
 
-use grpc::futures_grpc::{GrpcFutureSend, GrpcStreamSend};
+use grpc::futures_grpc::*;
 use grpc::error::*;
+use grpc::*;
 
 static DICTIONARY: &'static str = "ABCDEFGHIJKLMNOPQRSTUVabcdefghijklmnoqprstuvwxyz0123456789";
 // Note: due to const restrictions, this is calculated by hand.
@@ -37,13 +38,13 @@ fn make_string(size: usize) -> Vec<u8> {
 struct TestServerImpl {}
 
 impl TestServiceAsync for TestServerImpl {
-    fn EmptyCall(&self, _: Empty) -> GrpcFutureSend<Empty> {
-        Box::new(futures::finished(Empty::new()))
+    fn EmptyCall(&self, _: Empty) -> GrpcSingleResponse<Empty> {
+        GrpcSingleResponse::completed(Empty::new())
     }
 
-    fn UnaryCall(&self, mut req: SimpleRequest) -> GrpcFutureSend<SimpleResponse> {
+    fn UnaryCall(&self, mut req: SimpleRequest) -> GrpcSingleResponse<SimpleResponse> {
         if req.get_response_status().get_code() != 0 {
-            return Box::new(futures::failed(GrpcError::GrpcMessage(GrpcMessageError {
+            return GrpcSingleResponse::no_metadata(futures::failed(GrpcError::GrpcMessage(GrpcMessageError {
                 grpc_status: req.get_response_status().get_code(),
                 grpc_message: req.mut_response_status().take_message(),
             })));
@@ -53,16 +54,16 @@ impl TestServiceAsync for TestServerImpl {
         payload.set_body(make_string(req.get_response_size() as usize));
         let mut response = SimpleResponse::new();
         response.set_payload(payload);
-        Box::new(futures::finished(response))
+        GrpcSingleResponse::completed(response)
     }
 
     // TODO: is this needed? I can't find it implemented in grpc-go/interop/client/client.go
-    fn CacheableUnaryCall(&self, _: SimpleRequest) -> GrpcFutureSend<SimpleResponse> {
+    fn CacheableUnaryCall(&self, _: SimpleRequest) -> GrpcSingleResponse<SimpleResponse> {
         // TODO: implement fully
-        Box::new(futures::finished(SimpleResponse::new()))
+        GrpcSingleResponse::completed(SimpleResponse::new())
     }
 
-    fn StreamingOutputCall(&self, mut req: StreamingOutputCallRequest) -> GrpcStreamSend<StreamingOutputCallResponse> {
+    fn StreamingOutputCall(&self, mut req: StreamingOutputCallRequest) -> GrpcStreamingResponse<StreamingOutputCallResponse> {
         let sizes = req.take_response_parameters().into_iter().map(|res| Ok(res.get_size() as usize));
         let output = stream::iter(sizes).map(|size| {
             let mut response = StreamingOutputCallResponse::new();
@@ -71,10 +72,10 @@ impl TestServiceAsync for TestServerImpl {
             response.set_payload(payload);
             response
         });
-        Box::new(output)
+        GrpcStreamingResponse::no_metadata(output)
     }
 
-    fn StreamingInputCall(&self, req_stream: GrpcStreamSend<StreamingInputCallRequest>) -> GrpcFutureSend<StreamingInputCallResponse> {
+    fn StreamingInputCall(&self, req_stream: GrpcStreamSend<StreamingInputCallRequest>) -> GrpcSingleResponse<StreamingInputCallResponse> {
         let return_stream = req_stream
             .map(|req| req.get_payload().body.len() as i32)
             .fold(0, |a, b| futures::finished::<_, GrpcError>(a + b))
@@ -83,10 +84,12 @@ impl TestServiceAsync for TestServerImpl {
                 response.set_aggregated_payload_size(aggregate_size);
                 response
             });
-        Box::new(return_stream)
+        GrpcSingleResponse::no_metadata(return_stream)
     }
 
-    fn FullDuplexCall(&self, req_stream: GrpcStreamSend<StreamingOutputCallRequest>) -> GrpcStreamSend<StreamingOutputCallResponse> {
+    fn FullDuplexCall(&self, req_stream: GrpcStreamSend<StreamingOutputCallRequest>)
+        -> GrpcStreamingResponse<StreamingOutputCallResponse>
+    {
         let response = req_stream.map(|mut req| {
             if req.get_response_status().get_code() != 0 {
                 let s: GrpcStreamSend<StreamingOutputCallResponse> = Box::new(stream::once(Err(GrpcError::GrpcMessage(GrpcMessageError {
@@ -106,12 +109,12 @@ impl TestServiceAsync for TestServerImpl {
             }));
             ss
         }).flatten();
-        Box::new(response)
+        GrpcStreamingResponse::no_metadata(response)
     }
 
     // TODO: implement this if we find an interop client that needs it.
-    fn HalfDuplexCall(&self, _: GrpcStreamSend<StreamingOutputCallRequest>) -> GrpcStreamSend<StreamingOutputCallResponse> {
-        Box::new(stream::empty())
+    fn HalfDuplexCall(&self, _: GrpcStreamSend<StreamingOutputCallRequest>) -> GrpcStreamingResponse<StreamingOutputCallResponse> {
+        GrpcStreamingResponse::no_metadata(stream::empty())
     }
 }
 

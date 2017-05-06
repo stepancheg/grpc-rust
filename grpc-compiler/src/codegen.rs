@@ -38,8 +38,8 @@ impl<'a> MethodGen<'a> {
 
     fn output_async(&self) -> String {
         match self.proto.get_server_streaming() {
-            false => format!("::grpc::futures_grpc::GrpcFutureSend<{}>", self.output()),
-            true  => format!("::grpc::futures_grpc::GrpcStreamSend<{}>", self.output()),
+            false => format!("::grpc::GrpcSingleResponse<{}>", self.output()),
+            true  => format!("::grpc::GrpcStreamingResponse<{}>", self.output()),
         }
     }
 
@@ -78,7 +78,7 @@ impl<'a> MethodGen<'a> {
     fn write_sync_client(&self, w: &mut CodeWriter) {
         w.def_fn(&self.sync_sig(), |w| {
             let wait = match self.proto.get_server_streaming() {
-                false => "::futures::Future::wait",
+                false => "::grpc::GrpcSingleResponse::wait_drop_metadata",
                 true  => "::grpc::rt::stream_to_iter",
             };
             if self.proto.get_client_streaming() {

@@ -26,10 +26,15 @@ use grpc_frame::*;
 use httpbis::http_common::*;
 use httpbis::server_conf::*;
 use httpbis::misc::any_to_string;
+use resp::*;
 
 
-pub trait MethodHandler<Req, Resp> {
-    fn handle(&self, req: GrpcStreamSend<Req>) -> GrpcStreamSend<Resp>;
+pub trait MethodHandler<Req, Resp>
+    where
+        Req : Send + 'static,
+        Resp : Send + 'static,
+{
+    fn handle(&self, req: GrpcStreamSend<Req>) -> GrpcStreamingResponse<Resp>;
 }
 
 pub struct MethodHandlerUnary<F> {
@@ -83,7 +88,10 @@ impl<F> GrpcStreamingFlavor for MethodHandlerBidi<F> {
 
 impl<F> MethodHandlerUnary<F> {
     pub fn new<Req, Resp>(f: F) -> Self
-        where F : Fn(Req) -> GrpcFutureSend<Resp> + Send + Sync,
+        where
+            Req : Send + 'static,
+            Resp : Send + 'static,
+            F : Fn(Req) -> GrpcSingleResponse<Resp> + Send + 'static,
     {
         MethodHandlerUnary {
             f: Arc::new(f),
@@ -93,7 +101,10 @@ impl<F> MethodHandlerUnary<F> {
 
 impl<F> MethodHandlerClientStreaming<F> {
     pub fn new<Req, Resp>(f: F) -> Self
-        where F : Fn(GrpcStreamSend<Req>) -> GrpcFutureSend<Resp> + Send + Sync,
+        where
+            Req : Send + 'static,
+            Resp : Send + 'static,
+            F : Fn(GrpcStreamSend<Req>) -> GrpcSingleResponse<Resp> + Send + 'static,
     {
         MethodHandlerClientStreaming {
             f: Arc::new(f),
@@ -103,7 +114,10 @@ impl<F> MethodHandlerClientStreaming<F> {
 
 impl<F> MethodHandlerServerStreaming<F> {
     pub fn new<Req, Resp>(f: F) -> Self
-        where F : Fn(Req) -> GrpcStreamSend<Resp> + Send + Sync,
+        where
+            Req : Send + 'static,
+            Resp : Send + 'static,
+            F : Fn(Req) -> GrpcStreamingResponse<Resp> + Send + 'static,
     {
         MethodHandlerServerStreaming {
             f: Arc::new(f),
@@ -113,7 +127,10 @@ impl<F> MethodHandlerServerStreaming<F> {
 
 impl<F> MethodHandlerBidi<F> {
     pub fn new<Req, Resp>(f: F) -> Self
-        where F : Fn(GrpcStreamSend<Req>) -> GrpcStreamSend<Resp> + Send + Sync,
+        where
+            Req : Send + 'static,
+            Resp : Send + 'static,
+            F : Fn(GrpcStreamSend<Req>) -> GrpcStreamingResponse<Resp> + Send + 'static,
     {
         MethodHandlerBidi {
             f: Arc::new(f),
@@ -125,24 +142,24 @@ impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerUnary<F>
     where
         Req : Send + 'static,
         Resp : Send + 'static,
-        F : Fn(Req) -> GrpcFutureSend<Resp> + Send + Sync + 'static,
+        F : Fn(Req) -> GrpcSingleResponse<Resp> + Send + Sync + 'static,
 {
-    fn handle(&self, req: GrpcStreamSend<Req>) -> GrpcStreamSend<Resp> {
+    fn handle(&self, req: GrpcStreamSend<Req>) -> GrpcStreamingResponse<Resp> {
         let f = self.f.clone();
-        Box::new(
-            stream_single(req)
-                .and_then(move |req| f(req))
-                .into_stream())
+        GrpcSingleResponse(
+            Box::new(stream_single(req)
+                .and_then(move |req| f(req).0)))
+                    .into_stream()
     }
 }
 
-impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerClientStreaming<F>
+impl<Req : Send + 'static, Resp : Send + 'static, F> MethodHandler<Req, Resp> for MethodHandlerClientStreaming<F>
     where
         Resp : Send + 'static,
-        F : Fn(GrpcStreamSend<Req>) -> GrpcFutureSend<Resp> + Send + Sync + 'static,
+        F : Fn(GrpcStreamSend<Req>) -> GrpcSingleResponse<Resp> + Send + Sync + 'static,
 {
-    fn handle(&self, req: GrpcStreamSend<Req>) -> GrpcStreamSend<Resp> {
-        Box::new(((self.f)(req)).into_stream())
+    fn handle(&self, req: GrpcStreamSend<Req>) -> GrpcStreamingResponse<Resp> {
+        ((self.f)(req)).into_stream()
     }
 }
 
@@ -150,24 +167,24 @@ impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerServerStreaming<F>
     where
         Req : Send + 'static,
         Resp : Send + 'static,
-        F : Fn(Req) -> GrpcStreamSend<Resp> + Send + Sync + 'static,
+        F : Fn(Req) -> GrpcStreamingResponse<Resp> + Send + Sync + 'static,
 {
-    fn handle(&self, req: GrpcStreamSend<Req>) -> GrpcStreamSend<Resp> {
+    fn handle(&self, req: GrpcStreamSend<Req>) -> GrpcStreamingResponse<Resp> {
         let f = self.f.clone();
-        Box::new(
+        GrpcStreamingResponse(Box::new(
             stream_single(req)
-                .map(move |req| f(req))
-                .flatten_stream())
+                .and_then(move |req| f(req).0)))
     }
 }
 
 impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerBidi<F>
     where
+        Req : Send + 'static,
         Resp : Send + 'static,
-        F : Fn(GrpcStreamSend<Req>) -> GrpcStreamSend<Resp> + Send + Sync + 'static,
+        F : Fn(GrpcStreamSend<Req>) -> GrpcStreamingResponse<Resp> + Send + Sync + 'static,
 {
-    fn handle(&self, req: GrpcStreamSend<Req>) -> GrpcStreamSend<Resp> {
-        Box::new((self.f)(req))
+    fn handle(&self, req: GrpcStreamSend<Req>) -> GrpcStreamingResponse<Resp> {
+        (self.f)(req)
     }
 }
 
@@ -194,7 +211,8 @@ impl<Req, Resp> MethodHandlerDispatch for MethodHandlerDispatchImpl<Req, Resp>
         match resp {
             Ok(resp) => {
                 let desc_copy = self.desc.clone();
-                Box::new(resp
+                // TODO: keep metadata
+                Box::new(resp.drop_metadata()
                     .and_then(move |resp| desc_copy.resp_marshaller.write(&resp)))
             }
             Err(e) => {

@@ -1,22 +1,11 @@
-use std::thread;
-use std::iter;
-
 extern crate env_logger;
 
 extern crate grpc;
 extern crate long_tests;
 extern crate futures;
 
-use futures::stream::Stream;
-use futures::stream;
-use futures::Future;
-
 use long_tests::long_tests_pb::*;
 use long_tests::long_tests_pb_grpc::*;
-
-use grpc::futures_grpc::GrpcStreamSend;
-use grpc::futures_grpc::GrpcFutureSend;
-use grpc::error::GrpcError;
 
 use std::env;
 
@@ -43,7 +32,7 @@ fn run_echo(client: LongTestsAsyncClient, cmd_args: &[String]) {
         let mut req = EchoRequest::new();
         req.set_payload(payload.clone());
 
-        let r = client.echo(req).wait().expect("failed to get echo response");
+        let r = client.echo(req).wait_drop_metadata().expect("failed to get echo response");
 
         assert!(payload == r.get_payload());
     }
