@@ -1,8 +1,8 @@
 sudo: false
+dist: trusty
 
-#env:
-#  - PROTOBUF_VERSION=2.6.1
-#  - PROTOBUF_VERSION=3.0.0-beta-2
+env:
+  - PROTOBUF_VERSION=3.0.0-beta-2
 
 language: rust
 
@@ -11,13 +11,16 @@ rust:
   - beta
   - nightly
 
-before_install:
-  - sudo apt-get -qq update
-  - sudo apt-get install -y protobuf-compiler
+#addons:
+#  apt:
+#    packages:
+#    - protobuf-compiler
 
 script:
   - rustc --version
   - ./test.sh
+  - ./install-protobuf.sh
+  - cargo install protobuf
   - ./gen-rs.sh
   - ./build-all.sh
 
