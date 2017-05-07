@@ -11,6 +11,10 @@ rust:
   - beta
   - nightly
 
+before_install:
+  - sudo apt-get -qq update
+  - sudo apt-get install -y protobuf-compiler
+
 script:
   - rustc --version
   - ./test.sh
@@ -20,3 +24,5 @@ script:
 notifications:
   email:
     on_success: never
+
+# vim: set ts=2 sw=2 et:
