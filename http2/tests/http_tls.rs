@@ -12,7 +12,6 @@ use bytes::Bytes;
 use std::sync::Arc;
 use std::net::SocketAddr;
 
-use futures::stream;
 use futures::future::Future;
 
 use httpbis::solicit::header::Headers;
@@ -50,11 +49,8 @@ fn tls() {
     }
 
     impl HttpService for ServiceImpl {
-        fn new_request(&self, _headers: Headers, _req: HttpPartFutureStreamSend) -> HttpPartFutureStreamSend {
-            Box::new(stream::iter(vec![
-                Ok(HttpStreamPart::intermediate_headers(Headers::ok_200())),
-                Ok(HttpStreamPart::last_data(Bytes::from("hello"))),
-            ]))
+        fn new_request(&self, _headers: Headers, _req: HttpPartFutureStreamSend) -> HttpResponse {
+            HttpResponse::headers_and_bytes(Headers::ok_200(), Bytes::from("hello"))
         }
     }
 
@@ -70,7 +66,7 @@ fn tls() {
         Default::default())
             .expect("http client");
 
-    let resp: SimpleHttpMessage = client.start_get_simple_response("/hi", "localhost").wait().unwrap();
+    let resp: SimpleHttpMessage = client.start_get("/hi", "localhost").collect().wait().unwrap();
     assert_eq!(200, resp.headers.status());
     assert_eq!(&b"hello"[..], &resp.body[..]);
 }

@@ -11,6 +11,7 @@ use grpc::GrpcStatus;
 use grpc::HEADER_GRPC_STATUS;
 use grpc::HEADER_GRPC_MESSAGE;
 
+use httpbis::HttpResponse;
 use httpbis::solicit::header::Headers;
 use httpbis::bytesx::bytes_extend_with;
 use httpbis::http_common::HttpStreamPartContent;
@@ -55,25 +56,11 @@ fn init_headers_to_metadata(headers: Headers) -> GrpcResult<GrpcMetadata> {
 }
 
 
-pub fn http_response_to_grpc_frames(response: HttpPartFutureStreamSend) -> GrpcStreamingResponse<Bytes> {
-    GrpcStreamingResponse::new(response.into_future().map_err(|(e, _s)| GrpcError::from(e)).and_then(|(part, rem)| {
-        match part {
-            Some(part) => {
-                match part.content {
-                    HttpStreamPartContent::Headers(headers) => {
-                        let metadata = init_headers_to_metadata(headers)?;
-                        let frames: GrpcStreamSend<Bytes> = Box::new(GrpcFrameFromHttpFramesStreamResponse::new(rem));
-                        Ok((metadata, frames))
-                    },
-                    HttpStreamPartContent::Data(..) => {
-                        Err(GrpcError::Other("data before headers"))
-                    }
-                }
-            }
-            None => {
-                Err(GrpcError::Other("empty response"))
-            }
-        }
+pub fn http_response_to_grpc_frames(response: HttpResponse) -> GrpcStreamingResponse<Bytes> {
+    GrpcStreamingResponse::new(response.0.map_err(|e| GrpcError::from(e)).and_then(|(headers, rem)| {
+        let metadata = init_headers_to_metadata(headers)?;
+        let frames: GrpcStreamSend<Bytes> = Box::new(GrpcFrameFromHttpFramesStreamResponse::new(rem));
+        Ok((metadata, frames))
     }))
 }
 

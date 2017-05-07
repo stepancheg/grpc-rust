@@ -23,6 +23,10 @@ impl Default for SimpleHttpMessage {
 }
 
 impl SimpleHttpMessage {
+    pub fn new() -> SimpleHttpMessage {
+        Default::default()
+    }
+
     pub fn from_parts<I>(iter: I) -> SimpleHttpMessage
         where I : IntoIterator<Item= HttpStreamPart>
     {

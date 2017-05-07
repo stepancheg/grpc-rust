@@ -119,13 +119,13 @@ impl<F : HttpService> ServerInner<F> {
             warn!("handler panicked: {}", e);
 
             let headers = Headers::internal_error_500();
-            Box::new(stream::iter(vec![
+            HttpResponse::from_stream(stream::iter(vec![
                 Ok(HttpStreamPart::intermediate_headers(headers)),
                 Ok(HttpStreamPart::last_data(Bytes::from(format!("handler panicked: {}", e)))),
             ]))
         });
 
-        let response = panic::AssertUnwindSafe(response).catch_unwind().then(|r| {
+        let response = panic::AssertUnwindSafe(response.into_stream_flag()).catch_unwind().then(|r| {
             match r {
                 Ok(r) => r,
                 Err(e) => {
@@ -415,14 +415,14 @@ impl HttpServerConnectionAsync {
     pub fn new_plain_fn<F>(lh: &reactor::Handle, socket: TcpStream, conf: HttpServerConf, f: F)
             -> (HttpServerConnectionAsync, HttpFuture<()>)
         where
-            F : Fn(Headers, HttpPartFutureStreamSend) -> HttpPartFutureStreamSend + Send + 'static,
+            F : Fn(Headers, HttpPartFutureStreamSend) -> HttpResponse + Send + 'static,
     {
         struct HttpServiceFn<F>(F);
 
         impl<F> HttpService for HttpServiceFn<F>
-            where F : Fn(Headers, HttpPartFutureStreamSend) -> HttpPartFutureStreamSend + Send + 'static
+            where F : Fn(Headers, HttpPartFutureStreamSend) -> HttpResponse + Send + 'static
         {
-            fn new_request(&self, headers: Headers, req: HttpPartFutureStreamSend) -> HttpPartFutureStreamSend {
+            fn new_request(&self, headers: Headers, req: HttpPartFutureStreamSend) -> HttpResponse {
                 (self.0)(headers, req)
             }
         }

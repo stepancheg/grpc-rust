@@ -36,10 +36,13 @@ pub mod bytesx;
 
 pub mod misc;
 
+mod resp;
+
 pub use solicit::HttpScheme;
 pub use solicit::HttpError;
 pub use solicit::header::Header;
 pub use solicit::header::Headers;
+pub use resp::HttpResponse;
 
 pub mod for_test {
     pub use server_conf::*;

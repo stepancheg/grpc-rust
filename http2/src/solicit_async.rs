@@ -2,8 +2,10 @@ use std::io::Read;
 use std::net::SocketAddr;
 
 use futures::done;
-use futures::Future;
+use futures::future::Future;
+use futures::future::BoxFuture;
 use futures::stream::Stream;
+use futures::stream::BoxStream;
 
 use tokio_io::io::read_exact;
 use tokio_io::io::write_all;
@@ -29,8 +31,8 @@ pub type HttpFuture<T> = Box<Future<Item=T, Error=HttpError>>;
 // to avoid confusion with streams from HTTP/2 spec
 pub type HttpFutureStream<T> = Box<Stream<Item=T, Error=HttpError>>;
 
-pub type HttpFutureSend<T> = Box<Future<Item=T, Error=HttpError> + Send>;
-pub type HttpFutureStreamSend<T> = Box<Stream<Item=T, Error=HttpError> + Send>;
+pub type HttpFutureSend<T> = BoxFuture<T, HttpError>;
+pub type HttpFutureStreamSend<T> = BoxStream<T, HttpError>;
 
 
 struct VecWithPos<T> {

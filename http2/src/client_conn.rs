@@ -14,7 +14,6 @@ use bytes::Bytes;
 
 use futures;
 use futures::Future;
-use futures::stream;
 use futures::stream::Stream;
 
 use native_tls::TlsConnector;
@@ -377,7 +376,7 @@ impl HttpClientConnectionAsync {
         &self,
         headers: Headers,
         body: HttpFutureStreamSend<Bytes>)
-            -> HttpPartFutureStreamSend
+            -> HttpResponse
     {
         let (tx, rx) = futures::oneshot();
 
@@ -390,19 +389,19 @@ impl HttpClientConnectionAsync {
             body: body,
             response_handler: req_tx,
         })) {
-            return Box::new(stream::once(Err(HttpError::Other(format!("send request to client {:?}", e).into()))));
+            return HttpResponse::err(HttpError::Other(format!("send request to client {:?}", e).into()));
         }
 
         let req_rx = req_rx.map_err(|()| HttpError::from(io::Error::new(io::ErrorKind::Other, "req")));
 
         // TODO: future is no longer needed here
         if let Err(_) = tx.send(stream_with_eof_and_error(req_rx, || HttpError::from(io::Error::new(io::ErrorKind::Other, "client is likely died")))) {
-            return Box::new(stream::once(Err(HttpError::from(io::Error::new(io::ErrorKind::Other, "oneshot canceled")))));
+            return HttpResponse::err(HttpError::from(io::Error::new(io::ErrorKind::Other, "oneshot canceled")));
         }
 
         let rx = rx.map_err(|_| HttpError::from(io::Error::new(io::ErrorKind::Other, "oneshot canceled")));
 
-        Box::new(rx.flatten_stream())
+        HttpResponse::from_stream(rx.flatten_stream())
     }
 
     /// For tests

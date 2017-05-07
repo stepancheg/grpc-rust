@@ -9,7 +9,6 @@ use bytes::Bytes;
 
 use futures;
 use futures::Future;
-use futures::Stream;
 use futures::stream;
 
 use tokio_core::reactor;
@@ -28,7 +27,6 @@ use solicit_async::*;
 use client_conn::*;
 use client_conf::*;
 use http_common::*;
-use message::*;
 
 pub use client_tls::ClientTlsOption;
 
@@ -96,7 +94,7 @@ impl HttpClient {
         &self,
         headers: Headers,
         body: HttpFutureStreamSend<Bytes>)
-            -> HttpPartFutureStreamSend
+            -> HttpResponse
     {
         debug!("start request {:?}", headers);
         self.loop_to_client.http_conn.start_request(headers, body)
@@ -106,7 +104,7 @@ impl HttpClient {
         &self,
         headers: Headers,
         body: Bytes)
-            -> HttpPartFutureStreamSend
+            -> HttpResponse
     {
         self.start_request(
             headers,
@@ -117,7 +115,7 @@ impl HttpClient {
         &self,
         path: &str,
         authority: &str)
-            -> HttpPartFutureStreamSend
+            -> HttpResponse
     {
         let headers = Headers(vec![
             Header::new(":method", "GET"),
@@ -133,7 +131,7 @@ impl HttpClient {
         path: &str,
         authority: &str,
         body: Bytes)
-            -> HttpPartFutureStreamSend
+            -> HttpResponse
     {
         let headers = Headers(vec![
             Header::new(":method", "POST"),
@@ -142,27 +140,6 @@ impl HttpClient {
             Header::new(":scheme", self.http_scheme.as_bytes()),
         ]);
         self.start_request_simple(headers, body)
-    }
-
-    pub fn start_get_simple_response(
-        &self,
-        path: &str,
-        authority: &str)
-            -> HttpFutureSend<SimpleHttpMessage>
-    {
-        Box::new(self.start_get(path, authority).collect()
-            .map(SimpleHttpMessage::from_parts))
-    }
-
-    pub fn start_post_simple_response(
-        &self,
-        path: &str,
-        authority: &str,
-        body: Bytes)
-            -> HttpFutureSend<SimpleHttpMessage>
-    {
-        Box::new(self.start_post(path, authority, body).collect()
-            .map(SimpleHttpMessage::from_parts))
     }
 
     pub fn dump_state(&self) -> HttpFutureSend<ConnectionStateSnapshot> {

@@ -332,15 +332,16 @@ struct GrpcHttpServerHandlerFactory {
 }
 
 
-fn stream_500(message: &str) -> HttpPartFutureStreamSend {
-    Box::new(stream::once(Ok(HttpStreamPart::last_headers(Headers(vec![
+fn stream_500(message: &str) -> HttpResponse {
+    // TODO: HttpResponse::headers
+    HttpResponse::from_stream(stream::once(Ok(HttpStreamPart::last_headers(Headers(vec![
         Header::new(":status", "500"),
         Header::new(HEADER_GRPC_MESSAGE, message.to_owned()),
     ])))))
 }
 
 impl HttpService for GrpcHttpServerHandlerFactory {
-    fn new_request(&self, headers: Headers, req: HttpPartFutureStreamSend) -> HttpPartFutureStreamSend {
+    fn new_request(&self, headers: Headers, req: HttpPartFutureStreamSend) -> HttpResponse {
 
         let path = match headers.get_opt(":path") {
             Some(path) => path.to_owned(),
@@ -402,6 +403,6 @@ impl HttpService for GrpcHttpServerHandlerFactory {
 
         let http_parts = s1.chain(s2).chain(s3);
 
-        Box::new(http_parts)
+        HttpResponse::from_stream(http_parts)
     }
 }

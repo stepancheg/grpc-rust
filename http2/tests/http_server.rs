@@ -15,7 +15,6 @@ use std::io::Write as _Write;
 
 use futures::Future;
 use futures::stream;
-use futures::stream::Stream;
 
 use httpbis::solicit::header::*;
 
@@ -29,15 +28,7 @@ fn simple_new() {
     env_logger::init().ok();
 
     let server = HttpServerOneConn::new_fn(0, |_headers, req| {
-        Box::new(req
-            .collect()
-            .and_then(|v| {
-                let mut r = Vec::new();
-                r.push(HttpStreamPart::intermediate_headers(Headers::ok_200()));
-                r.push(HttpStreamPart::last_data(SimpleHttpMessage::from_parts(v).body));
-                Ok(stream::iter(r.into_iter().map(Ok)))
-            })
-            .flatten_stream())
+        HttpResponse::headers_and_stream(Headers::ok_200(), req)
     });
 
     let mut tester = HttpConnectionTester::connect(server.port());
@@ -67,10 +58,7 @@ fn panic_in_handler() {
         if headers.path() == "/panic" {
             panic!("requested");
         } else {
-            Box::new(stream::iter(vec![
-                Ok(HttpStreamPart::intermediate_headers(Headers::ok_200())),
-                Ok(HttpStreamPart::last_data(Bytes::from("hi there"))),
-            ]))
+            HttpResponse::headers_and_bytes(Headers::ok_200(), Bytes::from("hi there"))
         }
     });
 
@@ -104,17 +92,14 @@ fn panic_in_stream() {
 
     let server = HttpServerOneConn::new_fn(0, |headers, _req| {
         if headers.path() == "/panic" {
-            Box::new(stream::iter((0..2).map(|i| {
+            HttpResponse::from_stream(stream::iter((0..2).map(|i| {
                 match i {
                     0 => Ok(HttpStreamPart::intermediate_headers(Headers::ok_200())),
                     _ => panic!("should reset stream"),
                 }
             })))
         } else {
-            Box::new(stream::iter(vec![
-                Ok(HttpStreamPart::intermediate_headers(Headers::ok_200())),
-                Ok(HttpStreamPart::last_data(Bytes::from("hi there"))),
-            ]))
+            HttpResponse::headers_and_bytes(Headers::ok_200(), Bytes::from("hi there"))
         }
     });
 
@@ -159,14 +144,11 @@ fn response_large() {
     let large_resp_copy = large_resp.clone();
 
     let server = HttpServerOneConn::new_fn(0, move |_headers, _req| {
-        let mut r = Vec::new();
-        r.push(HttpStreamPart::intermediate_headers(Headers::ok_200()));
-        r.push(HttpStreamPart::intermediate_data(Bytes::from(large_resp_copy.clone())));
-        Box::new(stream::iter(r.into_iter().map(Ok)))
+        HttpResponse::headers_and_bytes(Headers::ok_200(), Bytes::from(large_resp_copy.clone()))
     });
 
     let client = HttpClient::new("::1", server.port(), false, Default::default()).expect("connect");
-    let resp = client.start_post_simple_response("/foobar", "localhost", Bytes::from(&b""[..])).wait().expect("wait");
+    let resp = client.start_post("/foobar", "localhost", Bytes::from(&b""[..])).collect().wait().expect("wait");
     assert_eq!(large_resp.len(), resp.body.len());
     assert_eq!((large_resp.len(), &large_resp[..]), (resp.body.len(), &resp.body[..]));
 
