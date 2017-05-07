@@ -18,6 +18,12 @@ pub struct GrpcSingleResponse<T : Send + 'static>(pub GrpcFutureSend<(GrpcMetada
 impl<T : Send + 'static> GrpcSingleResponse<T> {
     // constructors
 
+    pub fn new<F>(f: F) -> GrpcSingleResponse<T>
+        where F : Future<Item=(GrpcMetadata, GrpcFutureSend<T>), Error=GrpcError> + Send + 'static
+    {
+        GrpcSingleResponse(Box::new(f))
+    }
+
     pub fn metadata_and_future<F>(metadata: GrpcMetadata, result: F) -> GrpcSingleResponse<T>
         where F : Future<Item=T, Error=GrpcError> + Send + 'static
     {
@@ -37,6 +43,10 @@ impl<T : Send + 'static> GrpcSingleResponse<T> {
         where F : Future<Item=T, Error=GrpcError> + Send + 'static
     {
         GrpcSingleResponse::metadata_and_future(GrpcMetadata::new(), r)
+    }
+
+    pub fn err(err: GrpcError) -> GrpcSingleResponse<T> {
+        GrpcSingleResponse::new(future::err(err))
     }
 
     // getters
@@ -151,6 +161,10 @@ impl<T : Send + 'static> GrpcStreamingResponse<T> {
                 let future: GrpcFutureSend<Vec<T>> = Box::new(stream.collect());
                 (metadata, future)
             })))
+    }
+
+    pub fn err(err: GrpcError) -> GrpcStreamingResponse<T> {
+        GrpcStreamingResponse::new(future::err(err))
     }
 
     /// Take single element from stream

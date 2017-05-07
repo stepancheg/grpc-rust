@@ -12,7 +12,6 @@ use httpbis::Headers;
 use httpbis::server::HttpServer;
 use httpbis::server::ServerTlsOption;
 
-use futures;
 use futures::Future;
 use futures::stream;
 use futures::stream::Stream;
@@ -192,7 +191,8 @@ impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerBidi<F>
 
 
 trait MethodHandlerDispatch {
-    fn start_request(&self, m: GrpcRequestOptions, grpc_frames: GrpcStreamSend<Vec<u8>>) -> GrpcStreamSend<Vec<u8>>;
+    fn start_request(&self, m: GrpcRequestOptions, grpc_frames: GrpcStreamSend<Vec<u8>>)
+        -> GrpcStreamingResponse<Vec<u8>>;
 }
 
 struct MethodHandlerDispatchImpl<Req, Resp> {
@@ -205,7 +205,9 @@ impl<Req, Resp> MethodHandlerDispatch for MethodHandlerDispatchImpl<Req, Resp>
         Req : Send + 'static,
         Resp : Send + 'static,
 {
-    fn start_request(&self, o: GrpcRequestOptions, req_grpc_frames: GrpcStreamSend<Vec<u8>>) -> GrpcStreamSend<Vec<u8>> {
+    fn start_request(&self, o: GrpcRequestOptions, req_grpc_frames: GrpcStreamSend<Vec<u8>>)
+        -> GrpcStreamingResponse<Vec<u8>>
+    {
         let desc = self.desc.clone();
         let req = req_grpc_frames.and_then(move |frame| desc.req_marshaller.read(&frame));
         let resp =
@@ -213,13 +215,13 @@ impl<Req, Resp> MethodHandlerDispatch for MethodHandlerDispatchImpl<Req, Resp>
         match resp {
             Ok(resp) => {
                 let desc_copy = self.desc.clone();
-                // TODO: keep metadata
-                Box::new(resp.drop_metadata()
-                    .and_then(move |resp| desc_copy.resp_marshaller.write(&resp)))
+                resp.and_then_items(move |resp| {
+                    desc_copy.resp_marshaller.write(&resp)
+                })
             }
             Err(e) => {
                 let message = any_to_string(e);
-                Box::new(futures::failed(GrpcError::Panic(message)).into_stream())
+                GrpcStreamingResponse::err(GrpcError::Panic(message))
             }
         }
     }
@@ -274,7 +276,9 @@ impl ServerServiceDefinition {
             .expect(&format!("unknown method: {}", name))
     }
 
-    pub fn handle_method(&self, name: &str, o: GrpcRequestOptions, message: GrpcStreamSend<Vec<u8>>) -> GrpcStreamSend<Vec<u8>> {
+    pub fn handle_method(&self, name: &str, o: GrpcRequestOptions, message: GrpcStreamSend<Vec<u8>>)
+        -> GrpcStreamingResponse<Vec<u8>>
+    {
         self.find_method(name).dispatch.start_request(o, message)
     }
 }
@@ -356,53 +360,58 @@ impl HttpService for GrpcHttpServerHandlerFactory {
         };
 
         // TODO: catch unwind
-        let grpc_frames = self.service_definition.handle_method(
+        let grpc_response = self.service_definition.handle_method(
             &path,
             GrpcRequestOptions { metadata: metadata },
             Box::new(grpc_request));
 
-        let s1 = stream::once(Ok(HttpStreamPart::intermediate_headers(Headers(vec![
-            Header::new(":status", "200"),
-            Header::new("content-type", "application/grpc"),
-        ]))));
+        HttpResponse::new(grpc_response.0.map_err(HttpError::from).map(|(metadata, grpc_frames)| {
+            let mut init_headers = Headers(vec![
+                Header::new(":status", "200"),
+                Header::new("content-type", "application/grpc"),
+            ]);
 
-        let s2 = grpc_frames
-            .map(|frame| HttpStreamPart::intermediate_data(Bytes::from(write_grpc_frame_to_vec(&frame))))
-            .then(|result| {
-                match result {
-                    Ok(part) => {
-                        let r: Result<_, HttpError> = Ok(part);
-                        r
+            init_headers.extend(metadata.into_headers());
+
+            let s2 = grpc_frames
+                .map(|frame| HttpStreamPart::intermediate_data(Bytes::from(write_grpc_frame_to_vec(&frame))))
+                .then(|result| {
+                    match result {
+                        Ok(part) => {
+                            let r: Result<_, HttpError> = Ok(part);
+                            r
+                        }
+                        Err(e) =>
+                            Ok(HttpStreamPart::last_headers(
+                                match e {
+                                    GrpcError::GrpcMessage(GrpcMessageError { grpc_status, grpc_message }) => {
+                                        Headers(vec![
+                                            Header::new(":status", "500"),
+                                            // TODO: check nonzero
+                                            Header::new(HEADER_GRPC_STATUS, format!("{}", grpc_status)),
+                                            // TODO: escape invalid
+                                            Header::new(HEADER_GRPC_MESSAGE, grpc_message),
+                                        ])
+                                    }
+                                    e => {
+                                        Headers(vec![
+                                            Header::new(":status", "500"),
+                                            Header::new(HEADER_GRPC_MESSAGE, format!("error: {:?}", e)),
+                                        ])
+                                    }
+                                }
+                            ))
                     }
-                    Err(e) =>
-                        Ok(HttpStreamPart::last_headers(
-                            match e {
-                                GrpcError::GrpcMessage(GrpcMessageError { grpc_status, grpc_message }) => {
-                                    Headers(vec![
-                                        Header::new(":status", "500"),
-                                        // TODO: check nonzero
-                                        Header::new(HEADER_GRPC_STATUS, format!("{}", grpc_status)),
-                                        // TODO: escape invalid
-                                        Header::new(HEADER_GRPC_MESSAGE, grpc_message),
-                                    ])
-                                }
-                                e => {
-                                    Headers(vec![
-                                        Header::new(":status", "500"),
-                                        Header::new(HEADER_GRPC_MESSAGE, format!("error: {:?}", e)),
-                                    ])
-                                }
-                            }
-                        ))
-                }
-            });
+                })
+                .map_err(HttpError::from);
 
-        let s3 = stream::once(Ok(HttpStreamPart::last_headers(Headers(vec![
-            Header::new(HEADER_GRPC_STATUS, "0"),
-        ]))));
+            let s3 = stream::once(Ok(HttpStreamPart::last_headers(Headers(vec![
+                Header::new(HEADER_GRPC_STATUS, "0"),
+            ]))));
 
-        let http_parts = s1.chain(s2).chain(s3);
+            let http_parts: HttpPartFutureStreamSend = Box::new(s2.chain(s3));
 
-        HttpResponse::from_stream(http_parts)
+            (init_headers, http_parts)
+        }))
     }
 }
