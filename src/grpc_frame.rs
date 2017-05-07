@@ -4,13 +4,13 @@ use futures::stream;
 use futures::stream::Stream;
 
 use bytes::Bytes;
-use bytes_or_vec::*;
 
 use error::*;
 use result::*;
 use grpc::*;
 
 use httpbis::http_common::*;
+use httpbis::bytesx::*;
 
 
 
@@ -120,7 +120,7 @@ pub struct GrpcFrameFromHttpFramesStreamRequest {
 
 pub struct GrpcFrameFromHttpFramesStreamResponse {
     http_stream_stream: HttpPartFutureStreamSend,
-    buf: BytesOrVec,
+    buf: Bytes,
     seen_headers: bool,
     error: Option<stream::Once<Bytes, GrpcError>>,
 }
@@ -129,7 +129,7 @@ impl GrpcFrameFromHttpFramesStreamResponse {
     pub fn new(http_stream_stream: HttpPartFutureStreamSend) -> Self {
         GrpcFrameFromHttpFramesStreamResponse {
             http_stream_stream: http_stream_stream,
-            buf: BytesOrVec::new(),
+            buf: Bytes::new(),
             seen_headers: false,
             error: None,
         }
@@ -274,7 +274,7 @@ impl Stream for GrpcFrameFromHttpFramesStreamResponse {
                     }
                 },
                 HttpStreamPartContent::Data(data) => {
-                    self.buf.append(data);
+                    bytes_extend_with(&mut self.buf, data);
                 }
             }
         }
