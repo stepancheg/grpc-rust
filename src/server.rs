@@ -316,7 +316,7 @@ impl GrpcServer {
 
         let service_definition = Arc::new(service_definition);
         GrpcServer {
-            server: HttpServer::new(addr, tls, conf.http, GrpcHttpServerHandlerFactory {
+            server: HttpServer::new(addr, tls, conf.http, GrpcHttpService {
                 service_definition: service_definition.clone(),
             })
         }
@@ -331,7 +331,7 @@ impl GrpcServer {
     }
 }
 
-struct GrpcHttpServerHandlerFactory {
+struct GrpcHttpService {
     service_definition: Arc<ServerServiceDefinition>,
 }
 
@@ -344,7 +344,7 @@ fn stream_500(message: &str) -> HttpResponse {
     ])))))
 }
 
-impl HttpService for GrpcHttpServerHandlerFactory {
+impl HttpService for GrpcHttpService {
     fn new_request(&self, headers: Headers, req: HttpPartFutureStreamSend) -> HttpResponse {
 
         let path = match headers.get_opt(":path") {
