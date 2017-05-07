@@ -13,8 +13,8 @@ rust:
 
 script:
   - rustc --version
-  - ./cargo.sh build
   - ./test.sh
+  - ./gen-rs.sh
   - ./build-all.sh
 
 notifications:
