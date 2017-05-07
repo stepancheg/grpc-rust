@@ -35,7 +35,6 @@ pub fn bytes_mut_extend_with_slice(target: &mut BytesMut, append: &[u8]) {
 #[cfg(test)]
 mod test {
     use super::*;
-    use bytes::*;
 
     #[test]
     fn test_bytes_concat() {
