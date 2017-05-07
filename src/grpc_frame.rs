@@ -3,14 +3,10 @@ use futures::Poll;
 use futures::stream;
 use futures::stream::Stream;
 
-use bytes::Bytes;
-
 use error::*;
 use result::*;
-use grpc::*;
 
 use httpbis::http_common::*;
-use httpbis::bytesx::*;
 
 
 
@@ -32,7 +28,7 @@ fn write_u32_be(v: u32) -> [u8; 4] {
 }
 
 
-const GRPC_HEADER_LEN: usize = 5;
+pub const GRPC_HEADER_LEN: usize = 5;
 
 
 /// Return frame len
@@ -118,24 +114,6 @@ pub struct GrpcFrameFromHttpFramesStreamRequest {
     error: Option<stream::Once<Vec<u8>, GrpcError>>,
 }
 
-pub struct GrpcFrameFromHttpFramesStreamResponse {
-    http_stream_stream: HttpPartFutureStreamSend,
-    buf: Bytes,
-    seen_headers: bool,
-    error: Option<stream::Once<Bytes, GrpcError>>,
-}
-
-impl GrpcFrameFromHttpFramesStreamResponse {
-    pub fn new(http_stream_stream: HttpPartFutureStreamSend) -> Self {
-        GrpcFrameFromHttpFramesStreamResponse {
-            http_stream_stream: http_stream_stream,
-            buf: Bytes::new(),
-            seen_headers: false,
-            error: None,
-        }
-    }
-}
-
 impl GrpcFrameFromHttpFramesStreamRequest {
     pub fn new(http_stream_stream: HttpPartFutureStreamSend) -> Self {
         GrpcFrameFromHttpFramesStreamRequest {
@@ -183,105 +161,6 @@ impl Stream for GrpcFrameFromHttpFramesStreamRequest {
         }
     }
 }
-
-impl Stream for GrpcFrameFromHttpFramesStreamResponse {
-    type Item = Bytes;
-    type Error = GrpcError;
-
-    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-        loop {
-            if let Some(ref mut error) = self.error {
-                return error.poll();
-            }
-
-            if !self.seen_headers {
-                let headers = try_ready!(self.http_stream_stream.poll());
-                let headers = match headers {
-                    Some(headers) => headers,
-                    None => return Ok(Async::Ready(None)),
-                };
-                match headers.content {
-                    HttpStreamPartContent::Headers(headers) => {
-                        if headers.get_opt(":status") != Some("200") {
-                            self.error = Some(stream::once(Err(GrpcError::Other("not 200"))));
-                            continue;
-                        }
-
-                        // Check gRPC status code and message
-                        // TODO: a more detailed error message.
-                        if let Some(grpc_status) = headers.get_opt_parse(HEADER_GRPC_STATUS) {
-                            if grpc_status != GrpcStatus::Ok as i32 {
-                                let message = headers.get_opt(HEADER_GRPC_MESSAGE).unwrap_or("unknown error");
-                                self.error = Some(stream::once(Err(
-                                    GrpcError::GrpcMessage(GrpcMessageError{
-                                        grpc_status: grpc_status,
-                                        grpc_message: message.to_owned(),
-                                    })
-                                )));
-                                continue;
-                            }
-                        }
-                    }
-                    HttpStreamPartContent::Data(..) => {
-                        self.error = Some(stream::once(Err(GrpcError::Other("data before headers"))));
-                        continue;
-                    }
-                };
-                self.seen_headers = true;
-            }
-
-            if let Some(frame_len) = parse_grpc_frame_0(&self.buf)? {
-                let frame = self.buf
-                    .split_to(frame_len + GRPC_HEADER_LEN)
-                    .slice_from(GRPC_HEADER_LEN);
-                return Ok(Async::Ready(Some(frame)));
-            }
-
-            let part_opt = try_ready!(self.http_stream_stream.poll());
-            let part = match part_opt {
-                None => {
-                    if self.buf.is_empty() {
-                        return Ok(Async::Ready(None));
-                    } else {
-                        self.error = Some(stream::once(Err(GrpcError::Other("partial frame"))));
-                        continue;
-                    }
-                },
-                Some(part) => part,
-            };
-
-            match part.content {
-                HttpStreamPartContent::Headers(headers) => {
-                    if part.last {
-                        if !self.buf.is_empty() {
-                            self.error = Some(stream::once(Err(GrpcError::Other("partial frame"))));
-                        } else {
-                            let grpc_status = headers.get_opt_parse(HEADER_GRPC_STATUS);
-                            if grpc_status == Some(GrpcStatus::Ok as i32) {
-                                return Ok(Async::Ready(None));
-                            } else {
-                                self.error = Some(stream::once(Err(if let Some(message) = headers.get_opt(HEADER_GRPC_MESSAGE) {
-                                    GrpcError::GrpcMessage(GrpcMessageError {
-                                        grpc_status: grpc_status.unwrap_or(GrpcStatus::Unknown as i32),
-                                        grpc_message: message.to_owned(),
-                                    })
-                                } else {
-                                    GrpcError::Other("not xxx")
-                                })));
-                            }
-                        }
-                        continue;
-                    }
-                },
-                HttpStreamPartContent::Data(data) => {
-                    bytes_extend_with(&mut self.buf, data);
-                }
-            }
-        }
-    }
-}
-
-
 
 
 

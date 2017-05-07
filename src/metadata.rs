@@ -22,6 +22,7 @@ struct MetadataEntry {
     value: Bytes,
 }
 
+#[derive(Debug)]
 pub enum MetadataDecodeError {
     Base64(base64::DecodeError),
 }

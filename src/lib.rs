@@ -14,8 +14,11 @@ extern crate httpbis;
 
 pub mod client;
 pub mod server;
+
 mod grpc;
 mod grpc_frame;
+mod grpc_http_to_response;
+
 pub mod method;
 pub mod grpc_protobuf;
 pub mod marshall;

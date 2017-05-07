@@ -25,6 +25,7 @@ use httpbis::client_conf::*;
 use futures_grpc::*;
 
 use grpc_frame::*;
+use grpc_http_to_response::*;
 
 use req::GrpcRequestOptions;
 use resp::*;
@@ -134,11 +135,9 @@ impl GrpcClient {
                 headers,
                 Box::new(request_frames));
 
-        let grpc_frames = GrpcFrameFromHttpFramesStreamResponse::new(http_response_stream);
+        let grpc_frames = http_response_to_grpc_frames(http_response_stream);
 
-        let grpc_messages = grpc_frames.and_then(move |frame| method.resp_marshaller.read(&frame));
-
-        GrpcStreamingResponse::no_metadata(grpc_messages)
+        grpc_frames.and_then_items(move |frame| method.resp_marshaller.read(&frame))
     }
 
     pub fn call_unary<Req, Resp>(&self, o: GrpcRequestOptions, req: Req, method: Arc<MethodDescriptor<Req, Resp>>)

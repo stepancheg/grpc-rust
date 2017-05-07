@@ -4,6 +4,7 @@ use std::fmt;
 
 use futures;
 
+use metadata;
 use httpbis::HttpError;
 
 use protobuf::ProtobufError;
@@ -23,6 +24,7 @@ pub enum GrpcError {
     Http(HttpError),
     GrpcMessage(GrpcMessageError),
     Canceled(futures::Canceled),
+    MetadataDecode(metadata::MetadataDecodeError),
     Protobuf(ProtobufError),
     Panic(String),
     Other(&'static str),
@@ -40,6 +42,7 @@ impl Error for GrpcError {
             &GrpcError::Io(ref err) => err.description(),
             &GrpcError::Http(ref err) => err.description(),
             &GrpcError::GrpcMessage(ref err) => &err.grpc_message,
+            &GrpcError::MetadataDecode(..) => "metadata decode error",
             &GrpcError::Protobuf(ref err) => err.description(),
             &GrpcError::Canceled(..) => "canceled",
             &GrpcError::Panic(ref message) => &message,
@@ -54,6 +57,7 @@ impl fmt::Display for GrpcError {
             &GrpcError::Io(ref err) => write!(f, "io error: {}", err.description()),
             &GrpcError::Http(ref err) => write!(f, "http error: {}", err.description()),
             &GrpcError::GrpcMessage(ref err) => write!(f, "grpc message error: {}", err.grpc_message),
+            &GrpcError::MetadataDecode(..) => write!(f, "metadata decode error"),
             &GrpcError::Protobuf(ref err) => write!(f, "protobuf error: {}", err.description()),
             &GrpcError::Canceled(..) => write!(f, "canceled"),
             &GrpcError::Panic(ref message) => write!(f, "panic: {}", message),
@@ -93,6 +97,12 @@ impl From<GrpcError> for io::Error {
             GrpcError::Io(e) => e,
             _ => io::Error::new(io::ErrorKind::Other, err),
         }
+    }
+}
+
+impl From<metadata::MetadataDecodeError> for GrpcError {
+    fn from(de: metadata::MetadataDecodeError) -> Self {
+        GrpcError::MetadataDecode(de)
     }
 }
 

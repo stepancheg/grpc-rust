@@ -74,11 +74,17 @@ pub struct GrpcStreamingResponse<T : Send + 'static>(pub GrpcFutureSend<(GrpcMet
 impl<T : Send + 'static> GrpcStreamingResponse<T> {
     // constructors
 
+    pub fn new<F>(f: F) -> GrpcStreamingResponse<T>
+        where F : Future<Item=(GrpcMetadata, GrpcStreamSend<T>), Error=GrpcError> + Send + 'static
+    {
+        GrpcStreamingResponse(Box::new(f))
+    }
+
     pub fn metadata_and_stream<S>(metadata: GrpcMetadata, result: S) -> GrpcStreamingResponse<T>
         where S : Stream<Item=T, Error=GrpcError> + Send + 'static
     {
         let boxed: GrpcStreamSend<T> = Box::new(result);
-        GrpcStreamingResponse(Box::new(future::ok((metadata, boxed))))
+        GrpcStreamingResponse::new(future::ok((metadata, boxed)))
     }
 
     pub fn completed_with_metadata(metadata: GrpcMetadata, r: Vec<T>) -> GrpcStreamingResponse<T> {
@@ -108,6 +114,32 @@ impl<T : Send + 'static> GrpcStreamingResponse<T> {
     }
 
     // getters
+
+    fn map_stream<U, F>(self, f: F) -> GrpcStreamingResponse<U>
+        where
+            U : Send + 'static,
+            F : FnOnce(GrpcStreamSend<T>) -> GrpcStreamSend<U> + Send + 'static,
+    {
+        GrpcStreamingResponse(Box::new(self.0.map(move |(metadata, stream)| {
+            (metadata, f(stream))
+        })))
+    }
+
+    pub fn map_items<U, F>(self, f: F) -> GrpcStreamingResponse<U>
+        where
+            U : Send + 'static,
+            F : FnMut(T) -> U + Send + 'static,
+    {
+        self.map_stream(move |stream| Box::new(stream.map(f)))
+    }
+
+    pub fn and_then_items<U, F>(self, f: F) -> GrpcStreamingResponse<U>
+        where
+            U : Send + 'static,
+            F : FnMut(T) -> GrpcResult<U> + Send + 'static,
+    {
+        self.map_stream(move |stream| Box::new(stream.and_then(f)))
+    }
 
     pub fn drop_metadata(self) -> GrpcStreamSend<T> {
         Box::new(self.0.map(|(_metadata, stream)| stream).flatten_stream())
