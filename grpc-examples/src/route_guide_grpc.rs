@@ -26,9 +26,9 @@ pub trait RouteGuide {
 
     fn ListFeatures(&self, o: ::grpc::GrpcRequestOptions, p: super::route_guide::Rectangle) -> ::grpc::GrpcStreamingResponse<super::route_guide::Feature>;
 
-    fn RecordRoute(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::futures_grpc::GrpcStreamSend<super::route_guide::Point>) -> ::grpc::GrpcSingleResponse<super::route_guide::RouteSummary>;
+    fn RecordRoute(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::GrpcStreamingRequest<super::route_guide::Point>) -> ::grpc::GrpcSingleResponse<super::route_guide::RouteSummary>;
 
-    fn RouteChat(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::futures_grpc::GrpcStreamSend<super::route_guide::RouteNote>) -> ::grpc::GrpcStreamingResponse<super::route_guide::RouteNote>;
+    fn RouteChat(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::GrpcStreamingRequest<super::route_guide::RouteNote>) -> ::grpc::GrpcStreamingResponse<super::route_guide::RouteNote>;
 }
 
 // client
@@ -88,11 +88,11 @@ impl RouteGuide for RouteGuideClient {
         self.grpc_client.call_server_streaming(o, p, self.method_ListFeatures.clone())
     }
 
-    fn RecordRoute(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::futures_grpc::GrpcStreamSend<super::route_guide::Point>) -> ::grpc::GrpcSingleResponse<super::route_guide::RouteSummary> {
+    fn RecordRoute(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::GrpcStreamingRequest<super::route_guide::Point>) -> ::grpc::GrpcSingleResponse<super::route_guide::RouteSummary> {
         self.grpc_client.call_client_streaming(o, p, self.method_RecordRoute.clone())
     }
 
-    fn RouteChat(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::futures_grpc::GrpcStreamSend<super::route_guide::RouteNote>) -> ::grpc::GrpcStreamingResponse<super::route_guide::RouteNote> {
+    fn RouteChat(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::GrpcStreamingRequest<super::route_guide::RouteNote>) -> ::grpc::GrpcStreamingResponse<super::route_guide::RouteNote> {
         self.grpc_client.call_bidi(o, p, self.method_RouteChat.clone())
     }
 }

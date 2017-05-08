@@ -117,10 +117,14 @@ impl<T : Send + 'static> GrpcStreamingResponse<T> {
         GrpcStreamingResponse::iter_with_metadata(GrpcMetadata::new(), iter)
     }
 
-    pub fn no_metadata<F>(r: F) -> GrpcStreamingResponse<T>
-        where F : Stream<Item=T, Error=GrpcError> + Send + 'static
+    pub fn no_metadata<S>(s: S) -> GrpcStreamingResponse<T>
+        where S : Stream<Item=T, Error=GrpcError> + Send + 'static
     {
-        GrpcStreamingResponse::metadata_and_stream(GrpcMetadata::new(), r)
+        GrpcStreamingResponse::metadata_and_stream(GrpcMetadata::new(), s)
+    }
+
+    pub fn empty() -> GrpcStreamingResponse<T> {
+        GrpcStreamingResponse::no_metadata(stream::empty())
     }
 
     // getters

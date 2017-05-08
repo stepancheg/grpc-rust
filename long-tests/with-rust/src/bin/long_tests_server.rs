@@ -13,7 +13,6 @@ use futures::Future;
 use long_tests::long_tests_pb::*;
 use long_tests::long_tests_pb_grpc::*;
 
-use grpc::futures_grpc::*;
 use grpc::error::GrpcError;
 use grpc::*;
 
@@ -29,10 +28,10 @@ impl LongTests for LongTestsServerImpl {
         GrpcSingleResponse::completed(resp)
     }
 
-    fn char_count(&self, _o: GrpcRequestOptions, p: GrpcStreamSend<CharCountRequest>)
+    fn char_count(&self, _o: GrpcRequestOptions, p: GrpcStreamingRequest<CharCountRequest>)
         -> GrpcSingleResponse<CharCountResponse>
     {
-        let r = p
+        let r = p.drop_metadata()
             .map(|c| c.part.len() as u64)
             .fold(0, |a, b| futures::finished::<_, GrpcError>(a + b))
             .map(|s| {

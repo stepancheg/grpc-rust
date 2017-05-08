@@ -20,7 +20,6 @@ use futures::stream::Stream;
 
 use method::*;
 use error::*;
-use futures_grpc::*;
 use httpbis::futures_misc::*;
 use grpc::*;
 use grpc_frame::*;
@@ -107,7 +106,7 @@ impl<F> MethodHandlerClientStreaming<F> {
         where
             Req : Send + 'static,
             Resp : Send + 'static,
-            F : Fn(GrpcRequestOptions, GrpcStreamSend<Req>) -> GrpcSingleResponse<Resp> + Send + 'static,
+            F : Fn(GrpcRequestOptions, GrpcStreamingRequest<Req>) -> GrpcSingleResponse<Resp> + Send + 'static,
     {
         MethodHandlerClientStreaming {
             f: Arc::new(f),
@@ -133,7 +132,7 @@ impl<F> MethodHandlerBidi<F> {
         where
             Req : Send + 'static,
             Resp : Send + 'static,
-            F : Fn(GrpcRequestOptions, GrpcStreamSend<Req>) -> GrpcStreamingResponse<Resp> + Send + 'static,
+            F : Fn(GrpcRequestOptions, GrpcStreamingRequest<Req>) -> GrpcStreamingResponse<Resp> + Send + 'static,
     {
         MethodHandlerBidi {
             f: Arc::new(f),
@@ -159,10 +158,10 @@ impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerUnary<F>
 impl<Req : Send + 'static, Resp : Send + 'static, F> MethodHandler<Req, Resp> for MethodHandlerClientStreaming<F>
     where
         Resp : Send + 'static,
-        F : Fn(GrpcRequestOptions, GrpcStreamSend<Req>) -> GrpcSingleResponse<Resp> + Send + Sync + 'static,
+        F : Fn(GrpcRequestOptions, GrpcStreamingRequest<Req>) -> GrpcSingleResponse<Resp> + Send + Sync + 'static,
 {
     fn handle(&self, m: GrpcRequestOptions, req: GrpcStreamingRequest<Req>) -> GrpcStreamingResponse<Resp> {
-        ((self.f)(m, req.drop_metadata())).into_stream()
+        ((self.f)(m, req)).into_stream()
     }
 }
 
@@ -184,10 +183,10 @@ impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerBidi<F>
     where
         Req : Send + 'static,
         Resp : Send + 'static,
-        F : Fn(GrpcRequestOptions, GrpcStreamSend<Req>) -> GrpcStreamingResponse<Resp> + Send + Sync + 'static,
+        F : Fn(GrpcRequestOptions, GrpcStreamingRequest<Req>) -> GrpcStreamingResponse<Resp> + Send + Sync + 'static,
 {
     fn handle(&self, m: GrpcRequestOptions, req: GrpcStreamingRequest<Req>) -> GrpcStreamingResponse<Resp> {
-        (self.f)(m, req.drop_metadata())
+        (self.f)(m, req)
     }
 }
 

@@ -24,7 +24,7 @@
 pub trait LongTests {
     fn echo(&self, o: ::grpc::GrpcRequestOptions, p: super::long_tests_pb::EchoRequest) -> ::grpc::GrpcSingleResponse<super::long_tests_pb::EchoResponse>;
 
-    fn char_count(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::futures_grpc::GrpcStreamSend<super::long_tests_pb::CharCountRequest>) -> ::grpc::GrpcSingleResponse<super::long_tests_pb::CharCountResponse>;
+    fn char_count(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::GrpcStreamingRequest<super::long_tests_pb::CharCountRequest>) -> ::grpc::GrpcSingleResponse<super::long_tests_pb::CharCountResponse>;
 
     fn random_strings(&self, o: ::grpc::GrpcRequestOptions, p: super::long_tests_pb::RandomStringsRequest) -> ::grpc::GrpcStreamingResponse<super::long_tests_pb::RandomStringsResponse>;
 }
@@ -75,7 +75,7 @@ impl LongTests for LongTestsClient {
         self.grpc_client.call_unary(o, p, self.method_echo.clone())
     }
 
-    fn char_count(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::futures_grpc::GrpcStreamSend<super::long_tests_pb::CharCountRequest>) -> ::grpc::GrpcSingleResponse<super::long_tests_pb::CharCountResponse> {
+    fn char_count(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::GrpcStreamingRequest<super::long_tests_pb::CharCountRequest>) -> ::grpc::GrpcSingleResponse<super::long_tests_pb::CharCountResponse> {
         self.grpc_client.call_client_streaming(o, p, self.method_char_count.clone())
     }
 

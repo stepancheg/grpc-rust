@@ -32,7 +32,7 @@ impl<'a> MethodGen<'a> {
     fn input(&self) -> String {
         match self.proto.get_client_streaming() {
             false => self.input_message(),
-            true  => format!("::grpc::futures_grpc::GrpcStreamSend<{}>", self.input_message()),
+            true  => format!("::grpc::GrpcStreamingRequest<{}>", self.input_message()),
         }
     }
 

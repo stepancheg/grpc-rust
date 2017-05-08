@@ -75,8 +75,8 @@ impl TestService for TestServerImpl {
         GrpcStreamingResponse::no_metadata(output)
     }
 
-    fn StreamingInputCall(&self, _o: GrpcRequestOptions, req_stream: GrpcStreamSend<StreamingInputCallRequest>) -> GrpcSingleResponse<StreamingInputCallResponse> {
-        let return_stream = req_stream
+    fn StreamingInputCall(&self, _o: GrpcRequestOptions, req_stream: GrpcStreamingRequest<StreamingInputCallRequest>) -> GrpcSingleResponse<StreamingInputCallResponse> {
+        let return_stream = req_stream.drop_metadata()
             .map(|req| req.get_payload().body.len() as i32)
             .fold(0, |a, b| futures::finished::<_, GrpcError>(a + b))
             .map(|aggregate_size| {
@@ -87,10 +87,10 @@ impl TestService for TestServerImpl {
         GrpcSingleResponse::no_metadata(return_stream)
     }
 
-    fn FullDuplexCall(&self, _o: GrpcRequestOptions, req_stream: GrpcStreamSend<StreamingOutputCallRequest>)
+    fn FullDuplexCall(&self, _o: GrpcRequestOptions, req_stream: GrpcStreamingRequest<StreamingOutputCallRequest>)
         -> GrpcStreamingResponse<StreamingOutputCallResponse>
     {
-        let response = req_stream.map(|mut req| {
+        let response = req_stream.drop_metadata().map(|mut req| {
             if req.get_response_status().get_code() != 0 {
                 let s: GrpcStreamSend<StreamingOutputCallResponse> = Box::new(stream::once(Err(GrpcError::GrpcMessage(GrpcMessageError {
                     grpc_status: req.get_response_status().get_code(),
@@ -113,8 +113,10 @@ impl TestService for TestServerImpl {
     }
 
     // TODO: implement this if we find an interop client that needs it.
-    fn HalfDuplexCall(&self, _o: GrpcRequestOptions, _: GrpcStreamSend<StreamingOutputCallRequest>) -> GrpcStreamingResponse<StreamingOutputCallResponse> {
-        GrpcStreamingResponse::no_metadata(stream::empty())
+    fn HalfDuplexCall(&self, _o: GrpcRequestOptions, _: GrpcStreamingRequest<StreamingOutputCallRequest>)
+        -> GrpcStreamingResponse<StreamingOutputCallResponse>
+    {
+        GrpcStreamingResponse::empty()
     }
 }
 

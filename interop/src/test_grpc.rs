@@ -30,11 +30,11 @@ pub trait TestService {
 
     fn StreamingOutputCall(&self, o: ::grpc::GrpcRequestOptions, p: super::messages::StreamingOutputCallRequest) -> ::grpc::GrpcStreamingResponse<super::messages::StreamingOutputCallResponse>;
 
-    fn StreamingInputCall(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingInputCallRequest>) -> ::grpc::GrpcSingleResponse<super::messages::StreamingInputCallResponse>;
+    fn StreamingInputCall(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::GrpcStreamingRequest<super::messages::StreamingInputCallRequest>) -> ::grpc::GrpcSingleResponse<super::messages::StreamingInputCallResponse>;
 
-    fn FullDuplexCall(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingOutputCallRequest>) -> ::grpc::GrpcStreamingResponse<super::messages::StreamingOutputCallResponse>;
+    fn FullDuplexCall(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::GrpcStreamingRequest<super::messages::StreamingOutputCallRequest>) -> ::grpc::GrpcStreamingResponse<super::messages::StreamingOutputCallResponse>;
 
-    fn HalfDuplexCall(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingOutputCallRequest>) -> ::grpc::GrpcStreamingResponse<super::messages::StreamingOutputCallResponse>;
+    fn HalfDuplexCall(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::GrpcStreamingRequest<super::messages::StreamingOutputCallRequest>) -> ::grpc::GrpcStreamingResponse<super::messages::StreamingOutputCallResponse>;
 }
 
 // client
@@ -123,15 +123,15 @@ impl TestService for TestServiceClient {
         self.grpc_client.call_server_streaming(o, p, self.method_StreamingOutputCall.clone())
     }
 
-    fn StreamingInputCall(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingInputCallRequest>) -> ::grpc::GrpcSingleResponse<super::messages::StreamingInputCallResponse> {
+    fn StreamingInputCall(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::GrpcStreamingRequest<super::messages::StreamingInputCallRequest>) -> ::grpc::GrpcSingleResponse<super::messages::StreamingInputCallResponse> {
         self.grpc_client.call_client_streaming(o, p, self.method_StreamingInputCall.clone())
     }
 
-    fn FullDuplexCall(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingOutputCallRequest>) -> ::grpc::GrpcStreamingResponse<super::messages::StreamingOutputCallResponse> {
+    fn FullDuplexCall(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::GrpcStreamingRequest<super::messages::StreamingOutputCallRequest>) -> ::grpc::GrpcStreamingResponse<super::messages::StreamingOutputCallResponse> {
         self.grpc_client.call_bidi(o, p, self.method_FullDuplexCall.clone())
     }
 
-    fn HalfDuplexCall(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingOutputCallRequest>) -> ::grpc::GrpcStreamingResponse<super::messages::StreamingOutputCallResponse> {
+    fn HalfDuplexCall(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::GrpcStreamingRequest<super::messages::StreamingOutputCallRequest>) -> ::grpc::GrpcStreamingResponse<super::messages::StreamingOutputCallResponse> {
         self.grpc_client.call_bidi(o, p, self.method_HalfDuplexCall.clone())
     }
 }

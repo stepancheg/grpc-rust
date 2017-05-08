@@ -4,7 +4,6 @@ use std::net::SocketAddr;
 use bytes::Bytes;
 
 use futures;
-use futures::stream;
 use futures::stream::Stream;
 
 use httpbis::HttpScheme;
@@ -27,7 +26,7 @@ use futures_grpc::*;
 use grpc_frame::*;
 use grpc_http_to_response::*;
 
-use req::GrpcRequestOptions;
+use req::*;
 use resp::*;
 
 #[derive(Default, Debug, Clone)]
@@ -101,12 +100,15 @@ impl GrpcClient {
         one_receiver
     }
 
-    fn call_impl<Req, Resp, S>(&self, options: GrpcRequestOptions, req: S, method: Arc<MethodDescriptor<Req, Resp>>)
-                               -> GrpcStreamingResponse<Resp>
-            where
-                Req : Send + 'static,
-                Resp : Send + 'static,
-                S : Stream<Item=Req, Error=GrpcError> + Send + 'static,
+    fn call_impl<Req, Resp>(
+        &self,
+        options: GrpcRequestOptions,
+        req: GrpcStreamingRequest<Req>,
+        method: Arc<MethodDescriptor<Req, Resp>>)
+           -> GrpcStreamingResponse<Resp>
+        where
+            Req : Send + 'static,
+            Resp : Send + 'static,
     {
         info!("start call {}", method.name);
 
@@ -122,7 +124,7 @@ impl GrpcClient {
 
         let request_frames = {
             let method = method.clone();
-            req
+            req.drop_metadata() // TODO: metadata
                 .and_then(move |req| {
                     let grpc_frame = method.req_marshaller.write(&req)?;
                     Ok(Bytes::from(write_grpc_frame_to_vec(&grpc_frame)))
@@ -144,24 +146,24 @@ impl GrpcClient {
         -> GrpcSingleResponse<Resp>
             where Req: Send + 'static, Resp: Send + 'static
     {
-        self.call_impl(o, stream::once(Ok(req)), method).single()
+        self.call_impl(o, GrpcStreamingRequest::once(req), method).single()
     }
 
     pub fn call_server_streaming<Req, Resp>(&self, o: GrpcRequestOptions, req: Req, method: Arc<MethodDescriptor<Req, Resp>>)
         -> GrpcStreamingResponse<Resp>
             where Req: Send + 'static, Resp: Send + 'static
     {
-        self.call_impl(o, stream::once(Ok(req)), method)
+        self.call_impl(o, GrpcStreamingRequest::once(req), method)
     }
 
-    pub fn call_client_streaming<Req, Resp>(&self, o: GrpcRequestOptions, req: GrpcStreamSend<Req>, method: Arc<MethodDescriptor<Req, Resp>>)
+    pub fn call_client_streaming<Req, Resp>(&self, o: GrpcRequestOptions, req: GrpcStreamingRequest<Req>, method: Arc<MethodDescriptor<Req, Resp>>)
         -> GrpcSingleResponse<Resp>
             where Req: Send + 'static, Resp: Send + 'static
     {
         self.call_impl(o, req, method).single()
     }
 
-    pub fn call_bidi<Req, Resp>(&self, o: GrpcRequestOptions, req: GrpcStreamSend<Req>, method: Arc<MethodDescriptor<Req, Resp>>)
+    pub fn call_bidi<Req, Resp>(&self, o: GrpcRequestOptions, req: GrpcStreamingRequest<Req>, method: Arc<MethodDescriptor<Req, Resp>>)
         -> GrpcStreamingResponse<Resp>
             where Req: Send + 'static, Resp: Send + 'static
     {

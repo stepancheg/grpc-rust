@@ -7,8 +7,6 @@ extern crate env_logger;
 extern crate chrono;
 extern crate clap;
 
-use futures::stream;
-
 extern crate grpc_interop;
 use grpc_interop::*;
 
@@ -43,10 +41,10 @@ fn client_streaming(client: TestServiceClient) {
         let mut payload = Payload::new();
         payload.set_body(vec![0; size.to_owned()]);
         request.set_payload(payload);
-        requests.push(Ok(request));
+        requests.push(request);
     }
 
-    let response = client.StreamingInputCall(GrpcRequestOptions::new(), Box::new(stream::iter(requests))).wait_drop_metadata()
+    let response = client.StreamingInputCall(GrpcRequestOptions::new(), GrpcStreamingRequest::iter(requests)).wait_drop_metadata()
         .expect("expected response");
     assert!(response.aggregated_payload_size == 74922);
     println!("{} ClientStreaming done", Local::now().to_rfc3339());
@@ -96,9 +94,9 @@ fn ping_pong(client: TestServiceClient) {
         let mut payload = Payload::new();
         payload.set_body(vec![0;size_body_len.1]);
         req.set_payload(payload);
-        requests.push(Ok(req));
+        requests.push(req);
     }
-    let response = client.FullDuplexCall(GrpcRequestOptions::new(), Box::new(stream::iter(requests))).wait_drop_metadata();
+    let response = client.FullDuplexCall(GrpcRequestOptions::new(), GrpcStreamingRequest::iter(requests)).wait_drop_metadata();
     let mut response_sizes = Vec::new();
     {
         // this scope is to satisfy the borrow checker.
@@ -120,7 +118,7 @@ fn ping_pong(client: TestServiceClient) {
 fn empty_stream(client: TestServiceClient) {
     let response = client.FullDuplexCall(
         GrpcRequestOptions::new(),
-        Box::new(stream::empty()))
+        GrpcStreamingRequest::empty())
             .wait_drop_metadata();
     assert!(response.count() == 0);
     println!("{} EmptyStream done", Local::now().to_rfc3339());
