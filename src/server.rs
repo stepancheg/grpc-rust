@@ -356,7 +356,7 @@ impl GrpcServer {
         GrpcServer {
             server: HttpServer::new(addr, tls, conf.http, GrpcHttpService {
                 service_definition: service_definition.clone(),
-                call_starter: CallStarterSync,
+                call_starter: call_starter,
             })
         }
     }
