@@ -65,7 +65,7 @@ fn new_server_server_streaming<H>(name: &str, handler: H) -> GrpcServer
 
 /// Single server streaming method server
 fn new_server_client_streaming<H>(name: &str, handler: H) -> GrpcServer
-    where H : Fn(GrpcRequestOptions, GrpcStreamSend<String>) -> GrpcSingleResponse<String> + Sync + Send + 'static
+    where H : Fn(GrpcRequestOptions, GrpcStreamingRequest<String>) -> GrpcSingleResponse<String> + Sync + Send + 'static
 {
     new_server(name, MethodHandlerClientStreaming::new(handler))
 }
@@ -160,7 +160,7 @@ struct TesterClientStreaming {
 
 impl TesterClientStreaming {
     fn new<H>(handler: H) -> Self
-        where H : Fn(GrpcRequestOptions, GrpcStreamSend<String>) -> GrpcSingleResponse<String> + Sync + Send + 'static
+        where H : Fn(GrpcRequestOptions, GrpcStreamingRequest<String>) -> GrpcSingleResponse<String> + Sync + Send + 'static
     {
         let name = "/test/ClientStreaming";
         let server = new_server_client_streaming(name, handler);
@@ -178,7 +178,7 @@ impl TesterClientStreaming {
             tx,
             self.client.call_client_streaming(
                 GrpcRequestOptions::new(),
-                Box::new(rx),
+                GrpcStreamingRequest::stream(rx),
                 string_string_method(&self.name, GrpcStreaming::ClientStreaming)).drop_metadata(),
         )
     }
@@ -251,7 +251,7 @@ fn server_streaming() {
 #[test]
 fn client_streaming() {
     let tester = TesterClientStreaming::new(move |_m, s| {
-        GrpcSingleResponse::no_metadata(s.fold(String::new(), |mut s, message| {
+        GrpcSingleResponse::no_metadata(s.drop_metadata().fold(String::new(), |mut s, message| {
             s.push_str(&message);
             futures::finished::<_, GrpcError>(s)
         }))
