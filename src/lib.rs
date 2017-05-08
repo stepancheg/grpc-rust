@@ -36,6 +36,7 @@ mod chars;
 pub use resp::GrpcSingleResponse;
 pub use resp::GrpcStreamingResponse;
 pub use req::GrpcRequestOptions;
+pub use req::GrpcStreamingRequest;
 
 pub use metadata::GrpcMetadata;
 
