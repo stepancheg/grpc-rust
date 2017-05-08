@@ -1,11 +1,14 @@
 extern crate grpc_examples;
 extern crate grpc;
+extern crate futures;
+
+use grpc::*;
 
 use grpc_examples::helloworld_grpc::*;
 use grpc_examples::helloworld::*;
-use grpc::*;
 
 use std::env;
+
 
 fn main() {
     let name = env::args().nth(1).map(|s| s.to_owned()).unwrap_or_else(|| "world".to_owned());
@@ -14,6 +17,8 @@ fn main() {
 
     let mut req = HelloRequest::new();
     req.set_name(name);
+
     let resp = client.SayHello(GrpcRequestOptions::new(), req);
-    println!("{:?}", resp);
+
+    println!("{:?}", resp.wait());
 }

@@ -21,71 +21,35 @@ impl<'a> MethodGen<'a> {
         }
     }
 
-    fn input(&self) -> String {
+    fn input_message(&self) -> String {
         format!("super::{}", self.root_scope.find_message(self.proto.get_input_type()).rust_fq_name())
     }
 
-    fn output(&self) -> String {
+    fn output_message(&self) -> String {
         format!("super::{}", self.root_scope.find_message(self.proto.get_output_type()).rust_fq_name())
     }
 
-    fn input_async(&self) -> String {
+    fn input(&self) -> String {
         match self.proto.get_client_streaming() {
-            false => self.input(),
-            true  => format!("::grpc::futures_grpc::GrpcStreamSend<{}>", self.input()),
+            false => self.input_message(),
+            true  => format!("::grpc::futures_grpc::GrpcStreamSend<{}>", self.input_message()),
         }
     }
 
-    fn output_async(&self) -> String {
+    fn output(&self) -> String {
         match self.proto.get_server_streaming() {
-            false => format!("::grpc::GrpcSingleResponse<{}>", self.output()),
-            true  => format!("::grpc::GrpcStreamingResponse<{}>", self.output()),
+            false => format!("::grpc::GrpcSingleResponse<{}>", self.output_message()),
+            true  => format!("::grpc::GrpcStreamingResponse<{}>", self.output_message()),
         }
     }
 
-    fn input_sync(&self) -> String {
-        match self.proto.get_client_streaming() {
-            false => self.input(),
-            true  => format!("::grpc::iter::GrpcIterator<{}>", self.input()),
-        }
-    }
-
-    fn output_sync(&self) -> String {
-        match self.proto.get_server_streaming() {
-            false => format!("::grpc::result::GrpcResult<{}>", self.output()),
-            true  => format!("::grpc::iter::GrpcIterator<{}>", self.output()),
-        }
-    }
-
-    fn sync_sig(&self) -> String {
+    fn sig(&self) -> String {
         format!("{}(&self, o: ::grpc::GrpcRequestOptions, p: {}) -> {}",
-            self.proto.get_name(), self.input_sync(), self.output_sync())
+                self.proto.get_name(), self.input(), self.output())
     }
 
-    fn async_sig(&self) -> String {
-        format!("{}(&self, o: ::grpc::GrpcRequestOptions, p: {}) -> {}",
-                self.proto.get_name(), self.input_async(), self.output_async())
-    }
-
-    fn write_sync_intf(&self, w: &mut CodeWriter) {
-        w.fn_def(&self.sync_sig())
-    }
-
-    fn write_async_intf(&self, w: &mut CodeWriter) {
-        w.fn_def(&self.async_sig())
-    }
-
-    fn write_sync_client(&self, w: &mut CodeWriter) {
-        w.def_fn(&self.sync_sig(), |w| {
-            let wait = match self.proto.get_server_streaming() {
-                false => "::grpc::GrpcSingleResponse::wait_drop_metadata",
-                true  => "::grpc::rt::stream_to_iter",
-            };
-            if self.proto.get_client_streaming() {
-                w.write_line("let p = ::futures::stream::Stream::boxed(::futures::stream::iter(::std::iter::IntoIterator::into_iter(p)));");
-            }
-            w.write_line(&format!("{}(self.async_client.{}(o, p))", wait, self.proto.get_name()));
-        });
+    fn write_intf(&self, w: &mut CodeWriter) {
+        w.fn_def(&self.sig())
     }
 
     fn descriptor_field_name(&self) -> String {
@@ -93,7 +57,7 @@ impl<'a> MethodGen<'a> {
     }
 
     fn descriptor_type(&self) -> String {
-        format!("::grpc::method::MethodDescriptor<{}, {}>", self.input(), self.output())
+        format!("::grpc::method::MethodDescriptor<{}, {}>", self.input_message(), self.output_message())
     }
 
     fn streaming_upper(&self) -> &'static str {
@@ -114,8 +78,8 @@ impl<'a> MethodGen<'a> {
         }
     }
 
-    fn write_async_client(&self, w: &mut CodeWriter) {
-        w.def_fn(&self.async_sig(), |w| {
+    fn write_client(&self, w: &mut CodeWriter) {
+        w.def_fn(&self.sig(), |w| {
             w.write_line(&format!("self.grpc_client.call_{}(o, p, self.{}.clone())",
                 self.streaming_lower(),
                 self.descriptor_field_name()))
@@ -161,86 +125,35 @@ impl<'a> ServiceGen<'a> {
         }
     }
 
-    // name of synchronous interface
-    fn sync_intf_name(&self) -> &str {
+    // trait name
+    fn intf_name(&self) -> &str {
         self.proto.get_name()
     }
 
-    // name of asynchronous interface
-    fn async_intf_name(&self) -> String {
-        format!("{}Async", self.sync_intf_name())
+    // client struct name
+    fn client_name(&self) -> String {
+        format!("{}Client", self.intf_name())
     }
 
-    fn sync_client_name(&self) -> String {
-        format!("{}Client", self.sync_intf_name())
+    // server struct name
+    fn server_name(&self) -> String {
+        format!("{}Server", self.intf_name())
     }
 
-    fn async_client_name(&self) -> String {
-        format!("{}Client", self.async_intf_name())
-    }
-
-    fn async_server_name(&self) -> String {
-        format!("{}Server", self.async_intf_name())
-    }
-
-    fn write_sync_intf(&self, w: &mut CodeWriter) {
-        w.pub_trait(&self.sync_intf_name(), |w| {
+    fn write_intf(&self, w: &mut CodeWriter) {
+        w.pub_trait(&self.intf_name(), |w| {
             for (i, method) in self.methods.iter().enumerate() {
                 if i != 0 {
                     w.write_line("");
                 }
 
-                method.write_sync_intf(w);
+                method.write_intf(w);
             }
         });
     }
 
-    fn write_async_intf(&self, w: &mut CodeWriter) {
-        w.pub_trait(&self.async_intf_name(), |w| {
-            for (i, method) in self.methods.iter().enumerate() {
-                if i != 0 {
-                    w.write_line("");
-                }
-
-                method.write_async_intf(w);
-            }
-        });
-    }
-
-    fn write_sync_client(&self, w: &mut CodeWriter) {
-        w.pub_struct(&self.sync_client_name(), |w| {
-            w.field_decl("async_client", &self.async_client_name());
-        });
-
-        w.write_line("");
-
-        w.impl_self_block(&self.sync_client_name(), |w| {
-            w.pub_fn("new(host: &str, port: u16, tls: bool, conf: ::grpc::client::GrpcClientConf) -> ::grpc::result::GrpcResult<Self>", |w| {
-                w.write_line(format!("{}::new(host, port, tls, conf).map(|c| {{", &self.async_client_name()));
-                w.indented(|w| {
-                    w.expr_block(&self.sync_client_name(), |w| {
-                        w.field_entry("async_client", "c");
-                    });
-                });
-                w.write_line("})");
-            });
-        });
-
-        w.write_line("");
-
-        w.impl_for_block(self.sync_intf_name(), &self.sync_client_name(), |w| {
-            for (i, method) in self.methods.iter().enumerate() {
-                if i != 0 {
-                    w.write_line("");
-                }
-
-                method.write_sync_client(w);
-            }
-        });
-    }
-
-    fn write_async_client_object(&self, grpc_client: &str, w: &mut CodeWriter) {
-        w.expr_block(&self.async_client_name(), |w| {
+    fn write_client_object(&self, grpc_client: &str, w: &mut CodeWriter) {
+        w.expr_block(&self.client_name(), |w| {
             w.field_entry("grpc_client", grpc_client);
             for method in &self.methods {
                 method.write_descriptor(
@@ -251,8 +164,8 @@ impl<'a> ServiceGen<'a> {
         });
     }
 
-    fn write_async_client(&self, w: &mut CodeWriter) {
-        w.pub_struct(&self.async_client_name(), |w| {
+    fn write_client(&self, w: &mut CodeWriter) {
+        w.pub_struct(&self.client_name(), |w| {
             w.field_decl("grpc_client", "::grpc::client::GrpcClient");
             for method in &self.methods {
                 w.field_decl(
@@ -263,11 +176,11 @@ impl<'a> ServiceGen<'a> {
 
         w.write_line("");
 
-        w.impl_self_block(&self.async_client_name(), |w| {
+        w.impl_self_block(&self.client_name(), |w| {
 
             let sig = "with_client(grpc_client: ::grpc::client::GrpcClient) -> Self";
             w.pub_fn(sig, |w| {
-                self.write_async_client_object("grpc_client", w);
+                self.write_client_object("grpc_client", w);
             });
 
             w.write_line("");
@@ -276,7 +189,7 @@ impl<'a> ServiceGen<'a> {
             w.pub_fn(sig, |w| {
                 w.write_line("::grpc::client::GrpcClient::new(host, port, tls, conf).map(|c| {");
                 w.indented(|w| {
-                    w.write_line(&format!("{}::with_client(c)", self.async_client_name()));
+                    w.write_line(&format!("{}::with_client(c)", self.client_name()));
                 });
                 w.write_line("})");
             });
@@ -285,13 +198,13 @@ impl<'a> ServiceGen<'a> {
 
         w.write_line("");
 
-        w.impl_for_block(self.async_intf_name(), &self.async_client_name(), |w| {
+        w.impl_for_block(self.intf_name(), &self.client_name(), |w| {
             for (i, method) in self.methods.iter().enumerate() {
                 if i != 0 {
                     w.write_line("");
                 }
 
-                method.write_async_client(w);
+                method.write_client(w);
             }
         });
     }
@@ -318,13 +231,13 @@ impl<'a> ServiceGen<'a> {
     }
 
     fn write_server(&self, w: &mut CodeWriter) {
-        w.pub_struct(&self.async_server_name(), |w| {
+        w.pub_struct(&self.server_name(), |w| {
             w.pub_field_decl("grpc_server", "::grpc::server::GrpcServer");
         });
 
         w.write_line("");
 
-        w.impl_for_block("::std::ops::Deref", &self.async_server_name(), |w| {
+        w.impl_for_block("::std::ops::Deref", &self.server_name(), |w| {
             w.write_line("type Target = ::grpc::server::GrpcServer;");
             w.write_line("");
             w.def_fn("deref(&self) -> &Self::Target", |w| {
@@ -334,14 +247,14 @@ impl<'a> ServiceGen<'a> {
 
         w.write_line("");
 
-        w.impl_self_block(&self.async_server_name(), |w| {
+        w.impl_self_block(&self.server_name(), |w| {
             let sig = format!(
                 "new<A : ::std::net::ToSocketAddrs, H : {} + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self",
-                self.async_intf_name());
+                self.intf_name());
             w.pub_fn(&sig, |w| {
-                w.write_line(format!("let service_definition = {}::new_service_def(h);", self.async_server_name()));
+                w.write_line(format!("let service_definition = {}::new_service_def(h);", self.server_name()));
 
-                w.expr_block(&self.async_server_name(), |w| {
+                w.expr_block(&self.server_name(), |w| {
                     w.field_entry("grpc_server", "::grpc::server::GrpcServer::new_plain(addr, conf, service_definition)");
                 });
             });
@@ -350,18 +263,18 @@ impl<'a> ServiceGen<'a> {
 
             let sig = format!(
                 "new_pool<A : ::std::net::ToSocketAddrs, H : {} + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H, cpu_pool: ::futures_cpupool::CpuPool) -> Self",
-                self.async_intf_name());
+                self.intf_name());
             w.pub_fn(&sig, |w| {
-                w.write_line(format!("let service_definition = {}::new_service_def(h);", self.async_server_name()));
+                w.write_line(format!("let service_definition = {}::new_service_def(h);", self.server_name()));
 
-                w.expr_block(&self.async_server_name(), |w| {
+                w.expr_block(&self.server_name(), |w| {
                     w.field_entry("grpc_server", "::grpc::server::GrpcServer::new_plain_pool(addr, conf, service_definition, cpu_pool)");
                 });
             });
 
             w.write_line("");
 
-            w.pub_fn(&format!("new_service_def<H : {} + 'static + Sync + Send + 'static>(handler: H) -> ::grpc::server::ServerServiceDefinition", self.async_intf_name()), |w| {
+            w.pub_fn(&format!("new_service_def<H : {} + 'static + Sync + Send + 'static>(handler: H) -> ::grpc::server::ServerServiceDefinition", self.intf_name()), |w| {
                 w.write_line("let handler_arc = ::std::sync::Arc::new(handler);");
 
                 self.write_service_definition("", "", "handler_arc", w);
@@ -372,17 +285,11 @@ impl<'a> ServiceGen<'a> {
     fn write(&self, w: &mut CodeWriter) {
         w.comment("interface");
         w.write_line("");
-        self.write_sync_intf(w);
+        self.write_intf(w);
         w.write_line("");
-        self.write_async_intf(w);
+        w.comment("client");
         w.write_line("");
-        w.comment("sync client");
-        w.write_line("");
-        self.write_sync_client(w);
-        w.write_line("");
-        w.comment("async client");
-        w.write_line("");
-        self.write_async_client(w);
+        self.write_client(w);
         w.write_line("");
         w.comment("server");
         w.write_line("");

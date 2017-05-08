@@ -37,7 +37,7 @@ fn make_string(size: usize) -> Vec<u8> {
 
 struct TestServerImpl {}
 
-impl TestServiceAsync for TestServerImpl {
+impl TestService for TestServerImpl {
     fn EmptyCall(&self, _o: GrpcRequestOptions, _: Empty) -> GrpcSingleResponse<Empty> {
         GrpcSingleResponse::completed(Empty::new())
     }
@@ -121,7 +121,7 @@ impl TestServiceAsync for TestServerImpl {
 fn main() {
     env_logger::init().expect("env_logger::init");
 
-    let _server = TestServiceAsyncServer::new(("::", DEFAULT_PORT), Default::default(), TestServerImpl {});
+    let _server = TestServiceServer::new(("::", DEFAULT_PORT), Default::default(), TestServerImpl {});
 
     loop {
         thread::park();

@@ -20,7 +20,7 @@ use grpc::*;
 struct LongTestsServerImpl {
 }
 
-impl LongTestsAsync for LongTestsServerImpl {
+impl LongTests for LongTestsServerImpl {
     fn echo(&self, _o: GrpcRequestOptions, mut p: EchoRequest)
         -> GrpcSingleResponse<EchoResponse>
     {
@@ -61,7 +61,7 @@ impl LongTestsAsync for LongTestsServerImpl {
 fn main() {
     env_logger::init().unwrap();
 
-    let _server = LongTestsAsyncServer::new(long_tests::TEST_HOST, Default::default(), LongTestsServerImpl {});
+    let _server = LongTestsServer::new(long_tests::TEST_HOST, Default::default(), LongTestsServerImpl {});
 
     loop {
         thread::park();
