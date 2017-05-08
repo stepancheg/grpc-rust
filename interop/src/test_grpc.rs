@@ -305,6 +305,13 @@ impl TestServiceAsyncServer {
         }
     }
 
+    pub fn new_pool<A : ::std::net::ToSocketAddrs, H : TestServiceAsync + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H, cpu_pool: ::futures_cpupool::CpuPool) -> Self {
+        let service_definition = TestServiceAsyncServer::new_service_def(h);
+        TestServiceAsyncServer {
+            grpc_server: ::grpc::server::GrpcServer::new_plain_pool(addr, conf, service_definition, cpu_pool),
+        }
+    }
+
     pub fn new_service_def<H : TestServiceAsync + 'static + Sync + Send + 'static>(handler: H) -> ::grpc::server::ServerServiceDefinition {
         let handler_arc = ::std::sync::Arc::new(handler);
         ::grpc::server::ServerServiceDefinition::new(
@@ -525,6 +532,13 @@ impl UnimplementedServiceAsyncServer {
         }
     }
 
+    pub fn new_pool<A : ::std::net::ToSocketAddrs, H : UnimplementedServiceAsync + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H, cpu_pool: ::futures_cpupool::CpuPool) -> Self {
+        let service_definition = UnimplementedServiceAsyncServer::new_service_def(h);
+        UnimplementedServiceAsyncServer {
+            grpc_server: ::grpc::server::GrpcServer::new_plain_pool(addr, conf, service_definition, cpu_pool),
+        }
+    }
+
     pub fn new_service_def<H : UnimplementedServiceAsync + 'static + Sync + Send + 'static>(handler: H) -> ::grpc::server::ServerServiceDefinition {
         let handler_arc = ::std::sync::Arc::new(handler);
         ::grpc::server::ServerServiceDefinition::new(
@@ -696,6 +710,13 @@ impl ReconnectServiceAsyncServer {
         let service_definition = ReconnectServiceAsyncServer::new_service_def(h);
         ReconnectServiceAsyncServer {
             grpc_server: ::grpc::server::GrpcServer::new_plain(addr, conf, service_definition),
+        }
+    }
+
+    pub fn new_pool<A : ::std::net::ToSocketAddrs, H : ReconnectServiceAsync + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H, cpu_pool: ::futures_cpupool::CpuPool) -> Self {
+        let service_definition = ReconnectServiceAsyncServer::new_service_def(h);
+        ReconnectServiceAsyncServer {
+            grpc_server: ::grpc::server::GrpcServer::new_plain_pool(addr, conf, service_definition, cpu_pool),
         }
     }
 

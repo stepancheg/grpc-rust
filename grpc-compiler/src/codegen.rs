@@ -414,7 +414,22 @@ impl<'a> ServiceGen<'a> {
                     w.field_entry("grpc_server", "::grpc::server::GrpcServer::new_plain(addr, conf, service_definition)");
                 });
             });
+
             w.write_line("");
+
+            let sig = format!(
+                "new_pool<A : ::std::net::ToSocketAddrs, H : {} + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H, cpu_pool: ::futures_cpupool::CpuPool) -> Self",
+                self.async_intf_name());
+            w.pub_fn(&sig, |w| {
+                w.write_line(format!("let service_definition = {}::new_service_def(h);", self.async_server_name()));
+
+                w.expr_block(&self.async_server_name(), |w| {
+                    w.field_entry("grpc_server", "::grpc::server::GrpcServer::new_plain_pool(addr, conf, service_definition, cpu_pool)");
+                });
+            });
+
+            w.write_line("");
+
             w.pub_fn(&format!("new_service_def<H : {} + 'static + Sync + Send + 'static>(handler: H) -> ::grpc::server::ServerServiceDefinition", self.async_intf_name()), |w| {
                 w.write_line("let handler_arc = ::std::sync::Arc::new(handler);");
 

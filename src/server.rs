@@ -4,6 +4,8 @@ use std::net::ToSocketAddrs;
 use std::panic::catch_unwind;
 use std::panic::AssertUnwindSafe;
 
+use futures_cpupool::CpuPool;
+
 use bytes::Bytes;
 
 use httpbis::HttpError;
@@ -294,6 +296,7 @@ pub struct GrpcServer {
 }
 
 impl GrpcServer {
+    /// Without TLS
     pub fn new_plain<A : ToSocketAddrs>(
         addr: A,
         conf: GrpcServerConf,
@@ -303,11 +306,46 @@ impl GrpcServer {
         GrpcServer::new(addr, ServerTlsOption::Plain, conf, service_definition)
     }
 
+    /// Without TLS and execute handler in given CpuPool
+    pub fn new_plain_pool<A : ToSocketAddrs>(
+        addr: A,
+        conf: GrpcServerConf,
+        service_definition: ServerServiceDefinition,
+        cpu_pool: CpuPool)
+            -> GrpcServer
+    {
+        GrpcServer::new_pool(addr, ServerTlsOption::Plain, conf, service_definition, cpu_pool)
+    }
+
     pub fn new<A : ToSocketAddrs>(
         addr: A,
         tls: ServerTlsOption,
         conf: GrpcServerConf,
         service_definition: ServerServiceDefinition)
+            -> GrpcServer
+    {
+        GrpcServer::with_starter(addr, tls, conf, service_definition, CallStarterSync)
+    }
+
+    pub fn new_pool<A : ToSocketAddrs>(
+        addr: A,
+        tls: ServerTlsOption,
+        conf: GrpcServerConf,
+        service_definition: ServerServiceDefinition,
+        cpu_pool: CpuPool)
+            -> GrpcServer
+    {
+        GrpcServer::with_starter(addr, tls, conf, service_definition, CallStarterCpupool {
+            cpu_pool: cpu_pool,
+        })
+    }
+
+    fn with_starter<A : ToSocketAddrs, S : CallStarter>(
+        addr: A,
+        tls: ServerTlsOption,
+        conf: GrpcServerConf,
+        service_definition: ServerServiceDefinition,
+        call_starter: S)
             -> GrpcServer
     {
         let mut conf = conf;
@@ -318,6 +356,7 @@ impl GrpcServer {
         GrpcServer {
             server: HttpServer::new(addr, tls, conf.http, GrpcHttpService {
                 service_definition: service_definition.clone(),
+                call_starter: CallStarterSync,
             })
         }
     }
@@ -331,8 +370,56 @@ impl GrpcServer {
     }
 }
 
-struct GrpcHttpService {
+trait CallStarter : Send + 'static {
+    fn start(
+        &self,
+        service_definition: &Arc<ServerServiceDefinition>,
+        name: &str,
+        o: GrpcRequestOptions,
+        message: GrpcStreamSend<Vec<u8>>)
+            -> GrpcStreamingResponse<Vec<u8>>;
+}
+
+struct CallStarterSync;
+
+impl CallStarter for CallStarterSync {
+    fn start(
+        &self,
+        service_definition: &Arc<ServerServiceDefinition>,
+        name: &str,
+        o: GrpcRequestOptions,
+        message: GrpcStreamSend<Vec<u8>>)
+            -> GrpcStreamingResponse<Vec<u8>>
+    {
+        service_definition.handle_method(name, o, message)
+    }
+}
+
+struct CallStarterCpupool {
+    cpu_pool: CpuPool,
+}
+
+impl CallStarter for CallStarterCpupool {
+    fn start(
+        &self,
+        service_definition: &Arc<ServerServiceDefinition>,
+        name: &str,
+        o: GrpcRequestOptions,
+        message: GrpcStreamSend<Vec<u8>>)
+            -> GrpcStreamingResponse<Vec<u8>>
+    {
+        let service_definition = service_definition.clone();
+        let name = name.to_owned();
+        let f = self.cpu_pool.spawn_fn(move || {
+            service_definition.handle_method(&name, o, message).0
+        });
+        GrpcStreamingResponse::new(f)
+    }
+}
+
+struct GrpcHttpService<S : CallStarter> {
     service_definition: Arc<ServerServiceDefinition>,
+    call_starter: S,
 }
 
 
@@ -344,7 +431,7 @@ fn stream_500(message: &str) -> HttpResponse {
     ])))))
 }
 
-impl HttpService for GrpcHttpService {
+impl<S : CallStarter> HttpService for GrpcHttpService<S> {
     fn new_request(&self, headers: Headers, req: HttpPartFutureStreamSend) -> HttpResponse {
 
         let path = match headers.get_opt(":path") {
@@ -360,7 +447,8 @@ impl HttpService for GrpcHttpService {
         };
 
         // TODO: catch unwind
-        let grpc_response = self.service_definition.handle_method(
+        let grpc_response = self.call_starter.start(
+            &self.service_definition,
             &path,
             GrpcRequestOptions { metadata: metadata },
             Box::new(grpc_request));

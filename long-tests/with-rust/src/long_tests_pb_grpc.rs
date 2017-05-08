@@ -199,6 +199,13 @@ impl LongTestsAsyncServer {
         }
     }
 
+    pub fn new_pool<A : ::std::net::ToSocketAddrs, H : LongTestsAsync + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H, cpu_pool: ::futures_cpupool::CpuPool) -> Self {
+        let service_definition = LongTestsAsyncServer::new_service_def(h);
+        LongTestsAsyncServer {
+            grpc_server: ::grpc::server::GrpcServer::new_plain_pool(addr, conf, service_definition, cpu_pool),
+        }
+    }
+
     pub fn new_service_def<H : LongTestsAsync + 'static + Sync + Send + 'static>(handler: H) -> ::grpc::server::ServerServiceDefinition {
         let handler_arc = ::std::sync::Arc::new(handler);
         ::grpc::server::ServerServiceDefinition::new(
