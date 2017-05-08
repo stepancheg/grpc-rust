@@ -123,61 +123,7 @@ impl LongTestsAsync for LongTestsAsyncClient {
     }
 }
 
-// sync server
-
-pub struct LongTestsServer {
-    async_server: LongTestsAsyncServer,
-}
-
-impl ::std::ops::Deref for LongTestsServer {
-    type Target = LongTestsAsyncServer;
-
-    fn deref(&self) -> &Self::Target {
-        &self.async_server
-    }
-}
-
-struct LongTestsServerHandlerToAsync {
-    handler: ::std::sync::Arc<LongTests + Send + Sync>,
-    cpupool: ::futures_cpupool::CpuPool,
-}
-
-impl LongTestsAsync for LongTestsServerHandlerToAsync {
-    fn echo(&self, o: ::grpc::GrpcRequestOptions, p: super::long_tests_pb::EchoRequest) -> ::grpc::GrpcSingleResponse<super::long_tests_pb::EchoResponse> {
-        let h = self.handler.clone();
-        ::grpc::rt::sync_to_async_unary(&self.cpupool, p, move |p| {
-            h.echo(o, p)
-        })
-    }
-
-    fn char_count(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::futures_grpc::GrpcStreamSend<super::long_tests_pb::CharCountRequest>) -> ::grpc::GrpcSingleResponse<super::long_tests_pb::CharCountResponse> {
-        let h = self.handler.clone();
-        ::grpc::rt::sync_to_async_client_streaming(&self.cpupool, p, move |p| {
-            h.char_count(o, p)
-        })
-    }
-
-    fn random_strings(&self, o: ::grpc::GrpcRequestOptions, p: super::long_tests_pb::RandomStringsRequest) -> ::grpc::GrpcStreamingResponse<super::long_tests_pb::RandomStringsResponse> {
-        let h = self.handler.clone();
-        ::grpc::rt::sync_to_async_server_streaming(&self.cpupool, p, move |p| {
-            h.random_strings(o, p)
-        })
-    }
-}
-
-impl LongTestsServer {
-    pub fn new_plain<A : ::std::net::ToSocketAddrs, H : LongTests + Send + Sync + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self {
-        let h = LongTestsServerHandlerToAsync {
-            cpupool: ::futures_cpupool::CpuPool::new_num_cpus(),
-            handler: ::std::sync::Arc::new(h),
-        };
-        LongTestsServer {
-            async_server: LongTestsAsyncServer::new(addr, conf, h),
-        }
-    }
-}
-
-// async server
+// server
 
 pub struct LongTestsAsyncServer {
     pub grpc_server: ::grpc::server::GrpcServer,

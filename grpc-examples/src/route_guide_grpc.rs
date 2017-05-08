@@ -143,68 +143,7 @@ impl RouteGuideAsync for RouteGuideAsyncClient {
     }
 }
 
-// sync server
-
-pub struct RouteGuideServer {
-    async_server: RouteGuideAsyncServer,
-}
-
-impl ::std::ops::Deref for RouteGuideServer {
-    type Target = RouteGuideAsyncServer;
-
-    fn deref(&self) -> &Self::Target {
-        &self.async_server
-    }
-}
-
-struct RouteGuideServerHandlerToAsync {
-    handler: ::std::sync::Arc<RouteGuide + Send + Sync>,
-    cpupool: ::futures_cpupool::CpuPool,
-}
-
-impl RouteGuideAsync for RouteGuideServerHandlerToAsync {
-    fn GetFeature(&self, o: ::grpc::GrpcRequestOptions, p: super::route_guide::Point) -> ::grpc::GrpcSingleResponse<super::route_guide::Feature> {
-        let h = self.handler.clone();
-        ::grpc::rt::sync_to_async_unary(&self.cpupool, p, move |p| {
-            h.GetFeature(o, p)
-        })
-    }
-
-    fn ListFeatures(&self, o: ::grpc::GrpcRequestOptions, p: super::route_guide::Rectangle) -> ::grpc::GrpcStreamingResponse<super::route_guide::Feature> {
-        let h = self.handler.clone();
-        ::grpc::rt::sync_to_async_server_streaming(&self.cpupool, p, move |p| {
-            h.ListFeatures(o, p)
-        })
-    }
-
-    fn RecordRoute(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::futures_grpc::GrpcStreamSend<super::route_guide::Point>) -> ::grpc::GrpcSingleResponse<super::route_guide::RouteSummary> {
-        let h = self.handler.clone();
-        ::grpc::rt::sync_to_async_client_streaming(&self.cpupool, p, move |p| {
-            h.RecordRoute(o, p)
-        })
-    }
-
-    fn RouteChat(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::futures_grpc::GrpcStreamSend<super::route_guide::RouteNote>) -> ::grpc::GrpcStreamingResponse<super::route_guide::RouteNote> {
-        let h = self.handler.clone();
-        ::grpc::rt::sync_to_async_bidi(&self.cpupool, p, move |p| {
-            h.RouteChat(o, p)
-        })
-    }
-}
-
-impl RouteGuideServer {
-    pub fn new_plain<A : ::std::net::ToSocketAddrs, H : RouteGuide + Send + Sync + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self {
-        let h = RouteGuideServerHandlerToAsync {
-            cpupool: ::futures_cpupool::CpuPool::new_num_cpus(),
-            handler: ::std::sync::Arc::new(h),
-        };
-        RouteGuideServer {
-            async_server: RouteGuideAsyncServer::new(addr, conf, h),
-        }
-    }
-}
-
-// async server
+// server
 
 pub struct RouteGuideAsyncServer {
     pub grpc_server: ::grpc::server::GrpcServer,

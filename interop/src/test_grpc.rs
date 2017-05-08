@@ -201,89 +201,7 @@ impl TestServiceAsync for TestServiceAsyncClient {
     }
 }
 
-// sync server
-
-pub struct TestServiceServer {
-    async_server: TestServiceAsyncServer,
-}
-
-impl ::std::ops::Deref for TestServiceServer {
-    type Target = TestServiceAsyncServer;
-
-    fn deref(&self) -> &Self::Target {
-        &self.async_server
-    }
-}
-
-struct TestServiceServerHandlerToAsync {
-    handler: ::std::sync::Arc<TestService + Send + Sync>,
-    cpupool: ::futures_cpupool::CpuPool,
-}
-
-impl TestServiceAsync for TestServiceServerHandlerToAsync {
-    fn EmptyCall(&self, o: ::grpc::GrpcRequestOptions, p: super::empty::Empty) -> ::grpc::GrpcSingleResponse<super::empty::Empty> {
-        let h = self.handler.clone();
-        ::grpc::rt::sync_to_async_unary(&self.cpupool, p, move |p| {
-            h.EmptyCall(o, p)
-        })
-    }
-
-    fn UnaryCall(&self, o: ::grpc::GrpcRequestOptions, p: super::messages::SimpleRequest) -> ::grpc::GrpcSingleResponse<super::messages::SimpleResponse> {
-        let h = self.handler.clone();
-        ::grpc::rt::sync_to_async_unary(&self.cpupool, p, move |p| {
-            h.UnaryCall(o, p)
-        })
-    }
-
-    fn CacheableUnaryCall(&self, o: ::grpc::GrpcRequestOptions, p: super::messages::SimpleRequest) -> ::grpc::GrpcSingleResponse<super::messages::SimpleResponse> {
-        let h = self.handler.clone();
-        ::grpc::rt::sync_to_async_unary(&self.cpupool, p, move |p| {
-            h.CacheableUnaryCall(o, p)
-        })
-    }
-
-    fn StreamingOutputCall(&self, o: ::grpc::GrpcRequestOptions, p: super::messages::StreamingOutputCallRequest) -> ::grpc::GrpcStreamingResponse<super::messages::StreamingOutputCallResponse> {
-        let h = self.handler.clone();
-        ::grpc::rt::sync_to_async_server_streaming(&self.cpupool, p, move |p| {
-            h.StreamingOutputCall(o, p)
-        })
-    }
-
-    fn StreamingInputCall(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingInputCallRequest>) -> ::grpc::GrpcSingleResponse<super::messages::StreamingInputCallResponse> {
-        let h = self.handler.clone();
-        ::grpc::rt::sync_to_async_client_streaming(&self.cpupool, p, move |p| {
-            h.StreamingInputCall(o, p)
-        })
-    }
-
-    fn FullDuplexCall(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingOutputCallRequest>) -> ::grpc::GrpcStreamingResponse<super::messages::StreamingOutputCallResponse> {
-        let h = self.handler.clone();
-        ::grpc::rt::sync_to_async_bidi(&self.cpupool, p, move |p| {
-            h.FullDuplexCall(o, p)
-        })
-    }
-
-    fn HalfDuplexCall(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::futures_grpc::GrpcStreamSend<super::messages::StreamingOutputCallRequest>) -> ::grpc::GrpcStreamingResponse<super::messages::StreamingOutputCallResponse> {
-        let h = self.handler.clone();
-        ::grpc::rt::sync_to_async_bidi(&self.cpupool, p, move |p| {
-            h.HalfDuplexCall(o, p)
-        })
-    }
-}
-
-impl TestServiceServer {
-    pub fn new_plain<A : ::std::net::ToSocketAddrs, H : TestService + Send + Sync + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self {
-        let h = TestServiceServerHandlerToAsync {
-            cpupool: ::futures_cpupool::CpuPool::new_num_cpus(),
-            handler: ::std::sync::Arc::new(h),
-        };
-        TestServiceServer {
-            async_server: TestServiceAsyncServer::new(addr, conf, h),
-        }
-    }
-}
-
-// async server
+// server
 
 pub struct TestServiceAsyncServer {
     pub grpc_server: ::grpc::server::GrpcServer,
@@ -470,47 +388,7 @@ impl UnimplementedServiceAsync for UnimplementedServiceAsyncClient {
     }
 }
 
-// sync server
-
-pub struct UnimplementedServiceServer {
-    async_server: UnimplementedServiceAsyncServer,
-}
-
-impl ::std::ops::Deref for UnimplementedServiceServer {
-    type Target = UnimplementedServiceAsyncServer;
-
-    fn deref(&self) -> &Self::Target {
-        &self.async_server
-    }
-}
-
-struct UnimplementedServiceServerHandlerToAsync {
-    handler: ::std::sync::Arc<UnimplementedService + Send + Sync>,
-    cpupool: ::futures_cpupool::CpuPool,
-}
-
-impl UnimplementedServiceAsync for UnimplementedServiceServerHandlerToAsync {
-    fn UnimplementedCall(&self, o: ::grpc::GrpcRequestOptions, p: super::empty::Empty) -> ::grpc::GrpcSingleResponse<super::empty::Empty> {
-        let h = self.handler.clone();
-        ::grpc::rt::sync_to_async_unary(&self.cpupool, p, move |p| {
-            h.UnimplementedCall(o, p)
-        })
-    }
-}
-
-impl UnimplementedServiceServer {
-    pub fn new_plain<A : ::std::net::ToSocketAddrs, H : UnimplementedService + Send + Sync + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self {
-        let h = UnimplementedServiceServerHandlerToAsync {
-            cpupool: ::futures_cpupool::CpuPool::new_num_cpus(),
-            handler: ::std::sync::Arc::new(h),
-        };
-        UnimplementedServiceServer {
-            async_server: UnimplementedServiceAsyncServer::new(addr, conf, h),
-        }
-    }
-}
-
-// async server
+// server
 
 pub struct UnimplementedServiceAsyncServer {
     pub grpc_server: ::grpc::server::GrpcServer,
@@ -644,54 +522,7 @@ impl ReconnectServiceAsync for ReconnectServiceAsyncClient {
     }
 }
 
-// sync server
-
-pub struct ReconnectServiceServer {
-    async_server: ReconnectServiceAsyncServer,
-}
-
-impl ::std::ops::Deref for ReconnectServiceServer {
-    type Target = ReconnectServiceAsyncServer;
-
-    fn deref(&self) -> &Self::Target {
-        &self.async_server
-    }
-}
-
-struct ReconnectServiceServerHandlerToAsync {
-    handler: ::std::sync::Arc<ReconnectService + Send + Sync>,
-    cpupool: ::futures_cpupool::CpuPool,
-}
-
-impl ReconnectServiceAsync for ReconnectServiceServerHandlerToAsync {
-    fn Start(&self, o: ::grpc::GrpcRequestOptions, p: super::messages::ReconnectParams) -> ::grpc::GrpcSingleResponse<super::empty::Empty> {
-        let h = self.handler.clone();
-        ::grpc::rt::sync_to_async_unary(&self.cpupool, p, move |p| {
-            h.Start(o, p)
-        })
-    }
-
-    fn Stop(&self, o: ::grpc::GrpcRequestOptions, p: super::empty::Empty) -> ::grpc::GrpcSingleResponse<super::messages::ReconnectInfo> {
-        let h = self.handler.clone();
-        ::grpc::rt::sync_to_async_unary(&self.cpupool, p, move |p| {
-            h.Stop(o, p)
-        })
-    }
-}
-
-impl ReconnectServiceServer {
-    pub fn new_plain<A : ::std::net::ToSocketAddrs, H : ReconnectService + Send + Sync + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self {
-        let h = ReconnectServiceServerHandlerToAsync {
-            cpupool: ::futures_cpupool::CpuPool::new_num_cpus(),
-            handler: ::std::sync::Arc::new(h),
-        };
-        ReconnectServiceServer {
-            async_server: ReconnectServiceAsyncServer::new(addr, conf, h),
-        }
-    }
-}
-
-// async server
+// server
 
 pub struct ReconnectServiceAsyncServer {
     pub grpc_server: ::grpc::server::GrpcServer,

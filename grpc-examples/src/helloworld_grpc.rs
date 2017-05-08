@@ -84,47 +84,7 @@ impl GreeterAsync for GreeterAsyncClient {
     }
 }
 
-// sync server
-
-pub struct GreeterServer {
-    async_server: GreeterAsyncServer,
-}
-
-impl ::std::ops::Deref for GreeterServer {
-    type Target = GreeterAsyncServer;
-
-    fn deref(&self) -> &Self::Target {
-        &self.async_server
-    }
-}
-
-struct GreeterServerHandlerToAsync {
-    handler: ::std::sync::Arc<Greeter + Send + Sync>,
-    cpupool: ::futures_cpupool::CpuPool,
-}
-
-impl GreeterAsync for GreeterServerHandlerToAsync {
-    fn SayHello(&self, o: ::grpc::GrpcRequestOptions, p: super::helloworld::HelloRequest) -> ::grpc::GrpcSingleResponse<super::helloworld::HelloReply> {
-        let h = self.handler.clone();
-        ::grpc::rt::sync_to_async_unary(&self.cpupool, p, move |p| {
-            h.SayHello(o, p)
-        })
-    }
-}
-
-impl GreeterServer {
-    pub fn new_plain<A : ::std::net::ToSocketAddrs, H : Greeter + Send + Sync + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self {
-        let h = GreeterServerHandlerToAsync {
-            cpupool: ::futures_cpupool::CpuPool::new_num_cpus(),
-            handler: ::std::sync::Arc::new(h),
-        };
-        GreeterServer {
-            async_server: GreeterAsyncServer::new(addr, conf, h),
-        }
-    }
-}
-
-// async server
+// server
 
 pub struct GreeterAsyncServer {
     pub grpc_server: ::grpc::server::GrpcServer,
