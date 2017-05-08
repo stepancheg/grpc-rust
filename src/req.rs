@@ -41,6 +41,17 @@ impl<T : Send + 'static> GrpcStreamingRequest<T> {
         GrpcStreamingRequest::new(stream.map(GrpcStreamingRequestItem::Item))
     }
 
+    pub fn once(item: T) -> GrpcStreamingRequest<T> {
+        GrpcStreamingRequest::stream(stream::once(Ok(item)))
+    }
+
+    pub fn once_with_trailing_metadata(item: T, metadata: GrpcMetadata) -> GrpcStreamingRequest<T> {
+        GrpcStreamingRequest::new(stream::iter(vec![
+            GrpcStreamingRequestItem::Item(item),
+            GrpcStreamingRequestItem::TrailingMetadata(metadata),
+        ].into_iter().map(Ok)))
+    }
+
     pub fn iter<I>(iter: I) -> GrpcStreamingRequest<T>
         where
             I : IntoIterator<Item=T>,
