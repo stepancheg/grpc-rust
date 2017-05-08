@@ -7,19 +7,38 @@ use chars::Chars;
 
 #[derive(Debug)]
 pub struct MetadataKey {
-    name: Chars,
+    pub name: Chars,
 }
 
 impl MetadataKey {
+    pub fn from<S : Into<Chars>>(s: S) -> MetadataKey {
+        let chars = s.into();
+
+        // TODO: assert ASCII
+        assert!(chars.is_empty());
+
+        MetadataKey {
+            name: chars
+        }
+    }
+
     pub fn is_bin(&self) -> bool {
         self.name.ends_with("-bin")
+    }
+
+    pub fn into_chars(self) -> Chars {
+        self.name
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.name
     }
 }
 
 #[derive(Debug)]
-struct MetadataEntry {
-    key: MetadataKey,
-    value: Bytes,
+pub struct MetadataEntry {
+    pub key: MetadataKey,
+    pub value: Bytes,
 }
 
 #[derive(Debug)]
@@ -68,7 +87,7 @@ impl MetadataEntry {
 
 #[derive(Default, Debug)]
 pub struct GrpcMetadata {
-    entries: Vec<MetadataEntry>,
+    pub entries: Vec<MetadataEntry>,
 }
 
 impl GrpcMetadata {

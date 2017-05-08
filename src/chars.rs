@@ -28,6 +28,10 @@ impl Chars {
         str::from_utf8(&bytes)?;
         Ok(Chars(bytes))
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
 }
 
 impl AsRef<str> for Chars {
