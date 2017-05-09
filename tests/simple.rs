@@ -178,7 +178,7 @@ impl TesterClientStreaming {
             tx,
             self.client.call_client_streaming(
                 GrpcRequestOptions::new(),
-                GrpcStreamingRequest::stream(rx),
+                GrpcStreamingRequest::new(rx),
                 string_string_method(&self.name, GrpcStreaming::ClientStreaming)).drop_metadata(),
         )
     }
@@ -251,7 +251,7 @@ fn server_streaming() {
 #[test]
 fn client_streaming() {
     let tester = TesterClientStreaming::new(move |_m, s| {
-        GrpcSingleResponse::no_metadata(s.drop_metadata().fold(String::new(), |mut s, message| {
+        GrpcSingleResponse::no_metadata(s.0.fold(String::new(), |mut s, message| {
             s.push_str(&message);
             futures::finished::<_, GrpcError>(s)
         }))

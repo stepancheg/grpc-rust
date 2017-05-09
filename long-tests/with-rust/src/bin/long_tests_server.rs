@@ -31,7 +31,7 @@ impl LongTests for LongTestsServerImpl {
     fn char_count(&self, _o: GrpcRequestOptions, p: GrpcStreamingRequest<CharCountRequest>)
         -> GrpcSingleResponse<CharCountResponse>
     {
-        let r = p.drop_metadata()
+        let r = p.0
             .map(|c| c.part.len() as u64)
             .fold(0, |a, b| futures::finished::<_, GrpcError>(a + b))
             .map(|s| {

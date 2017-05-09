@@ -124,7 +124,7 @@ impl GrpcClient {
 
         let request_frames = {
             let method = method.clone();
-            req.drop_metadata() // TODO: metadata
+            req.0
                 .and_then(move |req| {
                     let grpc_frame = method.req_marshaller.write(&req)?;
                     Ok(Bytes::from(write_grpc_frame_to_vec(&grpc_frame)))

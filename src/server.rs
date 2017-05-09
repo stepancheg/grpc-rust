@@ -149,7 +149,7 @@ impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerUnary<F>
     fn handle(&self, m: GrpcRequestOptions, req: GrpcStreamingRequest<Req>) -> GrpcStreamingResponse<Resp> {
         let f = self.f.clone();
         GrpcSingleResponse(
-            Box::new(stream_single(req.drop_metadata())
+            Box::new(stream_single(req.0)
                 .and_then(move |req| f(m, req).0)))
                     .into_stream()
     }
@@ -174,7 +174,7 @@ impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerServerStreaming<F>
     fn handle(&self, o: GrpcRequestOptions, req: GrpcStreamingRequest<Req>) -> GrpcStreamingResponse<Resp> {
         let f = self.f.clone();
         GrpcStreamingResponse(Box::new(
-            stream_single(req.drop_metadata())
+            stream_single(req.0)
                 .and_then(move |req| f(o, req).0)))
     }
 }
@@ -210,9 +210,9 @@ impl<Req, Resp> MethodHandlerDispatch for MethodHandlerDispatchImpl<Req, Resp>
         -> GrpcStreamingResponse<Vec<u8>>
     {
         let desc = self.desc.clone();
-        let req = req_grpc_frames.drop_metadata().and_then(move |frame| desc.req_marshaller.read(&frame));
+        let req = req_grpc_frames.0.and_then(move |frame| desc.req_marshaller.read(&frame));
         let resp =
-            catch_unwind(AssertUnwindSafe(|| self.method_handler.handle(o, GrpcStreamingRequest::stream(req))));
+            catch_unwind(AssertUnwindSafe(|| self.method_handler.handle(o, GrpcStreamingRequest::new(req))));
         match resp {
             Ok(resp) => {
                 let desc_copy = self.desc.clone();
@@ -450,7 +450,7 @@ impl<S : CallStarter> HttpService for GrpcHttpService<S> {
             &self.service_definition,
             &path,
             GrpcRequestOptions { metadata: metadata },
-            GrpcStreamingRequest::stream(grpc_request));
+            GrpcStreamingRequest::new(grpc_request));
 
         HttpResponse::new(grpc_response.0.map_err(HttpError::from).map(|(metadata, grpc_frames)| {
             let mut init_headers = Headers(vec![

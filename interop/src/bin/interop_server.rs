@@ -76,7 +76,7 @@ impl TestService for TestServerImpl {
     }
 
     fn StreamingInputCall(&self, _o: GrpcRequestOptions, req_stream: GrpcStreamingRequest<StreamingInputCallRequest>) -> GrpcSingleResponse<StreamingInputCallResponse> {
-        let return_stream = req_stream.drop_metadata()
+        let return_stream = req_stream.0
             .map(|req| req.get_payload().body.len() as i32)
             .fold(0, |a, b| futures::finished::<_, GrpcError>(a + b))
             .map(|aggregate_size| {
@@ -90,7 +90,7 @@ impl TestService for TestServerImpl {
     fn FullDuplexCall(&self, _o: GrpcRequestOptions, req_stream: GrpcStreamingRequest<StreamingOutputCallRequest>)
         -> GrpcStreamingResponse<StreamingOutputCallResponse>
     {
-        let response = req_stream.drop_metadata().map(|mut req| {
+        let response = req_stream.0.map(|mut req| {
             if req.get_response_status().get_code() != 0 {
                 let s: GrpcStreamSend<StreamingOutputCallResponse> = Box::new(stream::once(Err(GrpcError::GrpcMessage(GrpcMessageError {
                     grpc_status: req.get_response_status().get_code(),
