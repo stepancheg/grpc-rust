@@ -1,9 +1,9 @@
-use futures::stream;
 use futures::stream::Stream;
 
 use metadata::GrpcMetadata;
 
 use futures_grpc::GrpcStreamSend;
+use stream_item::*;
 use error::GrpcError;
 
 #[derive(Debug, Default)]
@@ -17,39 +17,31 @@ impl GrpcRequestOptions {
     }
 }
 
-pub enum GrpcStreamingRequestItem<T> {
-    Item(T),
-    TrailingMetadata(GrpcMetadata),
-}
-
 /// Excluding initial metadata which is passed separately
-pub struct GrpcStreamingRequest<T : Send + 'static>(pub GrpcStreamSend<GrpcStreamingRequestItem<T>>);
+pub struct GrpcStreamingRequest<T : Send + 'static>(pub GrpcStreamWithTrailingMetadata<T>);
 
 impl<T : Send + 'static> GrpcStreamingRequest<T> {
 
     // constructors
 
     pub fn new<S>(stream: S) -> GrpcStreamingRequest<T>
-        where S : Stream<Item=GrpcStreamingRequestItem<T>, Error=GrpcError> + Send + 'static
+        where S : Stream<Item=GrpcItemOrMetadata<T>, Error=GrpcError> + Send + 'static
     {
-        GrpcStreamingRequest(Box::new(stream))
+        GrpcStreamingRequest(GrpcStreamWithTrailingMetadata::new(stream))
     }
 
     pub fn stream<S>(stream: S) -> GrpcStreamingRequest<T>
         where S : Stream<Item=T, Error=GrpcError> + Send + 'static
     {
-        GrpcStreamingRequest::new(stream.map(GrpcStreamingRequestItem::Item))
+        GrpcStreamingRequest(GrpcStreamWithTrailingMetadata::stream(stream))
     }
 
     pub fn once(item: T) -> GrpcStreamingRequest<T> {
-        GrpcStreamingRequest::stream(stream::once(Ok(item)))
+        GrpcStreamingRequest(GrpcStreamWithTrailingMetadata::once(item))
     }
 
     pub fn once_with_trailing_metadata(item: T, metadata: GrpcMetadata) -> GrpcStreamingRequest<T> {
-        GrpcStreamingRequest::new(stream::iter(vec![
-            GrpcStreamingRequestItem::Item(item),
-            GrpcStreamingRequestItem::TrailingMetadata(metadata),
-        ].into_iter().map(Ok)))
+        GrpcStreamingRequest(GrpcStreamWithTrailingMetadata::once_with_trailing_metadata(item, metadata))
     }
 
     pub fn iter<I>(iter: I) -> GrpcStreamingRequest<T>
@@ -57,25 +49,20 @@ impl<T : Send + 'static> GrpcStreamingRequest<T> {
             I : IntoIterator<Item=T>,
             I::IntoIter : Send + 'static,
     {
-        GrpcStreamingRequest::stream(stream::iter(iter.into_iter().map(Ok)))
+        GrpcStreamingRequest(GrpcStreamWithTrailingMetadata::iter(iter))
     }
 
     pub fn empty() -> GrpcStreamingRequest<T> {
-        GrpcStreamingRequest::new(stream::empty())
+        GrpcStreamingRequest(GrpcStreamWithTrailingMetadata::empty())
     }
 
     pub fn err(err: GrpcError) -> GrpcStreamingRequest<T> {
-        GrpcStreamingRequest::new(stream::once(Err(err)))
+        GrpcStreamingRequest(GrpcStreamWithTrailingMetadata::err(err))
     }
 
     // getters
 
     pub fn drop_metadata(self) -> GrpcStreamSend<T> {
-        Box::new(self.0.filter_map(|item| {
-            match item {
-                GrpcStreamingRequestItem::Item(t) => Some(t),
-                GrpcStreamingRequestItem::TrailingMetadata(_) => None,
-            }
-        }))
+        self.0.drop_metadata()
     }
 }

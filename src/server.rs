@@ -461,6 +461,7 @@ impl<S : CallStarter> HttpService for GrpcHttpService<S> {
             init_headers.extend(metadata.into_headers());
 
             let s2 = grpc_frames
+                .drop_metadata() // TODO
                 .map(|frame| HttpStreamPart::intermediate_data(Bytes::from(write_grpc_frame_to_vec(&frame))))
                 .then(|result| {
                     match result {

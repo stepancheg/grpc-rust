@@ -28,11 +28,13 @@ pub mod error;
 pub mod iter;
 pub mod rt;
 pub mod metadata;
+mod stream_item;
 mod req;
 mod resp;
 mod chars;
 
 
+pub use stream_item::GrpcItemOrMetadata;
 pub use resp::GrpcSingleResponse;
 pub use resp::GrpcStreamingResponse;
 pub use req::GrpcRequestOptions;

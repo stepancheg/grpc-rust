@@ -17,8 +17,6 @@ use httpbis::bytesx::bytes_extend_with;
 use httpbis::http_common::HttpStreamPartContent;
 use httpbis::http_common::HttpPartFutureStreamSend;
 
-use futures_grpc::*;
-
 use grpc_frame::*;
 
 use bytes::Bytes;
@@ -29,6 +27,7 @@ use error::GrpcError;
 use error::GrpcMessageError;
 
 use resp::*;
+use stream_item::*;
 use metadata::*;
 
 
@@ -59,7 +58,9 @@ fn init_headers_to_metadata(headers: Headers) -> GrpcResult<GrpcMetadata> {
 pub fn http_response_to_grpc_frames(response: HttpResponse) -> GrpcStreamingResponse<Bytes> {
     GrpcStreamingResponse::new(response.0.map_err(|e| GrpcError::from(e)).and_then(|(headers, rem)| {
         let metadata = init_headers_to_metadata(headers)?;
-        let frames: GrpcStreamSend<Bytes> = Box::new(GrpcFrameFromHttpFramesStreamResponse::new(rem));
+        // TODO: metadata
+        let frames: GrpcStreamWithTrailingMetadata<Bytes> =
+            GrpcStreamWithTrailingMetadata::new(GrpcFrameFromHttpFramesStreamResponse::new(rem));
         Ok((metadata, frames))
     }))
 }
@@ -68,7 +69,7 @@ pub fn http_response_to_grpc_frames(response: HttpResponse) -> GrpcStreamingResp
 struct GrpcFrameFromHttpFramesStreamResponse {
     http_stream_stream: HttpPartFutureStreamSend,
     buf: Bytes,
-    error: Option<stream::Once<Bytes, GrpcError>>,
+    error: Option<stream::Once<GrpcItemOrMetadata<Bytes>, GrpcError>>,
 }
 
 impl GrpcFrameFromHttpFramesStreamResponse {
@@ -82,7 +83,7 @@ impl GrpcFrameFromHttpFramesStreamResponse {
 }
 
 impl Stream for GrpcFrameFromHttpFramesStreamResponse {
-    type Item = Bytes;
+    type Item = GrpcItemOrMetadata<Bytes>;
     type Error = GrpcError;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
@@ -95,7 +96,7 @@ impl Stream for GrpcFrameFromHttpFramesStreamResponse {
                 let frame = self.buf
                     .split_to(frame_len + GRPC_HEADER_LEN)
                     .slice_from(GRPC_HEADER_LEN);
-                return Ok(Async::Ready(Some(frame)));
+                return Ok(Async::Ready(Some(GrpcItemOrMetadata::Item(frame))));
             }
 
             let part_opt = try_ready!(self.http_stream_stream.poll());
@@ -112,6 +113,7 @@ impl Stream for GrpcFrameFromHttpFramesStreamResponse {
             };
 
             match part.content {
+                // TODO: trailing metadata
                 HttpStreamPartContent::Headers(headers) => {
                     if part.last {
                         if !self.buf.is_empty() {
