@@ -1,3 +1,4 @@
+extern crate bytes;
 extern crate protobuf;
 extern crate grpc;
 extern crate futures;
@@ -10,7 +11,10 @@ extern crate clap;
 extern crate grpc_interop;
 use grpc_interop::*;
 
+use bytes::Bytes;
+
 use grpc::*;
+use grpc::metadata::MetadataKey;
 
 use chrono::*;
 use clap::{App, Arg};
@@ -124,6 +128,40 @@ fn empty_stream(client: TestServiceClient) {
     println!("{} EmptyStream done", Local::now().to_rfc3339());
 }
 
+fn custom_metadata(client: TestServiceClient) {
+    {
+        // The client attaches custom metadata with the following keys and values:
+        // key: "x-grpc-test-echo-initial", value: "test_initial_metadata_value"
+        // key: "x-grpc-test-echo-initial", value: "test_initial_metadata_value"
+        let mut options = GrpcRequestOptions::new();
+        options.metadata.add(
+            MetadataKey::from("x-grpc-test-echo-initial"),
+            Bytes::from("test_initial_metadata_value"));
+        options.metadata.add(
+            MetadataKey::from("x-grpc-test-echo-trailing-bin"),
+            Bytes::from(&b"\xab\xab\xab"[..]));
+
+        // to a UnaryCall with request:
+        // {
+        //   response_size: 314159
+        //   payload:{
+        //     body: 271828 bytes of zeros
+        //   }
+        // }
+        let mut req = SimpleRequest::new();
+        req.set_response_size(314159);
+        let mut payload = Payload::new();
+        payload.set_body(vec![0; 271828]);
+        req.set_payload(payload);
+        let (initial, _result, trailing) = client.UnaryCall(options, req)
+            .wait().expect("UnaryCall");
+
+        assert_eq!(Some(&b"test_initial_metadata_value"[..]), initial.get("x-grpc-test-echo-initial"));
+        assert_eq!(Some(&b"\xab\xab\xab"[..]), trailing.get("x-grpc-test-echo-trailing-bin"));
+    }
+    unimplemented!();
+}
+
 // The flags we use are defined in the gRPC Interopability doc
 // https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md
 fn main() {
@@ -196,7 +234,7 @@ fn main() {
         "jwt_token_creds" => panic!("jwt_token_creds not done yet"),
         "oauth2_auth_token" => panic!("oauth2_auth_token not done yet"),
         "per_rpc_creds" => panic!("per_rpc_creds not done yet"),
-        "custom_metadata" => panic!("custom_metadata not done yet"),
+        "custom_metadata" => custom_metadata(client),
         "status_code_and_message" => panic!("status_code_and_message not done yet"),
         "unimplemented_method" => panic!("unimplemented_method not done yet"),
         "unimplemented_service" => panic!("unimplemented_service not done yet"),

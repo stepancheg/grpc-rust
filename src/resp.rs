@@ -1,5 +1,3 @@
-use httpbis::futures_misc::stream_single;
-
 use futures::future;
 use futures::future::Future;
 use futures::stream;
@@ -13,14 +11,15 @@ use metadata::*;
 use stream_item::*;
 
 /// Single message response
-// TODO: trailers metadata
-pub struct GrpcSingleResponse<T : Send + 'static>(pub GrpcFutureSend<(GrpcMetadata, GrpcFutureSend<T>)>);
+pub struct GrpcSingleResponse<T : Send + 'static>(
+    pub GrpcFutureSend<(GrpcMetadata, GrpcFutureSend<(T, GrpcMetadata)>)>
+);
 
 impl<T : Send + 'static> GrpcSingleResponse<T> {
     // constructors
 
     pub fn new<F>(f: F) -> GrpcSingleResponse<T>
-        where F : Future<Item=(GrpcMetadata, GrpcFutureSend<T>), Error=GrpcError> + Send + 'static
+        where F : Future<Item=(GrpcMetadata, GrpcFutureSend<(T, GrpcMetadata)>), Error=GrpcError> + Send + 'static
     {
         GrpcSingleResponse(Box::new(f))
     }
@@ -28,8 +27,8 @@ impl<T : Send + 'static> GrpcSingleResponse<T> {
     pub fn metadata_and_future<F>(metadata: GrpcMetadata, result: F) -> GrpcSingleResponse<T>
         where F : Future<Item=T, Error=GrpcError> + Send + 'static
     {
-        let boxed: GrpcFutureSend<T> = Box::new(result);
-        GrpcSingleResponse(Box::new(future::ok((metadata, boxed))))
+        let boxed: GrpcFutureSend<(T, GrpcMetadata)> = Box::new((result.map(|r| (r, GrpcMetadata::new()))));
+        GrpcSingleResponse::new(future::ok((metadata, boxed)))
     }
 
     pub fn completed_with_metadata(metadata: GrpcMetadata, r: T) -> GrpcSingleResponse<T> {
@@ -52,28 +51,36 @@ impl<T : Send + 'static> GrpcSingleResponse<T> {
 
     // getters
 
-    pub fn join_metadata_result(self) -> GrpcFutureSend<(GrpcMetadata, T)> {
-        Box::new(self.0.and_then(|(metadata, result)| result.map(|result| (metadata, result))))
+    pub fn join_metadata_result(self) -> GrpcFutureSend<(GrpcMetadata, T, GrpcMetadata)> {
+        Box::new(self.0.and_then(|(initial, result)| {
+            result.map(|(result, trailing)| (initial, result, trailing))
+        }))
     }
 
     pub fn drop_metadata(self) -> GrpcFutureSend<T> {
-        Box::new(self.0.and_then(|(_metadata, result)| result))
+        Box::new(self.0.and_then(|(_initial, result)| result.map(|(result, _trailing)| result)))
     }
 
     /// Convert self into single element stream.
     pub fn into_stream(self) -> GrpcStreamingResponse<T> {
         GrpcStreamingResponse::new(self.0.map(|(metadata, future)| {
-            // TODO: trailing metadata
-            (metadata, GrpcStreamWithTrailingMetadata::stream(future.into_stream()))
+            let stream = future.map(|(result, trailing)| {
+                stream::iter(vec![
+                    Ok(GrpcItemOrMetadata::Item(result)),
+                    Ok(GrpcItemOrMetadata::TrailingMetadata(trailing)),
+                ])
+            }).flatten_stream();
+
+            (metadata, GrpcStreamWithTrailingMetadata::new(stream))
         }))
     }
 
-    pub fn wait(self) -> GrpcResult<(GrpcMetadata, T)> {
+    pub fn wait(self) -> GrpcResult<(GrpcMetadata, T, GrpcMetadata)> {
         self.join_metadata_result().wait()
     }
 
     pub fn wait_drop_metadata(self) -> GrpcResult<T> {
-        self.wait().map(|(_metadata, r)| r)
+        self.wait().map(|(_initial, r, _trailing)| r)
     }
 }
 
@@ -166,21 +173,17 @@ impl<T : Send + 'static> GrpcStreamingResponse<T> {
     }
 
     pub fn into_future(self) -> GrpcSingleResponse<Vec<T>> {
-        GrpcSingleResponse(
-            Box::new(self.0.map(|(metadata, stream)| {
-                let future: GrpcFutureSend<Vec<T>> = stream.collect();
-                (metadata, future)
-            })))
+        GrpcSingleResponse::new(self.0.map(|(initial, stream)| {
+            let future: GrpcFutureSend<(Vec<T>, GrpcMetadata)> = stream.collect_with_metadata();
+            (initial, future)
+        }))
     }
 
     /// Take single element from stream
     pub fn single(self) -> GrpcSingleResponse<T> {
-        GrpcSingleResponse(
-            Box::new(self.0.map(|(metadata, stream)| {
-                // TODO: trailing metadata
-                let future: GrpcFutureSend<T> = Box::new(stream_single(stream.drop_metadata()));
-                (metadata, future)
-            })))
+        GrpcSingleResponse(Box::new(self.0.map(|(metadata, stream)| {
+            (metadata, stream.single_with_metadata())
+        })))
     }
 
     pub fn wait(self) -> GrpcResult<(GrpcMetadata, GrpcIterator<T>)> {

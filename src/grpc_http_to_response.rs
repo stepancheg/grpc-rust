@@ -58,7 +58,6 @@ fn init_headers_to_metadata(headers: Headers) -> GrpcResult<GrpcMetadata> {
 pub fn http_response_to_grpc_frames(response: HttpResponse) -> GrpcStreamingResponse<Bytes> {
     GrpcStreamingResponse::new(response.0.map_err(|e| GrpcError::from(e)).and_then(|(headers, rem)| {
         let metadata = init_headers_to_metadata(headers)?;
-        // TODO: metadata
         let frames: GrpcStreamWithTrailingMetadata<Bytes> =
             GrpcStreamWithTrailingMetadata::new(GrpcFrameFromHttpFramesStreamResponse::new(rem));
         Ok((metadata, frames))
@@ -113,7 +112,8 @@ impl Stream for GrpcFrameFromHttpFramesStreamResponse {
             };
 
             match part.content {
-                // TODO: trailing metadata
+                // TODO: check only one trailing header
+                // TODO: check no data after headers
                 HttpStreamPartContent::Headers(headers) => {
                     if part.last {
                         if !self.buf.is_empty() {
@@ -121,7 +121,8 @@ impl Stream for GrpcFrameFromHttpFramesStreamResponse {
                         } else {
                             let grpc_status = headers.get_opt_parse(HEADER_GRPC_STATUS);
                             if grpc_status == Some(GrpcStatus::Ok as i32) {
-                                return Ok(Async::Ready(None));
+                                return Ok(Async::Ready(Some(GrpcItemOrMetadata::TrailingMetadata(
+                                    GrpcMetadata::from_headers(headers)?))));
                             } else {
                                 self.error = Some(stream::once(Err(if let Some(message) = headers.get_opt(HEADER_GRPC_MESSAGE) {
                                     GrpcError::GrpcMessage(GrpcMessageError {

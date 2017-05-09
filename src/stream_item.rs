@@ -1,3 +1,5 @@
+use futures::future;
+use futures::future::Future;
 use futures::stream;
 use futures::stream::Stream;
 
@@ -111,6 +113,28 @@ impl<T : Send + 'static> GrpcStreamWithTrailingMetadata<T> {
 
     pub fn collect(self) -> GrpcFutureSend<Vec<T>> {
         Box::new(self.drop_metadata().collect())
+    }
+
+    pub fn collect_with_metadata(self) -> GrpcFutureSend<(Vec<T>, GrpcMetadata)> {
+        Box::new(self.0.fold((Vec::new(), GrpcMetadata::new()), |(mut vec, mut metadata), item| {
+            match item {
+                GrpcItemOrMetadata::Item(r) => vec.push(r),
+                GrpcItemOrMetadata::TrailingMetadata(next) => metadata.extend(next),
+            }
+            future::ok::<_, GrpcError>((vec, metadata))
+        }))
+    }
+
+    pub fn single_with_metadata(self) -> GrpcFutureSend<(T, GrpcMetadata)> {
+        Box::new(self.collect_with_metadata().and_then(|(mut v, trailing)| {
+            if v.is_empty() {
+                Err(GrpcError::Other("no result"))
+            } else if v.len() > 1 {
+                Err(GrpcError::Other("more than one result"))
+            } else {
+                Ok((v.swap_remove(0), trailing))
+            }
+        }))
     }
 
     pub fn wait(self) -> GrpcIterator<T> {

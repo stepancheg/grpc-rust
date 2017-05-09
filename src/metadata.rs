@@ -15,7 +15,7 @@ impl MetadataKey {
         let chars = s.into();
 
         // TODO: assert ASCII
-        assert!(chars.is_empty());
+        assert!(!chars.is_empty());
 
         MetadataKey {
             name: chars
@@ -107,5 +107,26 @@ impl GrpcMetadata {
 
     pub fn into_headers(self) -> Headers {
         Headers(self.entries.into_iter().map(MetadataEntry::into_header).collect())
+    }
+
+    // Get metadata by key
+    pub fn get<'a>(&'a self, name: &str) -> Option<&'a [u8]> {
+        for e in &self.entries {
+            if e.key.as_str() == name {
+                return Some(&e.value[..]);
+            }
+        }
+        None
+    }
+
+    pub fn extend(&mut self, extend: GrpcMetadata) {
+        self.entries.extend(extend.entries);
+    }
+
+    pub fn add(&mut self, key: MetadataKey, value: Bytes) {
+        self.entries.push(MetadataEntry {
+            key: key,
+            value: value,
+        });
     }
 }

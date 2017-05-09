@@ -9,6 +9,7 @@ authors = ["Steve Jenson <stevej@buoyant.io>"]
 path = ".."
 
 [dependencies]
+bytes           = "0.*"
 log             = "0.*"
 env_logger      = "0.*"
 protobuf        = "1.*"
