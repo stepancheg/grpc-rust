@@ -8,6 +8,8 @@ extern crate env_logger;
 extern crate chrono;
 extern crate clap;
 
+use futures::future::Future;
+
 extern crate grpc_interop;
 use grpc_interop::*;
 
@@ -129,7 +131,7 @@ fn empty_stream(client: TestServiceClient) {
 }
 
 fn custom_metadata(client: TestServiceClient) {
-    {
+    fn make_options() -> GrpcRequestOptions {
         // The client attaches custom metadata with the following keys and values:
         // key: "x-grpc-test-echo-initial", value: "test_initial_metadata_value"
         // key: "x-grpc-test-echo-initial", value: "test_initial_metadata_value"
@@ -140,7 +142,15 @@ fn custom_metadata(client: TestServiceClient) {
         options.metadata.add(
             MetadataKey::from("x-grpc-test-echo-trailing-bin"),
             Bytes::from(&b"\xab\xab\xab"[..]));
+        options
+    }
 
+    fn assert_result_metadata(initial: GrpcMetadata, trailing: GrpcMetadata) {
+        assert_eq!(Some(&b"test_initial_metadata_value"[..]), initial.get("x-grpc-test-echo-initial"));
+        assert_eq!(Some(&b"\xab\xab\xab"[..]), trailing.get("x-grpc-test-echo-trailing-bin"));
+    }
+
+    {
         // to a UnaryCall with request:
         // {
         //   response_size: 314159
@@ -153,13 +163,39 @@ fn custom_metadata(client: TestServiceClient) {
         let mut payload = Payload::new();
         payload.set_body(vec![0; 271828]);
         req.set_payload(payload);
-        let (initial, _result, trailing) = client.UnaryCall(options, req)
+        let (initial, _result, trailing) = client.UnaryCall(make_options(), req)
             .wait().expect("UnaryCall");
 
-        assert_eq!(Some(&b"test_initial_metadata_value"[..]), initial.get("x-grpc-test-echo-initial"));
-        assert_eq!(Some(&b"\xab\xab\xab"[..]), trailing.get("x-grpc-test-echo-trailing-bin"));
+        assert_result_metadata(initial, trailing);
     }
-    unimplemented!();
+
+    {
+        // to a FullDuplexCall with request:
+        // {
+        //   response_parameters:{
+        //     size: 314159
+        //   }
+        //   payload:{
+        //     body: 271828 bytes of zeros
+        //   }
+        // }
+        let mut req = StreamingOutputCallRequest::new();
+        {
+            let mut rp = ResponseParameters::new();
+            rp.set_size(314159);
+            req.mut_response_parameters().push(rp);
+        }
+        {
+            let mut p = Payload::new();
+            p.set_body(vec![0; 271828]);
+            req.set_payload(p);
+        }
+
+        let (initial, _res, trailing) = client.FullDuplexCall(make_options(), GrpcStreamingRequest::single(req))
+            .collect().wait().expect("FullDuplexCall");
+
+        assert_result_metadata(initial, trailing);
+    }
 }
 
 // The flags we use are defined in the gRPC Interopability doc

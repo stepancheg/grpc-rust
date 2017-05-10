@@ -194,4 +194,8 @@ impl<T : Send + 'static> GrpcStreamingResponse<T> {
     pub fn wait_drop_metadata(self) -> GrpcIterator<T> {
         Box::new(self.drop_metadata().wait())
     }
+
+    pub fn collect(self) -> GrpcFutureSend<(GrpcMetadata, Vec<T>, GrpcMetadata)> {
+        self.into_future().join_metadata_result()
+    }
 }

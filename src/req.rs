@@ -42,6 +42,10 @@ impl<T : Send + 'static> GrpcStreamingRequest<T> {
         GrpcStreamingRequest::new(stream::iter(iter.into_iter().map(Ok)))
     }
 
+    pub fn single(item: T) -> GrpcStreamingRequest<T> {
+        GrpcStreamingRequest::new(stream::once(Ok(item)))
+    }
+
     pub fn empty() -> GrpcStreamingRequest<T> {
         GrpcStreamingRequest::new(stream::empty())
     }
