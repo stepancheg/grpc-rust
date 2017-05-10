@@ -124,11 +124,11 @@ pub struct HttpStreamCommon {
 }
 
 impl HttpStreamCommon {
-    pub fn new() -> HttpStreamCommon {
+    pub fn new(out_window_size: u32) -> HttpStreamCommon {
         HttpStreamCommon {
             state: StreamState::Open,
             in_window_size: WindowSize::new(INITIAL_CONNECTION_WINDOW_SIZE),
-            out_window_size: WindowSize::new(INITIAL_CONNECTION_WINDOW_SIZE),
+            out_window_size: WindowSize::new(out_window_size as i32),
             outgoing: VecDeque::new(),
             outgoing_end: None,
         }
@@ -445,6 +445,30 @@ pub trait LoopInner: 'static {
     fn process_settings_global(&mut self, frame: SettingsFrame) {
         if frame.is_ack() {
             return;
+        }
+
+        for setting in frame.settings {
+            match setting {
+                HttpSetting::HeaderTableSize(..) => { /* TODO */ }
+                HttpSetting::EnablePush(..) => { /* TODO */ }
+                HttpSetting::MaxConcurrentStreams(..) => { /* TODO */ }
+                HttpSetting::InitialWindowSize(size) => {
+                    self.common().conn.initial_out_window_size = size;
+                    for _ in &mut self.common().streams {
+                        // In addition to changing the flow-control window for streams
+                        // that are not yet active, a SETTINGS frame can alter the initial
+                        // flow-control window size for streams with active flow-control windows
+                        // (that is, streams in the "open" or "half-closed (remote)" state).
+                        // When the value of SETTINGS_INITIAL_WINDOW_SIZE changes,
+                        // a receiver MUST adjust the size of all stream flow-control windows
+                        // that it maintains by the difference between the new value
+                        // and the old value.
+                        unimplemented!()
+                    }
+                }
+                HttpSetting::MaxFrameSize(..) => { /* TODO */ }
+                HttpSetting::MaxHeaderListSize(..) => { /* TODO */ }
+            }
         }
         // TODO: apply settings
 

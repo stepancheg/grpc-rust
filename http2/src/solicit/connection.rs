@@ -134,6 +134,8 @@ pub struct HttpConnection {
     pub out_window_size: WindowSize,
     /// Tracks the size of the inbound flow control window
     pub in_window_size: WindowSize,
+    /// Initial stream window size
+    pub initial_out_window_size: u32,
     /// The scheme of the connection
     pub scheme: HttpScheme,
 }
@@ -316,6 +318,7 @@ impl HttpConnection {
             scheme: scheme,
             decoder: hpack::Decoder::new(),
             encoder: hpack::Encoder::new(),
+            initial_out_window_size: INITIAL_CONNECTION_WINDOW_SIZE as u32,
             in_window_size: WindowSize::new(INITIAL_CONNECTION_WINDOW_SIZE),
             out_window_size: WindowSize::new(INITIAL_CONNECTION_WINDOW_SIZE),
         }

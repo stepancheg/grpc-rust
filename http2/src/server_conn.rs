@@ -175,7 +175,7 @@ impl<F : HttpService> ServerInner<F> {
 
         // New stream initiated by the client
         let stream = HttpServerStream {
-            common: HttpStreamCommon::new(),
+            common: HttpStreamCommon::new(self.common.conn.initial_out_window_size),
             request_handler: Some(req_tx),
             _marker: marker::PhantomData,
         };
