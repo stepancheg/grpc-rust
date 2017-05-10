@@ -13,6 +13,7 @@ kill_server
 ../cargo.sh run --bin grpc-rust-interop-client -- --test_case large_unary
 ../cargo.sh run --bin grpc-rust-interop-client -- --test_case ping_pong
 ../cargo.sh run --bin grpc-rust-interop-client -- --test_case empty_stream
+../cargo.sh run --bin grpc-rust-interop-client -- --test_case custom_metadata
 
 kill_server
 
