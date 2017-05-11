@@ -148,10 +148,9 @@ impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerUnary<F>
 {
     fn handle(&self, m: GrpcRequestOptions, req: GrpcStreamingRequest<Req>) -> GrpcStreamingResponse<Resp> {
         let f = self.f.clone();
-        GrpcSingleResponse(
-            Box::new(stream_single(req.0)
-                .and_then(move |req| f(m, req).0)))
-                    .into_stream()
+        GrpcSingleResponse::new(
+            stream_single(req.0).and_then(move |req| f(m, req).0))
+                .into_stream()
     }
 }
 
@@ -369,6 +368,7 @@ impl GrpcServer {
     }
 }
 
+/// Utility to start a call
 trait CallStarter : Send + 'static {
     fn start(
         &self,
@@ -379,6 +379,7 @@ trait CallStarter : Send + 'static {
             -> GrpcStreamingResponse<Vec<u8>>;
 }
 
+/// Start a call in current task
 struct CallStarterSync;
 
 impl CallStarter for CallStarterSync {
@@ -394,6 +395,7 @@ impl CallStarter for CallStarterSync {
     }
 }
 
+/// Start a call in cpupool
 struct CallStarterCpupool {
     cpu_pool: CpuPool,
 }
@@ -416,18 +418,21 @@ impl CallStarter for CallStarterCpupool {
     }
 }
 
+/// Implementation of gRPC over http2 HttpService
 struct GrpcHttpService<S : CallStarter> {
     service_definition: Arc<ServerServiceDefinition>,
     call_starter: S,
 }
 
 
-fn stream_500(message: &str) -> HttpResponse {
+/// Create HTTP response for gRPC error
+fn http_response_500(message: &str) -> HttpResponse {
     // TODO: HttpResponse::headers
-    HttpResponse::from_stream(stream::once(Ok(HttpStreamPart::last_headers(Headers(vec![
+    let headers = Headers(vec![
         Header::new(":status", "500"),
         Header::new(HEADER_GRPC_MESSAGE, message.to_owned()),
-    ])))))
+    ]);
+    HttpResponse::headers_and_stream(headers, stream::empty())
 }
 
 impl<S : CallStarter> HttpService for GrpcHttpService<S> {
@@ -435,14 +440,14 @@ impl<S : CallStarter> HttpService for GrpcHttpService<S> {
 
         let path = match headers.get_opt(":path") {
             Some(path) => path.to_owned(),
-            None => return stream_500("no :path header"),
+            None => return http_response_500("no :path header"),
         };
 
         let grpc_request = GrpcFrameFromHttpFramesStreamRequest::new(req);
 
         let metadata = match GrpcMetadata::from_headers(headers) {
             Ok(metadata) => metadata,
-            Err(_) => return stream_500("decode metadata error"),
+            Err(_) => return http_response_500("decode metadata error"),
         };
 
         // TODO: catch unwind

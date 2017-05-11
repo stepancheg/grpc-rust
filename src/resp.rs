@@ -87,6 +87,7 @@ impl<T : Send + 'static> GrpcSingleResponse<T> {
 
 /// Streaming response
 pub struct GrpcStreamingResponse<T : Send + 'static>(
+    /// Initial metadata, stream of items followed by trailing metadata
     pub GrpcFutureSend<(GrpcMetadata, GrpcStreamWithTrailingMetadata<T>)>
 );
 
@@ -136,6 +137,7 @@ impl<T : Send + 'static> GrpcStreamingResponse<T> {
         GrpcStreamingResponse::no_metadata(stream::empty())
     }
 
+    /// Create an error response
     pub fn err(err: GrpcError) -> GrpcStreamingResponse<T> {
         GrpcStreamingResponse::new(future::err(err))
     }

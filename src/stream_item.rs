@@ -11,34 +11,43 @@ use iter::GrpcIterator;
 
 use metadata::*;
 
+/// Either stream item or trailing metadata.
 pub enum GrpcItemOrMetadata<T : Send + 'static> {
     Item(T),
     TrailingMetadata(GrpcMetadata), // must be the last item in the stream
 }
 
-// Sequence of items with optional trailing metadata
-pub struct GrpcStreamWithTrailingMetadata<T : Send + 'static>(pub GrpcStreamSend<GrpcItemOrMetadata<T>>);
+/// Sequence of items with optional trailing metadata
+/// Useful as part of GrpcStreamingResult
+pub struct GrpcStreamWithTrailingMetadata<T : Send + 'static>(
+    /// Stream of items followed by optional trailing metadata
+    pub GrpcStreamSend<GrpcItemOrMetadata<T>>
+);
 
 impl<T : Send + 'static> GrpcStreamWithTrailingMetadata<T> {
 
     // constructors
 
+    /// Box a stream
     pub fn new<S>(stream: S) -> GrpcStreamWithTrailingMetadata<T>
         where S : Stream<Item=GrpcItemOrMetadata<T>, Error=GrpcError> + Send + 'static
     {
         GrpcStreamWithTrailingMetadata(Box::new(stream))
     }
 
+    /// Stream of items with no trailing metadata
     pub fn stream<S>(stream: S) -> GrpcStreamWithTrailingMetadata<T>
         where S : Stream<Item=T, Error=GrpcError> + Send + 'static
     {
         GrpcStreamWithTrailingMetadata::new(stream.map(GrpcItemOrMetadata::Item))
     }
 
+    /// Single element stream with no trailing metadata
     pub fn once(item: T) -> GrpcStreamWithTrailingMetadata<T> {
         GrpcStreamWithTrailingMetadata::stream(stream::once(Ok(item)))
     }
 
+    /// Single element stream with trailing metadata
     pub fn once_with_trailing_metadata(item: T, metadata: GrpcMetadata) -> GrpcStreamWithTrailingMetadata<T> {
         GrpcStreamWithTrailingMetadata::new(stream::iter(vec![
             GrpcItemOrMetadata::Item(item),
@@ -46,6 +55,7 @@ impl<T : Send + 'static> GrpcStreamWithTrailingMetadata<T> {
         ].into_iter().map(Ok)))
     }
 
+    /// Create a result from iterator, no metadata
     pub fn iter<I>(iter: I) -> GrpcStreamWithTrailingMetadata<T>
         where
             I : IntoIterator<Item=T>,
@@ -54,16 +64,19 @@ impl<T : Send + 'static> GrpcStreamWithTrailingMetadata<T> {
         GrpcStreamWithTrailingMetadata::stream(stream::iter(iter.into_iter().map(Ok)))
     }
 
+    /// Create an empty stream
     pub fn empty() -> GrpcStreamWithTrailingMetadata<T> {
         GrpcStreamWithTrailingMetadata::new(stream::empty())
     }
 
+    /// Create an error
     pub fn err(err: GrpcError) -> GrpcStreamWithTrailingMetadata<T> {
         GrpcStreamWithTrailingMetadata::new(stream::once(Err(err)))
     }
 
     // getters
 
+    /// Apply a function to transform item stream
     fn map_stream<U, F>(self, f: F) -> GrpcStreamWithTrailingMetadata<U>
         where
             U : Send + 'static,
@@ -72,6 +85,7 @@ impl<T : Send + 'static> GrpcStreamWithTrailingMetadata<T> {
         GrpcStreamWithTrailingMetadata::new(Box::new(f(self.0)))
     }
 
+    /// Transform items of the stream, keep metadata
     pub fn map_items<U, F>(self, mut f: F) -> GrpcStreamWithTrailingMetadata<U>
         where
             U : Send + 'static,
@@ -87,6 +101,7 @@ impl<T : Send + 'static> GrpcStreamWithTrailingMetadata<T> {
         })
     }
 
+    /// Apply `and_then` operation to items, preserving trailing metadata
     pub fn and_then_items<U, F>(self, mut f: F) -> GrpcStreamWithTrailingMetadata<U>
         where
             U : Send + 'static,
@@ -102,6 +117,7 @@ impl<T : Send + 'static> GrpcStreamWithTrailingMetadata<T> {
         })
     }
 
+    /// Return raw futures `Stream` without trailing metadata
     pub fn drop_metadata(self) -> GrpcStreamSend<T> {
         Box::new(self.0.filter_map(|item| {
             match item {
@@ -111,12 +127,15 @@ impl<T : Send + 'static> GrpcStreamWithTrailingMetadata<T> {
         }))
     }
 
+    /// Collect all elements to a stream
     pub fn collect(self) -> GrpcFutureSend<Vec<T>> {
         Box::new(self.drop_metadata().collect())
     }
 
+    /// Collect all elements and trailing metadata
     pub fn collect_with_metadata(self) -> GrpcFutureSend<(Vec<T>, GrpcMetadata)> {
         Box::new(self.0.fold((Vec::new(), GrpcMetadata::new()), |(mut vec, mut metadata), item| {
+            // Could also check that elements returned in proper order
             match item {
                 GrpcItemOrMetadata::Item(r) => vec.push(r),
                 GrpcItemOrMetadata::TrailingMetadata(next) => metadata.extend(next),
@@ -125,6 +144,8 @@ impl<T : Send + 'static> GrpcStreamWithTrailingMetadata<T> {
         }))
     }
 
+    /// Collect stream into single element future.
+    /// It is an error if stream has no result items or more than one result item.
     pub fn single_with_metadata(self) -> GrpcFutureSend<(T, GrpcMetadata)> {
         Box::new(self.collect_with_metadata().and_then(|(mut v, trailing)| {
             if v.is_empty() {
@@ -137,6 +158,8 @@ impl<T : Send + 'static> GrpcStreamWithTrailingMetadata<T> {
         }))
     }
 
+    /// Convert `Stream` to synchronous `Iterator`.
+    /// Metadata is dropped.
     pub fn wait(self) -> GrpcIterator<T> {
         Box::new(self.drop_metadata().wait())
     }
