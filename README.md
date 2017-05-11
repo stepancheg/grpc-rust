@@ -11,15 +11,12 @@ Some development questions in [FAQ](/docs/FAQ.md).
 
 ## Current status
 
-It basially works. See `grpc-examples/src/bin/greeter_{client,server}{,_async}.rs`. It can be tested
+It basially works. See `grpc-examples/src/bin/greeter_{client,server}.rs`. It can be tested
 for example with [go client](https://github.com/grpc/grpc-go/tree/master/examples/helloworld):
 
 ```
 # start greeter server implemented in rust
 $ cargo run --bin greeter_server
-
-# .. or start async server
-$ cargo run --bin greeter_server_async
 
 # ... or start greeter server implemented in go
 $ go get -u google.golang.org/grpc/examples/helloworld/greeter_client
@@ -29,17 +26,13 @@ $ greeter_server
 $ cargo run --bin greeter_client rust
 > message: "Hello rust"
 
-# ... or start async client
-$ cargo run --bin greeter_client_async rust
-> message: "Hello rust"
-
 # ... or start greeter client implemented in go
 $ go get -u google.golang.org/grpc/examples/helloworld/greeter_client
 $ greeter_client rust
 > 2016/08/19 05:44:45 Greeting: Hello rust
 ```
 
-Client and server are implemented asynchronously, and sync versions are thin wrappers around async counterparts.
+Client and server are implemented asynchronously.
 
 ## How to use gRPC compiler
 
@@ -98,5 +91,5 @@ https://github.com/dwrensha/capnpc-rust for more details.
 * Implement flow control. See issue #35
 * Fix performance
 * More tests
-* In particular, add more compatibility tests, they live in `long-tests` directory
+* In particular, add more compatibility tests, they live in `interop` directory
 * Fix all TODO in sources
