@@ -109,13 +109,13 @@ trait RequestOrResponse {
 }
 
 pub struct GrpcFrameFromHttpFramesStreamRequest {
-    http_stream_stream: HttpPartFutureStreamSend,
+    http_stream_stream: HttpPartStream,
     buf: Vec<u8>,
     error: Option<stream::Once<Vec<u8>, GrpcError>>,
 }
 
 impl GrpcFrameFromHttpFramesStreamRequest {
-    pub fn new(http_stream_stream: HttpPartFutureStreamSend) -> Self {
+    pub fn new(http_stream_stream: HttpPartStream) -> Self {
         GrpcFrameFromHttpFramesStreamRequest {
             http_stream_stream: http_stream_stream,
             buf: Vec::new(),

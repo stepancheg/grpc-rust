@@ -1,6 +1,6 @@
 #!/bin/sh -e
 
-version="0.1.4"
+version="0.1.5"
 
 sed -e 's,^version = .*,version = "'$version'",' -i '' \
     Cargo.toml grpc-compiler/Cargo.toml

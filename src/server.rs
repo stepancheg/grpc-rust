@@ -432,11 +432,11 @@ fn http_response_500(message: &str) -> HttpResponse {
         Header::new(":status", "500"),
         Header::new(HEADER_GRPC_MESSAGE, message.to_owned()),
     ]);
-    HttpResponse::headers_and_stream(headers, stream::empty())
+    HttpResponse::headers_and_stream(headers, HttpPartStream::empty())
 }
 
 impl<S : CallStarter> HttpService for GrpcHttpService<S> {
-    fn new_request(&self, headers: Headers, req: HttpPartFutureStreamSend) -> HttpResponse {
+    fn new_request(&self, headers: Headers, req: HttpPartStream) -> HttpResponse {
 
         let path = match headers.get_opt(":path") {
             Some(path) => path.to_owned(),
@@ -502,7 +502,7 @@ impl<S : CallStarter> HttpService for GrpcHttpService<S> {
                 Header::new(HEADER_GRPC_STATUS, "0"),
             ]))));
 
-            let http_parts: HttpPartFutureStreamSend = Box::new(s2.chain(s3));
+            let http_parts = HttpPartStream::new(s2.chain(s3));
 
             (init_headers, http_parts)
         }))

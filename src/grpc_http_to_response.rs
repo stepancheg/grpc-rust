@@ -15,7 +15,7 @@ use httpbis::HttpResponse;
 use httpbis::solicit::header::Headers;
 use httpbis::bytesx::bytes_extend_with;
 use httpbis::http_common::HttpStreamPartContent;
-use httpbis::http_common::HttpPartFutureStreamSend;
+use httpbis::http_common::HttpPartStream;
 
 use grpc_frame::*;
 
@@ -66,13 +66,13 @@ pub fn http_response_to_grpc_frames(response: HttpResponse) -> GrpcStreamingResp
 
 
 struct GrpcFrameFromHttpFramesStreamResponse {
-    http_stream_stream: HttpPartFutureStreamSend,
+    http_stream_stream: HttpPartStream,
     buf: Bytes,
     error: Option<stream::Once<GrpcItemOrMetadata<Bytes>, GrpcError>>,
 }
 
 impl GrpcFrameFromHttpFramesStreamResponse {
-    pub fn new(http_stream_stream: HttpPartFutureStreamSend) -> Self {
+    pub fn new(http_stream_stream: HttpPartStream) -> Self {
         GrpcFrameFromHttpFramesStreamResponse {
             http_stream_stream: http_stream_stream,
             buf: Bytes::new(),
