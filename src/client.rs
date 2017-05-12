@@ -10,6 +10,8 @@ use httpbis::HttpScheme;
 use httpbis::HttpError;
 use httpbis::Header;
 use httpbis::Headers;
+use httpbis::http_common::HttpPartStream;
+use httpbis::http_common::HttpService;
 use httpbis::client::HttpClient;
 use httpbis::client::ClientTlsOption;
 
@@ -135,7 +137,7 @@ impl GrpcClient {
         let http_response_stream = self.client
             .start_request(
                 headers,
-                Box::new(request_frames));
+                HttpPartStream::bytes(request_frames));
 
         let grpc_frames = http_response_to_grpc_frames(http_response_stream);
 

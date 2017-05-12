@@ -436,7 +436,7 @@ fn http_response_500(message: &str) -> HttpResponse {
 }
 
 impl<S : CallStarter> HttpService for GrpcHttpService<S> {
-    fn new_request(&self, headers: Headers, req: HttpPartStream) -> HttpResponse {
+    fn start_request(&self, headers: Headers, req: HttpPartStream) -> HttpResponse {
 
         let path = match headers.get_opt(":path") {
             Some(path) => path.to_owned(),
