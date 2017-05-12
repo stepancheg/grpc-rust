@@ -3,7 +3,7 @@
 version="0.1.4"
 
 sed -e 's,^version = .*,version = "'$version'",' -i '' \
-    Cargo.toml http2/Cargo.toml grpc-compiler/Cargo.toml
+    Cargo.toml grpc-compiler/Cargo.toml
 
 sed -e '/httpbis.*path/ s,version = [^ ]*,version = "'$version'",' -i '' Cargo.toml
 
