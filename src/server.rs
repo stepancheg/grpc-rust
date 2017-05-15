@@ -8,11 +8,13 @@ use futures_cpupool::CpuPool;
 
 use bytes::Bytes;
 
-use httpbis::HttpError;
+use httpbis;
 use httpbis::Header;
 use httpbis::Headers;
-use httpbis::server::HttpServer;
-use httpbis::server::ServerTlsOption;
+use httpbis::misc::any_to_string;
+use httpbis::futures_misc::*;
+use httpbis::HttpPartStream;
+use httpbis::stream_part::HttpStreamPart;
 
 use futures::Future;
 use futures::stream;
@@ -20,12 +22,8 @@ use futures::stream::Stream;
 
 use method::*;
 use error::*;
-use httpbis::futures_misc::*;
 use grpc::*;
 use grpc_frame::*;
-use httpbis::http_common::*;
-use httpbis::server_conf::*;
-use httpbis::misc::any_to_string;
 use req::*;
 use resp::*;
 use metadata::Metadata;
@@ -285,12 +283,12 @@ impl ServerServiceDefinition {
 
 #[derive(Default, Debug, Clone)]
 pub struct ServerConf {
-    pub http: HttpServerConf,
+    pub http: httpbis::ServerConf,
 }
 
 
 pub struct Server {
-    server: HttpServer,
+    server: httpbis::Server,
 }
 
 impl Server {
@@ -301,7 +299,7 @@ impl Server {
         service_definition: ServerServiceDefinition)
             -> Server
     {
-        Server::new(addr, ServerTlsOption::Plain, conf, service_definition)
+        Server::new(addr, httpbis::ServerTlsOption::Plain, conf, service_definition)
     }
 
     /// Without TLS and execute handler in given CpuPool
@@ -312,12 +310,12 @@ impl Server {
         cpu_pool: CpuPool)
             -> Server
     {
-        Server::new_pool(addr, ServerTlsOption::Plain, conf, service_definition, cpu_pool)
+        Server::new_pool(addr, httpbis::ServerTlsOption::Plain, conf, service_definition, cpu_pool)
     }
 
     pub fn new<A : ToSocketAddrs>(
         addr: A,
-        tls: ServerTlsOption,
+        tls: httpbis::ServerTlsOption,
         conf: ServerConf,
         service_definition: ServerServiceDefinition)
             -> Server
@@ -327,7 +325,7 @@ impl Server {
 
     pub fn new_pool<A : ToSocketAddrs>(
         addr: A,
-        tls: ServerTlsOption,
+        tls: httpbis::ServerTlsOption,
         conf: ServerConf,
         service_definition: ServerServiceDefinition,
         cpu_pool: CpuPool)
@@ -340,7 +338,7 @@ impl Server {
 
     fn with_starter<A : ToSocketAddrs, S : CallStarter>(
         addr: A,
-        tls: ServerTlsOption,
+        tls: httpbis::ServerTlsOption,
         conf: ServerConf,
         service_definition: ServerServiceDefinition,
         call_starter: S)
@@ -352,7 +350,7 @@ impl Server {
 
         let service_definition = Arc::new(service_definition);
         Server {
-            server: HttpServer::new(addr, tls, conf.http, GrpcHttpService {
+            server: httpbis::Server::new(addr, tls, conf.http, GrpcHttpService {
                 service_definition: service_definition.clone(),
                 call_starter: call_starter,
             })
@@ -426,17 +424,17 @@ struct GrpcHttpService<S : CallStarter> {
 
 
 /// Create HTTP response for gRPC error
-fn http_response_500(message: &str) -> HttpResponse {
+fn http_response_500(message: &str) -> httpbis::Response {
     // TODO: HttpResponse::headers
     let headers = Headers(vec![
         Header::new(":status", "500"),
         Header::new(HEADER_GRPC_MESSAGE, message.to_owned()),
     ]);
-    HttpResponse::headers_and_stream(headers, HttpPartStream::empty())
+    httpbis::Response::headers_and_stream(headers, httpbis::HttpPartStream::empty())
 }
 
-impl<S : CallStarter> HttpService for GrpcHttpService<S> {
-    fn start_request(&self, headers: Headers, req: HttpPartStream) -> HttpResponse {
+impl<S : CallStarter> httpbis::Service for GrpcHttpService<S> {
+    fn start_request(&self, headers: Headers, req: HttpPartStream) -> httpbis::Response {
 
         let path = match headers.get_opt(":path") {
             Some(path) => path.to_owned(),
@@ -457,7 +455,7 @@ impl<S : CallStarter> HttpService for GrpcHttpService<S> {
             RequestOptions { metadata: metadata },
             StreamingRequest::new(grpc_request));
 
-        HttpResponse::new(grpc_response.0.map_err(HttpError::from).map(|(metadata, grpc_frames)| {
+        httpbis::Response::new(grpc_response.0.map_err(httpbis::Error::from).map(|(metadata, grpc_frames)| {
             let mut init_headers = Headers(vec![
                 Header::new(":status", "200"),
                 Header::new("content-type", "application/grpc"),
@@ -471,7 +469,7 @@ impl<S : CallStarter> HttpService for GrpcHttpService<S> {
                 .then(|result| {
                     match result {
                         Ok(part) => {
-                            let r: Result<_, HttpError> = Ok(part);
+                            let r: Result<_, httpbis::Error> = Ok(part);
                             r
                         }
                         Err(e) =>
@@ -496,7 +494,7 @@ impl<S : CallStarter> HttpService for GrpcHttpService<S> {
                             ))
                     }
                 })
-                .map_err(HttpError::from);
+                .map_err(httpbis::Error::from);
 
             let s3 = stream::once(Ok(HttpStreamPart::last_headers(Headers(vec![
                 Header::new(HEADER_GRPC_STATUS, "0"),

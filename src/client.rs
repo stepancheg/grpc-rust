@@ -6,14 +6,12 @@ use bytes::Bytes;
 use futures;
 use futures::stream::Stream;
 
+use httpbis;
+use httpbis::Service as HttpbisService;
 use httpbis::HttpScheme;
-use httpbis::HttpError;
 use httpbis::Header;
 use httpbis::Headers;
-use httpbis::http_common::HttpPartStream;
-use httpbis::http_common::HttpService;
-use httpbis::client::HttpClient;
-use httpbis::client::ClientTlsOption;
+use httpbis::HttpPartStream;
 
 
 use method::MethodDescriptor;
@@ -22,7 +20,6 @@ use error::*;
 use result;
 
 use httpbis::futures_misc::*;
-use httpbis::client_conf::*;
 use futures_grpc::*;
 
 use grpc_frame::*;
@@ -33,14 +30,14 @@ use resp::*;
 
 #[derive(Default, Debug, Clone)]
 pub struct ClientConf {
-    pub http: HttpClientConf,
+    pub http: httpbis::ClientConf,
 }
 
 
 /// gRPC client implementation.
 /// Used by generated code.
 pub struct Client {
-    client: HttpClient,
+    client: httpbis::Client,
     host: String,
     http_scheme: HttpScheme,
 }
@@ -54,7 +51,7 @@ impl Client {
         conf.http.thread_name =
             Some(conf.http.thread_name.unwrap_or_else(|| "grpc-client-loop".to_owned()));
 
-        HttpClient::new(host, port, tls, conf.http)
+        httpbis::Client::new(host, port, tls, conf.http)
             .map(|client| {
                 Client {
                     client: client,
@@ -65,7 +62,7 @@ impl Client {
             .map_err(Error::from)
     }
 
-    pub fn new_expl(addr: &SocketAddr, host: &str, tls: ClientTlsOption, conf: ClientConf)
+    pub fn new_expl(addr: &SocketAddr, host: &str, tls: httpbis::ClientTlsOption, conf: ClientConf)
         -> result::Result<Client>
     {
         let mut conf = conf;
@@ -74,7 +71,7 @@ impl Client {
 
         let http_scheme = tls.http_scheme();
 
-        HttpClient::new_expl(addr, tls, conf.http)
+        httpbis::Client::new_expl(addr, tls, conf.http)
             .map(|client| {
                 Client {
                     client: client,
@@ -131,7 +128,7 @@ impl Client {
                     let grpc_frame = method.req_marshaller.write(&req)?;
                     Ok(Bytes::from(write_grpc_frame_to_vec(&grpc_frame)))
                 })
-                .map_err(|e| HttpError::Other(Box::new(e)))
+                .map_err(|_e| httpbis::Error::Other("grpc error")) // TODO: preserve error
         };
 
         let http_response_stream = self.client

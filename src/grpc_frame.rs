@@ -6,7 +6,8 @@ use futures::stream::Stream;
 use error::*;
 use result;
 
-use httpbis::http_common::*;
+use httpbis::HttpPartStream;
+use httpbis::stream_part::HttpStreamPartContent;
 
 
 

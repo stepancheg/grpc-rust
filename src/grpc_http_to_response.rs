@@ -11,11 +11,11 @@ use grpc::GrpcStatus;
 use grpc::HEADER_GRPC_STATUS;
 use grpc::HEADER_GRPC_MESSAGE;
 
-use httpbis::HttpResponse;
-use httpbis::solicit::header::Headers;
+use httpbis;
+use httpbis::Headers;
 use httpbis::bytesx::bytes_extend_with;
-use httpbis::http_common::HttpStreamPartContent;
-use httpbis::http_common::HttpPartStream;
+use httpbis::stream_part::HttpStreamPartContent;
+use httpbis::stream_part::HttpPartStream;
 
 use grpc_frame::*;
 
@@ -55,7 +55,7 @@ fn init_headers_to_metadata(headers: Headers) -> result::Result<Metadata> {
 }
 
 
-pub fn http_response_to_grpc_frames(response: HttpResponse) -> StreamingResponse<Bytes> {
+pub fn http_response_to_grpc_frames(response: httpbis::Response) -> StreamingResponse<Bytes> {
     StreamingResponse::new(response.0.map_err(|e| Error::from(e)).and_then(|(headers, rem)| {
         let metadata = init_headers_to_metadata(headers)?;
         let frames: GrpcStreamWithTrailingMetadata<Bytes> =

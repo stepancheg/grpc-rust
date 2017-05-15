@@ -15,7 +15,6 @@ use futures::stream::Stream;
 
 use grpc::*;
 use grpc::server::*;
-use grpc::client::*;
 use grpc::method::*;
 use grpc::marshall::*;
 use grpc::error::*;

@@ -5,7 +5,8 @@ use std::fmt;
 use futures;
 
 use metadata;
-use httpbis::HttpError;
+
+use httpbis;
 
 use protobuf_lib::ProtobufError;
 
@@ -21,7 +22,7 @@ pub struct GrpcMessageError {
 #[derive(Debug)]
 pub enum Error {
     Io(io::Error),
-    Http(HttpError),
+    Http(httpbis::Error),
     GrpcMessage(GrpcMessageError),
     Canceled(futures::Canceled),
     MetadataDecode(metadata::MetadataDecodeError),
@@ -73,8 +74,8 @@ impl From<io::Error> for Error {
     }
 }
 
-impl From<HttpError> for Error {
-    fn from(err: HttpError) -> Self {
+impl From<httpbis::Error> for Error {
+    fn from(err: httpbis::Error) -> Self {
         Error::Http(err)
     }
 }
@@ -106,8 +107,8 @@ impl From<metadata::MetadataDecodeError> for Error {
     }
 }
 
-impl From<Error> for HttpError {
-    fn from(err: Error) -> HttpError {
-        HttpError::Other(Box::new(err))
+impl From<Error> for httpbis::Error {
+    fn from(_err: Error) -> httpbis::Error {
+        httpbis::Error::Other("grpc error") // TODO: preserve
     }
 }
