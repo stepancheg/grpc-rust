@@ -22,19 +22,19 @@
 // interface
 
 pub trait RouteGuide {
-    fn get_feature(&self, o: ::grpc::GrpcRequestOptions, p: super::route_guide::Point) -> ::grpc::GrpcSingleResponse<super::route_guide::Feature>;
+    fn get_feature(&self, o: ::grpc::RequestOptions, p: super::route_guide::Point) -> ::grpc::SingleResponse<super::route_guide::Feature>;
 
-    fn list_features(&self, o: ::grpc::GrpcRequestOptions, p: super::route_guide::Rectangle) -> ::grpc::GrpcStreamingResponse<super::route_guide::Feature>;
+    fn list_features(&self, o: ::grpc::RequestOptions, p: super::route_guide::Rectangle) -> ::grpc::StreamingResponse<super::route_guide::Feature>;
 
-    fn record_route(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::GrpcStreamingRequest<super::route_guide::Point>) -> ::grpc::GrpcSingleResponse<super::route_guide::RouteSummary>;
+    fn record_route(&self, o: ::grpc::RequestOptions, p: ::grpc::StreamingRequest<super::route_guide::Point>) -> ::grpc::SingleResponse<super::route_guide::RouteSummary>;
 
-    fn route_chat(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::GrpcStreamingRequest<super::route_guide::RouteNote>) -> ::grpc::GrpcStreamingResponse<super::route_guide::RouteNote>;
+    fn route_chat(&self, o: ::grpc::RequestOptions, p: ::grpc::StreamingRequest<super::route_guide::RouteNote>) -> ::grpc::StreamingResponse<super::route_guide::RouteNote>;
 }
 
 // client
 
 pub struct RouteGuideClient {
-    grpc_client: ::grpc::client::GrpcClient,
+    grpc_client: ::grpc::Client,
     method_GetFeature: ::std::sync::Arc<::grpc::method::MethodDescriptor<super::route_guide::Point, super::route_guide::Feature>>,
     method_ListFeatures: ::std::sync::Arc<::grpc::method::MethodDescriptor<super::route_guide::Rectangle, super::route_guide::Feature>>,
     method_RecordRoute: ::std::sync::Arc<::grpc::method::MethodDescriptor<super::route_guide::Point, super::route_guide::RouteSummary>>,
@@ -42,57 +42,57 @@ pub struct RouteGuideClient {
 }
 
 impl RouteGuideClient {
-    pub fn with_client(grpc_client: ::grpc::client::GrpcClient) -> Self {
+    pub fn with_client(grpc_client: ::grpc::Client) -> Self {
         RouteGuideClient {
             grpc_client: grpc_client,
             method_GetFeature: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
                 name: "/proto.RouteGuide/GetFeature".to_string(),
                 streaming: ::grpc::method::GrpcStreaming::Unary,
-                req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+                req_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
+                resp_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
             }),
             method_ListFeatures: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
                 name: "/proto.RouteGuide/ListFeatures".to_string(),
                 streaming: ::grpc::method::GrpcStreaming::ServerStreaming,
-                req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+                req_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
+                resp_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
             }),
             method_RecordRoute: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
                 name: "/proto.RouteGuide/RecordRoute".to_string(),
                 streaming: ::grpc::method::GrpcStreaming::ClientStreaming,
-                req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+                req_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
+                resp_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
             }),
             method_RouteChat: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
                 name: "/proto.RouteGuide/RouteChat".to_string(),
                 streaming: ::grpc::method::GrpcStreaming::Bidi,
-                req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+                req_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
+                resp_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
             }),
         }
     }
 
-    pub fn new(host: &str, port: u16, tls: bool, conf: ::grpc::client::GrpcClientConf) -> ::grpc::result::GrpcResult<Self> {
-        ::grpc::client::GrpcClient::new(host, port, tls, conf).map(|c| {
+    pub fn new(host: &str, port: u16, tls: bool, conf: ::grpc::ClientConf) -> ::grpc::Result<Self> {
+        ::grpc::Client::new(host, port, tls, conf).map(|c| {
             RouteGuideClient::with_client(c)
         })
     }
 }
 
 impl RouteGuide for RouteGuideClient {
-    fn get_feature(&self, o: ::grpc::GrpcRequestOptions, p: super::route_guide::Point) -> ::grpc::GrpcSingleResponse<super::route_guide::Feature> {
+    fn get_feature(&self, o: ::grpc::RequestOptions, p: super::route_guide::Point) -> ::grpc::SingleResponse<super::route_guide::Feature> {
         self.grpc_client.call_unary(o, p, self.method_GetFeature.clone())
     }
 
-    fn list_features(&self, o: ::grpc::GrpcRequestOptions, p: super::route_guide::Rectangle) -> ::grpc::GrpcStreamingResponse<super::route_guide::Feature> {
+    fn list_features(&self, o: ::grpc::RequestOptions, p: super::route_guide::Rectangle) -> ::grpc::StreamingResponse<super::route_guide::Feature> {
         self.grpc_client.call_server_streaming(o, p, self.method_ListFeatures.clone())
     }
 
-    fn record_route(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::GrpcStreamingRequest<super::route_guide::Point>) -> ::grpc::GrpcSingleResponse<super::route_guide::RouteSummary> {
+    fn record_route(&self, o: ::grpc::RequestOptions, p: ::grpc::StreamingRequest<super::route_guide::Point>) -> ::grpc::SingleResponse<super::route_guide::RouteSummary> {
         self.grpc_client.call_client_streaming(o, p, self.method_RecordRoute.clone())
     }
 
-    fn route_chat(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::GrpcStreamingRequest<super::route_guide::RouteNote>) -> ::grpc::GrpcStreamingResponse<super::route_guide::RouteNote> {
+    fn route_chat(&self, o: ::grpc::RequestOptions, p: ::grpc::StreamingRequest<super::route_guide::RouteNote>) -> ::grpc::StreamingResponse<super::route_guide::RouteNote> {
         self.grpc_client.call_bidi(o, p, self.method_RouteChat.clone())
     }
 }
@@ -100,11 +100,11 @@ impl RouteGuide for RouteGuideClient {
 // server
 
 pub struct RouteGuideServer {
-    pub grpc_server: ::grpc::server::GrpcServer,
+    pub grpc_server: ::grpc::Server,
 }
 
 impl ::std::ops::Deref for RouteGuideServer {
-    type Target = ::grpc::server::GrpcServer;
+    type Target = ::grpc::Server;
 
     fn deref(&self) -> &Self::Target {
         &self.grpc_server
@@ -112,17 +112,17 @@ impl ::std::ops::Deref for RouteGuideServer {
 }
 
 impl RouteGuideServer {
-    pub fn new<A : ::std::net::ToSocketAddrs, H : RouteGuide + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self {
+    pub fn new<A : ::std::net::ToSocketAddrs, H : RouteGuide + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::ServerConf, h: H) -> Self {
         let service_definition = RouteGuideServer::new_service_def(h);
         RouteGuideServer {
-            grpc_server: ::grpc::server::GrpcServer::new_plain(addr, conf, service_definition),
+            grpc_server: ::grpc::Server::new_plain(addr, conf, service_definition),
         }
     }
 
-    pub fn new_pool<A : ::std::net::ToSocketAddrs, H : RouteGuide + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H, cpu_pool: ::futures_cpupool::CpuPool) -> Self {
+    pub fn new_pool<A : ::std::net::ToSocketAddrs, H : RouteGuide + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::ServerConf, h: H, cpu_pool: ::futures_cpupool::CpuPool) -> Self {
         let service_definition = RouteGuideServer::new_service_def(h);
         RouteGuideServer {
-            grpc_server: ::grpc::server::GrpcServer::new_plain_pool(addr, conf, service_definition, cpu_pool),
+            grpc_server: ::grpc::Server::new_plain_pool(addr, conf, service_definition, cpu_pool),
         }
     }
 
@@ -134,8 +134,8 @@ impl RouteGuideServer {
                     ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
                         name: "/proto.RouteGuide/GetFeature".to_string(),
                         streaming: ::grpc::method::GrpcStreaming::Unary,
-                        req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                        resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+                        req_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
+                        resp_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
                     }),
                     {
                         let handler_copy = handler_arc.clone();
@@ -146,8 +146,8 @@ impl RouteGuideServer {
                     ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
                         name: "/proto.RouteGuide/ListFeatures".to_string(),
                         streaming: ::grpc::method::GrpcStreaming::ServerStreaming,
-                        req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                        resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+                        req_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
+                        resp_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
                     }),
                     {
                         let handler_copy = handler_arc.clone();
@@ -158,8 +158,8 @@ impl RouteGuideServer {
                     ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
                         name: "/proto.RouteGuide/RecordRoute".to_string(),
                         streaming: ::grpc::method::GrpcStreaming::ClientStreaming,
-                        req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                        resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+                        req_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
+                        resp_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
                     }),
                     {
                         let handler_copy = handler_arc.clone();
@@ -170,8 +170,8 @@ impl RouteGuideServer {
                     ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
                         name: "/proto.RouteGuide/RouteChat".to_string(),
                         streaming: ::grpc::method::GrpcStreaming::Bidi,
-                        req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                        resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+                        req_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
+                        resp_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
                     }),
                     {
                         let handler_copy = handler_arc.clone();

@@ -20,7 +20,7 @@ impl CounterServiceImpl {
 }
 
 impl CounterService for CounterServiceImpl {
-    fn Count(&self, req: Request) -> GrpcResult<Reply> {
+    fn Count(&self, req: Request) -> grpc::Result<Reply> {
         println!("Request url: {}", req.get_url());
         *self.requests.lock().unwrap() += 1;
         Ok(Reply::new())

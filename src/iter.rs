@@ -1,5 +1,5 @@
-use result::GrpcResult;
+use result;
 
-pub type BoxIterator<T> = Box<Iterator<Item=T> + Send>;
+type BoxIterator<T> = Box<Iterator<Item=T> + Send>;
 
-pub type GrpcIterator<T> = BoxIterator<GrpcResult<T>>;
+pub type GrpcIterator<T> = BoxIterator<result::Result<T>>;

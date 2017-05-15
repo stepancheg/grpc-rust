@@ -4,8 +4,6 @@ extern crate grpc;
 extern crate long_tests;
 extern crate futures;
 
-use grpc::*;
-
 use long_tests::long_tests_pb::*;
 use long_tests::long_tests_pb_grpc::*;
 
@@ -34,7 +32,7 @@ fn run_echo(client: LongTestsClient, cmd_args: &[String]) {
         let mut req = EchoRequest::new();
         req.set_payload(payload.clone());
 
-        let r = client.echo(GrpcRequestOptions::new(), req).wait_drop_metadata().expect("failed to get echo response");
+        let r = client.echo(grpc::RequestOptions::new(), req).wait_drop_metadata().expect("failed to get echo response");
 
         assert!(payload == r.get_payload());
     }

@@ -36,7 +36,7 @@ fn string_string_method(name: &str, streaming: GrpcStreaming)
 }
 
 /// Single method server on random port
-fn new_server<H>(name: &str, handler: H) -> GrpcServer
+fn new_server<H>(name: &str, handler: H) -> Server
     where
         H : MethodHandler<String, String> + 'static + Sync + Send,
         H : GrpcStreamingFlavor,
@@ -46,26 +46,26 @@ fn new_server<H>(name: &str, handler: H) -> GrpcServer
         string_string_method(name, <H as GrpcStreamingFlavor>::streaming()),
         handler,
     ));
-    GrpcServer::new_plain("[::1]:0", Default::default(), ServerServiceDefinition::new(methods))
+    Server::new_plain("[::1]:0", Default::default(), ServerServiceDefinition::new(methods))
 }
 
 /// Single unary method server
-fn new_server_unary<H>(name: &str, handler: H) -> GrpcServer
-    where H : Fn(GrpcRequestOptions, String) -> GrpcSingleResponse<String> + Sync + Send + 'static
+fn new_server_unary<H>(name: &str, handler: H) -> Server
+    where H : Fn(RequestOptions, String) -> SingleResponse<String> + Sync + Send + 'static
 {
     new_server(name, MethodHandlerUnary::new(handler))
 }
 
 /// Single server streaming method server
-fn new_server_server_streaming<H>(name: &str, handler: H) -> GrpcServer
-    where H : Fn(GrpcRequestOptions, String) -> GrpcStreamingResponse<String> + Sync + Send + 'static
+fn new_server_server_streaming<H>(name: &str, handler: H) -> Server
+    where H : Fn(RequestOptions, String) -> StreamingResponse<String> + Sync + Send + 'static
 {
     new_server(name, MethodHandlerServerStreaming::new(handler))
 }
 
 /// Single server streaming method server
-fn new_server_client_streaming<H>(name: &str, handler: H) -> GrpcServer
-    where H : Fn(GrpcRequestOptions, GrpcStreamingRequest<String>) -> GrpcSingleResponse<String> + Sync + Send + 'static
+fn new_server_client_streaming<H>(name: &str, handler: H) -> Server
+    where H : Fn(RequestOptions, StreamingRequest<String>) -> SingleResponse<String> + Sync + Send + 'static
 {
     new_server(name, MethodHandlerClientStreaming::new(handler))
 }
@@ -74,13 +74,13 @@ fn new_server_client_streaming<H>(name: &str, handler: H) -> GrpcServer
 /// Tester for unary methods
 struct TesterUnary {
     name: String,
-    client: GrpcClient,
-    _server: GrpcServer,
+    client: Client,
+    _server: Server,
 }
 
 impl TesterUnary {
     fn new<H>(handler: H) -> TesterUnary
-        where H : Fn(GrpcRequestOptions, String) -> GrpcSingleResponse<String> + Sync + Send + 'static
+        where H : Fn(RequestOptions, String) -> SingleResponse<String> + Sync + Send + 'static
     {
         let name = "/text/Unary";
         let server = new_server_unary(name, handler);
@@ -88,19 +88,19 @@ impl TesterUnary {
         TesterUnary {
             name: name.to_owned(),
             _server: server,
-            client: GrpcClient::new("::1", port, false, Default::default()).unwrap()
+            client: Client::new("::1", port, false, Default::default()).unwrap()
         }
     }
 
     fn call(&self, param: &str) -> GrpcFutureSend<String> {
         self.client.call_unary(
-            GrpcRequestOptions::new(),
+            RequestOptions::new(),
             param.to_owned(),
             string_string_method(&self.name, GrpcStreaming::Unary))
                 .drop_metadata()
     }
 
-    fn call_expect_error<F : FnOnce(&GrpcError) -> bool>(&self, param: &str, expect: F) {
+    fn call_expect_error<F : FnOnce(&Error) -> bool>(&self, param: &str, expect: F) {
         match self.call(param).wait() {
             Ok(r) => panic!("expecting error, got: {:?}", r),
             Err(e) => assert!(expect(&e), "wrong error: {:?}", e),
@@ -110,7 +110,7 @@ impl TesterUnary {
     fn call_expect_grpc_error<F : FnOnce(&str) -> bool>(&self, param: &str, expect: F) {
         self.call_expect_error(param, |e| {
             match e {
-                &GrpcError::GrpcMessage(GrpcMessageError { ref grpc_message, .. }) if expect(&grpc_message) => true,
+                &Error::GrpcMessage(GrpcMessageError { ref grpc_message, .. }) if expect(&grpc_message) => true,
                 _ => false,
             }
         });
@@ -125,13 +125,13 @@ impl TesterUnary {
 /// Tester for server streaming methods
 struct TesterServerStreaming {
     name: String,
-    client: GrpcClient,
-    _server: GrpcServer,
+    client: Client,
+    _server: Server,
 }
 
 impl TesterServerStreaming {
     fn new<H>(handler: H) -> Self
-        where H : Fn(GrpcRequestOptions, String) -> GrpcStreamingResponse<String> + Sync + Send + 'static
+        where H : Fn(RequestOptions, String) -> StreamingResponse<String> + Sync + Send + 'static
     {
         let name = "/test/ServerStreaming";
         let server = new_server_server_streaming(name, handler);
@@ -139,13 +139,13 @@ impl TesterServerStreaming {
         TesterServerStreaming {
             name: name.to_owned(),
             _server: server,
-            client: GrpcClient::new("::1", port, false, Default::default()).unwrap()
+            client: Client::new("::1", port, false, Default::default()).unwrap()
         }
     }
 
     fn call(&self, param: &str) -> GrpcStream<String> {
         self.client.call_server_streaming(
-            GrpcRequestOptions::new(),
+            RequestOptions::new(),
             param.to_owned(),
             string_string_method(&self.name, GrpcStreaming::ServerStreaming)).drop_metadata()
     }
@@ -154,13 +154,13 @@ impl TesterServerStreaming {
 
 struct TesterClientStreaming {
     name: String,
-    client: GrpcClient,
-    _server: GrpcServer,
+    client: Client,
+    _server: Server,
 }
 
 impl TesterClientStreaming {
     fn new<H>(handler: H) -> Self
-        where H : Fn(GrpcRequestOptions, GrpcStreamingRequest<String>) -> GrpcSingleResponse<String> + Sync + Send + 'static
+        where H : Fn(RequestOptions, StreamingRequest<String>) -> SingleResponse<String> + Sync + Send + 'static
     {
         let name = "/test/ClientStreaming";
         let server = new_server_client_streaming(name, handler);
@@ -168,7 +168,7 @@ impl TesterClientStreaming {
         TesterClientStreaming {
             name: name.to_owned(),
             _server: server,
-            client: GrpcClient::new("::1", port, false, Default::default()).unwrap()
+            client: Client::new("::1", port, false, Default::default()).unwrap()
         }
     }
 
@@ -177,8 +177,8 @@ impl TesterClientStreaming {
         (
             tx,
             self.client.call_client_streaming(
-                GrpcRequestOptions::new(),
-                GrpcStreamingRequest::new(rx.map_err(|()| unreachable!())),
+                RequestOptions::new(),
+                StreamingRequest::new(rx.map_err(|()| unreachable!())),
                 string_string_method(&self.name, GrpcStreaming::ClientStreaming)).drop_metadata(),
         )
     }
@@ -187,19 +187,19 @@ impl TesterClientStreaming {
 
 #[test]
 fn unary() {
-    let tester = TesterUnary::new(|_m, s| GrpcSingleResponse::completed(s));
+    let tester = TesterUnary::new(|_m, s| SingleResponse::completed(s));
 
     assert_eq!("aa", tester.call("aa").wait().unwrap());
 }
 
 #[test]
 fn server_is_not_running() {
-    let client = GrpcClient::new("::1", 2, false, Default::default()).unwrap();
+    let client = Client::new("::1", 2, false, Default::default()).unwrap();
 
     // TODO: https://github.com/tokio-rs/tokio-core/issues/12
     if false {
         let result = client.call_unary(
-            GrpcRequestOptions::new(),
+            RequestOptions::new(),
             "aa".to_owned(),
             string_string_method("/does/not/matter", GrpcStreaming::Unary)).wait();
         assert!(result.is_err(), result);
@@ -208,7 +208,7 @@ fn server_is_not_running() {
 
 #[test]
 fn error_in_handler() {
-    let tester = TesterUnary::new(|_m, _| GrpcSingleResponse::no_metadata(Err(GrpcError::Other("my error")).into_future()));
+    let tester = TesterUnary::new(|_m, _| SingleResponse::no_metadata(Err(Error::Other("my error")).into_future()));
 
     tester.call_expect_grpc_error_contain("aa", "my error");
 }
@@ -229,7 +229,7 @@ fn server_streaming() {
 
     let tester = TesterServerStreaming::new(move |_m, s| {
         let sync = test_sync_server.clone();
-        GrpcStreamingResponse::no_metadata(test_misc::stream_thread_spawn_iter(move || {
+        StreamingResponse::no_metadata(test_misc::stream_thread_spawn_iter(move || {
             (0..3).map(move |i| {
                 sync.take(i * 2 + 1);
                 format!("{}{}", s, i)
@@ -251,9 +251,9 @@ fn server_streaming() {
 #[test]
 fn client_streaming() {
     let tester = TesterClientStreaming::new(move |_m, s| {
-        GrpcSingleResponse::no_metadata(s.0.fold(String::new(), |mut s, message| {
+        SingleResponse::no_metadata(s.0.fold(String::new(), |mut s, message| {
             s.push_str(&message);
-            futures::finished::<_, GrpcError>(s)
+            futures::finished::<_, Error>(s)
         }))
     });
 

@@ -1,5 +1,5 @@
+use std::error::Error as StdError;
 use std::io;
-use std::error::Error;
 use std::fmt;
 
 use futures;
@@ -7,7 +7,7 @@ use futures;
 use metadata;
 use httpbis::HttpError;
 
-use protobuf::ProtobufError;
+use protobuf_lib::ProtobufError;
 
 #[derive(Debug)]
 pub struct GrpcMessageError {
@@ -19,7 +19,7 @@ pub struct GrpcMessageError {
 
 
 #[derive(Debug)]
-pub enum GrpcError {
+pub enum Error {
     Io(io::Error),
     Http(HttpError),
     GrpcMessage(GrpcMessageError),
@@ -32,82 +32,82 @@ pub enum GrpcError {
 
 fn _assert_debug<D : ::std::fmt::Debug>(_: &D) {}
 
-fn _assert_grpc_error_debug(e: &GrpcError) {
+fn _assert_grpc_error_debug(e: &Error) {
     _assert_debug(e);
 }
 
-impl Error for GrpcError {
+impl StdError for Error {
     fn description(&self) -> &str {
         match self {
-            &GrpcError::Io(ref err) => err.description(),
-            &GrpcError::Http(ref err) => err.description(),
-            &GrpcError::GrpcMessage(ref err) => &err.grpc_message,
-            &GrpcError::MetadataDecode(..) => "metadata decode error",
-            &GrpcError::Protobuf(ref err) => err.description(),
-            &GrpcError::Canceled(..) => "canceled",
-            &GrpcError::Panic(ref message) => &message,
-            &GrpcError::Other(ref message) => message,
+            &Error::Io(ref err) => err.description(),
+            &Error::Http(ref err) => err.description(),
+            &Error::GrpcMessage(ref err) => &err.grpc_message,
+            &Error::MetadataDecode(..) => "metadata decode error",
+            &Error::Protobuf(ref err) => err.description(),
+            &Error::Canceled(..) => "canceled",
+            &Error::Panic(ref message) => &message,
+            &Error::Other(ref message) => message,
         }
     }
 }
 
-impl fmt::Display for GrpcError {
+impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            &GrpcError::Io(ref err) => write!(f, "io error: {}", err.description()),
-            &GrpcError::Http(ref err) => write!(f, "http error: {}", err.description()),
-            &GrpcError::GrpcMessage(ref err) => write!(f, "grpc message error: {}", err.grpc_message),
-            &GrpcError::MetadataDecode(..) => write!(f, "metadata decode error"),
-            &GrpcError::Protobuf(ref err) => write!(f, "protobuf error: {}", err.description()),
-            &GrpcError::Canceled(..) => write!(f, "canceled"),
-            &GrpcError::Panic(ref message) => write!(f, "panic: {}", message),
-            &GrpcError::Other(ref message) => write!(f, "other error: {}", message),
+            &Error::Io(ref err) => write!(f, "io error: {}", err.description()),
+            &Error::Http(ref err) => write!(f, "http error: {}", err.description()),
+            &Error::GrpcMessage(ref err) => write!(f, "grpc message error: {}", err.grpc_message),
+            &Error::MetadataDecode(..) => write!(f, "metadata decode error"),
+            &Error::Protobuf(ref err) => write!(f, "protobuf error: {}", err.description()),
+            &Error::Canceled(..) => write!(f, "canceled"),
+            &Error::Panic(ref message) => write!(f, "panic: {}", message),
+            &Error::Other(ref message) => write!(f, "other error: {}", message),
         }
     }
 }
 
 
-impl From<io::Error> for GrpcError {
+impl From<io::Error> for Error {
     fn from(err: io::Error) -> Self {
-        GrpcError::Io(err)
+        Error::Io(err)
     }
 }
 
-impl From<HttpError> for GrpcError {
+impl From<HttpError> for Error {
     fn from(err: HttpError) -> Self {
-        GrpcError::Http(err)
+        Error::Http(err)
     }
 }
 
-impl From<ProtobufError> for GrpcError {
+impl From<ProtobufError> for Error {
     fn from(err: ProtobufError) -> Self {
-        GrpcError::Protobuf(err)
+        Error::Protobuf(err)
     }
 }
 
-impl From<futures::Canceled> for GrpcError {
+impl From<futures::Canceled> for Error {
     fn from(err: futures::Canceled) -> Self {
-        GrpcError::Canceled(err)
+        Error::Canceled(err)
     }
 }
 
-impl From<GrpcError> for io::Error {
-    fn from(err: GrpcError) -> io::Error {
+impl From<Error> for io::Error {
+    fn from(err: Error) -> io::Error {
         match err {
-            GrpcError::Io(e) => e,
+            Error::Io(e) => e,
             _ => io::Error::new(io::ErrorKind::Other, err),
         }
     }
 }
 
-impl From<metadata::MetadataDecodeError> for GrpcError {
+impl From<metadata::MetadataDecodeError> for Error {
     fn from(de: metadata::MetadataDecodeError) -> Self {
-        GrpcError::MetadataDecode(de)
+        Error::MetadataDecode(de)
     }
 }
 
-impl From<GrpcError> for HttpError {
-    fn from(err: GrpcError) -> HttpError {
+impl From<Error> for HttpError {
+    fn from(err: Error) -> HttpError {
         HttpError::Other(Box::new(err))
     }
 }

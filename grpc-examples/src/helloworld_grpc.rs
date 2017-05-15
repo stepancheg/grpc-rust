@@ -22,38 +22,38 @@
 // interface
 
 pub trait Greeter {
-    fn say_hello(&self, o: ::grpc::GrpcRequestOptions, p: super::helloworld::HelloRequest) -> ::grpc::GrpcSingleResponse<super::helloworld::HelloReply>;
+    fn say_hello(&self, o: ::grpc::RequestOptions, p: super::helloworld::HelloRequest) -> ::grpc::SingleResponse<super::helloworld::HelloReply>;
 }
 
 // client
 
 pub struct GreeterClient {
-    grpc_client: ::grpc::client::GrpcClient,
+    grpc_client: ::grpc::Client,
     method_SayHello: ::std::sync::Arc<::grpc::method::MethodDescriptor<super::helloworld::HelloRequest, super::helloworld::HelloReply>>,
 }
 
 impl GreeterClient {
-    pub fn with_client(grpc_client: ::grpc::client::GrpcClient) -> Self {
+    pub fn with_client(grpc_client: ::grpc::Client) -> Self {
         GreeterClient {
             grpc_client: grpc_client,
             method_SayHello: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
                 name: "/helloworld.Greeter/SayHello".to_string(),
                 streaming: ::grpc::method::GrpcStreaming::Unary,
-                req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+                req_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
+                resp_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
             }),
         }
     }
 
-    pub fn new(host: &str, port: u16, tls: bool, conf: ::grpc::client::GrpcClientConf) -> ::grpc::result::GrpcResult<Self> {
-        ::grpc::client::GrpcClient::new(host, port, tls, conf).map(|c| {
+    pub fn new(host: &str, port: u16, tls: bool, conf: ::grpc::ClientConf) -> ::grpc::Result<Self> {
+        ::grpc::Client::new(host, port, tls, conf).map(|c| {
             GreeterClient::with_client(c)
         })
     }
 }
 
 impl Greeter for GreeterClient {
-    fn say_hello(&self, o: ::grpc::GrpcRequestOptions, p: super::helloworld::HelloRequest) -> ::grpc::GrpcSingleResponse<super::helloworld::HelloReply> {
+    fn say_hello(&self, o: ::grpc::RequestOptions, p: super::helloworld::HelloRequest) -> ::grpc::SingleResponse<super::helloworld::HelloReply> {
         self.grpc_client.call_unary(o, p, self.method_SayHello.clone())
     }
 }
@@ -61,11 +61,11 @@ impl Greeter for GreeterClient {
 // server
 
 pub struct GreeterServer {
-    pub grpc_server: ::grpc::server::GrpcServer,
+    pub grpc_server: ::grpc::Server,
 }
 
 impl ::std::ops::Deref for GreeterServer {
-    type Target = ::grpc::server::GrpcServer;
+    type Target = ::grpc::Server;
 
     fn deref(&self) -> &Self::Target {
         &self.grpc_server
@@ -73,17 +73,17 @@ impl ::std::ops::Deref for GreeterServer {
 }
 
 impl GreeterServer {
-    pub fn new<A : ::std::net::ToSocketAddrs, H : Greeter + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self {
+    pub fn new<A : ::std::net::ToSocketAddrs, H : Greeter + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::ServerConf, h: H) -> Self {
         let service_definition = GreeterServer::new_service_def(h);
         GreeterServer {
-            grpc_server: ::grpc::server::GrpcServer::new_plain(addr, conf, service_definition),
+            grpc_server: ::grpc::Server::new_plain(addr, conf, service_definition),
         }
     }
 
-    pub fn new_pool<A : ::std::net::ToSocketAddrs, H : Greeter + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H, cpu_pool: ::futures_cpupool::CpuPool) -> Self {
+    pub fn new_pool<A : ::std::net::ToSocketAddrs, H : Greeter + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::ServerConf, h: H, cpu_pool: ::futures_cpupool::CpuPool) -> Self {
         let service_definition = GreeterServer::new_service_def(h);
         GreeterServer {
-            grpc_server: ::grpc::server::GrpcServer::new_plain_pool(addr, conf, service_definition, cpu_pool),
+            grpc_server: ::grpc::Server::new_plain_pool(addr, conf, service_definition, cpu_pool),
         }
     }
 
@@ -95,8 +95,8 @@ impl GreeterServer {
                     ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
                         name: "/helloworld.Greeter/SayHello".to_string(),
                         streaming: ::grpc::method::GrpcStreaming::Unary,
-                        req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                        resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+                        req_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
+                        resp_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
                     }),
                     {
                         let handler_copy = handler_arc.clone();

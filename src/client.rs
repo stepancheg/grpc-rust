@@ -19,7 +19,7 @@ use httpbis::client::ClientTlsOption;
 use method::MethodDescriptor;
 
 use error::*;
-use result::*;
+use result;
 
 use httpbis::futures_misc::*;
 use httpbis::client_conf::*;
@@ -32,23 +32,23 @@ use req::*;
 use resp::*;
 
 #[derive(Default, Debug, Clone)]
-pub struct GrpcClientConf {
+pub struct ClientConf {
     pub http: HttpClientConf,
 }
 
 
 /// gRPC client implementation.
 /// Used by generated code.
-pub struct GrpcClient {
+pub struct Client {
     client: HttpClient,
     host: String,
     http_scheme: HttpScheme,
 }
 
-impl GrpcClient {
+impl Client {
     /// Create a client connected to specified host and port.
-    pub fn new(host: &str, port: u16, tls: bool, conf: GrpcClientConf)
-        -> GrpcResult<GrpcClient>
+    pub fn new(host: &str, port: u16, tls: bool, conf: ClientConf)
+        -> result::Result<Client>
     {
         let mut conf = conf;
         conf.http.thread_name =
@@ -56,17 +56,17 @@ impl GrpcClient {
 
         HttpClient::new(host, port, tls, conf.http)
             .map(|client| {
-                GrpcClient {
+                Client {
                     client: client,
                     host: host.to_owned(),
                     http_scheme: if tls { HttpScheme::Https } else { HttpScheme::Http },
                 }
             })
-            .map_err(GrpcError::from)
+            .map_err(Error::from)
     }
 
-    pub fn new_expl(addr: &SocketAddr, host: &str, tls: ClientTlsOption, conf: GrpcClientConf)
-        -> GrpcResult<GrpcClient>
+    pub fn new_expl(addr: &SocketAddr, host: &str, tls: ClientTlsOption, conf: ClientConf)
+        -> result::Result<Client>
     {
         let mut conf = conf;
         conf.http.thread_name =
@@ -76,25 +76,25 @@ impl GrpcClient {
 
         HttpClient::new_expl(addr, tls, conf.http)
             .map(|client| {
-                GrpcClient {
+                Client {
                     client: client,
                     host: host.to_owned(),
                     http_scheme: http_scheme,
                 }
             })
-            .map_err(GrpcError::from)
+            .map_err(Error::from)
     }
 
     pub fn new_resp_channel<Resp : Send + 'static>(&self)
-        -> futures::Oneshot<(futures::sync::mpsc::UnboundedSender<ResultOrEof<Resp, GrpcError>>, GrpcStreamSend<Resp>)>
+        -> futures::Oneshot<(futures::sync::mpsc::UnboundedSender<ResultOrEof<Resp, Error>>, GrpcStreamSend<Resp>)>
     {
         let (one_sender, one_receiver) = futures::oneshot();
 
         let (sender, receiver) = futures::sync::mpsc::unbounded();
-        let receiver: GrpcStreamSend<ResultOrEof<Resp, GrpcError>> =
-            Box::new(receiver.map_err(|()| GrpcError::Other("receive from resp channel")));
+        let receiver: GrpcStreamSend<ResultOrEof<Resp, Error>> =
+            Box::new(receiver.map_err(|()| Error::Other("receive from resp channel")));
 
-        let receiver: GrpcStreamSend<Resp> = Box::new(stream_with_eof_and_error(receiver, || GrpcError::Other("unexpected EOF")));
+        let receiver: GrpcStreamSend<Resp> = Box::new(stream_with_eof_and_error(receiver, || Error::Other("unexpected EOF")));
 
         // TODO: oneshot sender is no longer necessary as we don't use tokio queues
         one_sender.send((sender, receiver)).ok().unwrap();
@@ -104,10 +104,10 @@ impl GrpcClient {
 
     fn call_impl<Req, Resp>(
         &self,
-        options: GrpcRequestOptions,
-        req: GrpcStreamingRequest<Req>,
+        options: RequestOptions,
+        req: StreamingRequest<Req>,
         method: Arc<MethodDescriptor<Req, Resp>>)
-           -> GrpcStreamingResponse<Resp>
+        -> StreamingResponse<Resp>
         where
             Req : Send + 'static,
             Resp : Send + 'static,
@@ -144,29 +144,29 @@ impl GrpcClient {
         grpc_frames.and_then_items(move |frame| method.resp_marshaller.read(&frame))
     }
 
-    pub fn call_unary<Req, Resp>(&self, o: GrpcRequestOptions, req: Req, method: Arc<MethodDescriptor<Req, Resp>>)
-        -> GrpcSingleResponse<Resp>
+    pub fn call_unary<Req, Resp>(&self, o: RequestOptions, req: Req, method: Arc<MethodDescriptor<Req, Resp>>)
+                                 -> SingleResponse<Resp>
             where Req: Send + 'static, Resp: Send + 'static
     {
-        self.call_impl(o, GrpcStreamingRequest::once(req), method).single()
+        self.call_impl(o, StreamingRequest::once(req), method).single()
     }
 
-    pub fn call_server_streaming<Req, Resp>(&self, o: GrpcRequestOptions, req: Req, method: Arc<MethodDescriptor<Req, Resp>>)
-        -> GrpcStreamingResponse<Resp>
+    pub fn call_server_streaming<Req, Resp>(&self, o: RequestOptions, req: Req, method: Arc<MethodDescriptor<Req, Resp>>)
+                                            -> StreamingResponse<Resp>
             where Req: Send + 'static, Resp: Send + 'static
     {
-        self.call_impl(o, GrpcStreamingRequest::once(req), method)
+        self.call_impl(o, StreamingRequest::once(req), method)
     }
 
-    pub fn call_client_streaming<Req, Resp>(&self, o: GrpcRequestOptions, req: GrpcStreamingRequest<Req>, method: Arc<MethodDescriptor<Req, Resp>>)
-        -> GrpcSingleResponse<Resp>
+    pub fn call_client_streaming<Req, Resp>(&self, o: RequestOptions, req: StreamingRequest<Req>, method: Arc<MethodDescriptor<Req, Resp>>)
+                                            -> SingleResponse<Resp>
             where Req: Send + 'static, Resp: Send + 'static
     {
         self.call_impl(o, req, method).single()
     }
 
-    pub fn call_bidi<Req, Resp>(&self, o: GrpcRequestOptions, req: GrpcStreamingRequest<Req>, method: Arc<MethodDescriptor<Req, Resp>>)
-        -> GrpcStreamingResponse<Resp>
+    pub fn call_bidi<Req, Resp>(&self, o: RequestOptions, req: StreamingRequest<Req>, method: Arc<MethodDescriptor<Req, Resp>>)
+                                -> StreamingResponse<Resp>
             where Req: Send + 'static, Resp: Send + 'static
     {
         self.call_impl(o, req, method)

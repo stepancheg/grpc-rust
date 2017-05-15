@@ -8,20 +8,18 @@ use std::thread;
 
 use futures_cpupool::CpuPool;
 
-use grpc::*;
-
 use grpc_examples::helloworld_grpc::*;
 use grpc_examples::helloworld::*;
 
 struct GreeterImpl;
 
 impl Greeter for GreeterImpl {
-    fn say_hello(&self, _m: GrpcRequestOptions, req: HelloRequest) -> GrpcSingleResponse<HelloReply> {
+    fn say_hello(&self, _m: grpc::RequestOptions, req: HelloRequest) -> grpc::SingleResponse<HelloReply> {
         let mut r = HelloReply::new();
         let name = if req.get_name().is_empty() { "world" } else { req.get_name() };
         println!("greeting request from {}", name);
         r.set_message(format!("Hello {}", name));
-        GrpcSingleResponse::completed(r)
+        grpc::SingleResponse::completed(r)
     }
 }
 

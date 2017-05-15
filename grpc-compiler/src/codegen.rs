@@ -78,19 +78,19 @@ impl<'a> MethodGen<'a> {
     fn input(&self) -> String {
         match self.proto.get_client_streaming() {
             false => self.input_message(),
-            true  => format!("::grpc::GrpcStreamingRequest<{}>", self.input_message()),
+            true  => format!("::grpc::StreamingRequest<{}>", self.input_message()),
         }
     }
 
     fn output(&self) -> String {
         match self.proto.get_server_streaming() {
-            false => format!("::grpc::GrpcSingleResponse<{}>", self.output_message()),
-            true  => format!("::grpc::GrpcStreamingResponse<{}>", self.output_message()),
+            false => format!("::grpc::SingleResponse<{}>", self.output_message()),
+            true  => format!("::grpc::StreamingResponse<{}>", self.output_message()),
         }
     }
 
     fn sig(&self) -> String {
-        format!("{}(&self, o: ::grpc::GrpcRequestOptions, p: {}) -> {}",
+        format!("{}(&self, o: ::grpc::RequestOptions, p: {}) -> {}",
                 self.snake_name(), self.input(), self.output())
     }
 
@@ -136,8 +136,8 @@ impl<'a> MethodGen<'a> {
         w.block(&format!("{}{}", before, "::grpc::method::MethodDescriptor {"), &format!("{}{}", "}", after), |w| {
             w.field_entry("name", &format!("\"{}/{}\".to_string()", self.service_path, self.proto.get_name()));
             w.field_entry("streaming", &format!("::grpc::method::GrpcStreaming::{}", self.streaming_upper()));
-            w.field_entry("req_marshaller", "Box::new(::grpc::grpc_protobuf::MarshallerProtobuf)");
-            w.field_entry("resp_marshaller", "Box::new(::grpc::grpc_protobuf::MarshallerProtobuf)");
+            w.field_entry("req_marshaller", "Box::new(::grpc::protobuf::MarshallerProtobuf)");
+            w.field_entry("resp_marshaller", "Box::new(::grpc::protobuf::MarshallerProtobuf)");
         });
     }
 }
@@ -212,7 +212,7 @@ impl<'a> ServiceGen<'a> {
 
     fn write_client(&self, w: &mut CodeWriter) {
         w.pub_struct(&self.client_name(), |w| {
-            w.field_decl("grpc_client", "::grpc::client::GrpcClient");
+            w.field_decl("grpc_client", "::grpc::Client");
             for method in &self.methods {
                 w.field_decl(
                     &method.descriptor_field_name(),
@@ -224,16 +224,16 @@ impl<'a> ServiceGen<'a> {
 
         w.impl_self_block(&self.client_name(), |w| {
 
-            let sig = "with_client(grpc_client: ::grpc::client::GrpcClient) -> Self";
+            let sig = "with_client(grpc_client: ::grpc::Client) -> Self";
             w.pub_fn(sig, |w| {
                 self.write_client_object("grpc_client", w);
             });
 
             w.write_line("");
 
-            let sig = "new(host: &str, port: u16, tls: bool, conf: ::grpc::client::GrpcClientConf) -> ::grpc::result::GrpcResult<Self>";
+            let sig = "new(host: &str, port: u16, tls: bool, conf: ::grpc::ClientConf) -> ::grpc::Result<Self>";
             w.pub_fn(sig, |w| {
-                w.write_line("::grpc::client::GrpcClient::new(host, port, tls, conf).map(|c| {");
+                w.write_line("::grpc::Client::new(host, port, tls, conf).map(|c| {");
                 w.indented(|w| {
                     w.write_line(&format!("{}::with_client(c)", self.client_name()));
                 });
@@ -278,13 +278,13 @@ impl<'a> ServiceGen<'a> {
 
     fn write_server(&self, w: &mut CodeWriter) {
         w.pub_struct(&self.server_name(), |w| {
-            w.pub_field_decl("grpc_server", "::grpc::server::GrpcServer");
+            w.pub_field_decl("grpc_server", "::grpc::Server");
         });
 
         w.write_line("");
 
         w.impl_for_block("::std::ops::Deref", &self.server_name(), |w| {
-            w.write_line("type Target = ::grpc::server::GrpcServer;");
+            w.write_line("type Target = ::grpc::Server;");
             w.write_line("");
             w.def_fn("deref(&self) -> &Self::Target", |w| {
                 w.write_line("&self.grpc_server");
@@ -295,26 +295,26 @@ impl<'a> ServiceGen<'a> {
 
         w.impl_self_block(&self.server_name(), |w| {
             let sig = format!(
-                "new<A : ::std::net::ToSocketAddrs, H : {} + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self",
+                "new<A : ::std::net::ToSocketAddrs, H : {} + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::ServerConf, h: H) -> Self",
                 self.intf_name());
             w.pub_fn(&sig, |w| {
                 w.write_line(format!("let service_definition = {}::new_service_def(h);", self.server_name()));
 
                 w.expr_block(&self.server_name(), |w| {
-                    w.field_entry("grpc_server", "::grpc::server::GrpcServer::new_plain(addr, conf, service_definition)");
+                    w.field_entry("grpc_server", "::grpc::Server::new_plain(addr, conf, service_definition)");
                 });
             });
 
             w.write_line("");
 
             let sig = format!(
-                "new_pool<A : ::std::net::ToSocketAddrs, H : {} + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H, cpu_pool: ::futures_cpupool::CpuPool) -> Self",
+                "new_pool<A : ::std::net::ToSocketAddrs, H : {} + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::ServerConf, h: H, cpu_pool: ::futures_cpupool::CpuPool) -> Self",
                 self.intf_name());
             w.pub_fn(&sig, |w| {
                 w.write_line(format!("let service_definition = {}::new_service_def(h);", self.server_name()));
 
                 w.expr_block(&self.server_name(), |w| {
-                    w.field_entry("grpc_server", "::grpc::server::GrpcServer::new_plain_pool(addr, conf, service_definition, cpu_pool)");
+                    w.field_entry("grpc_server", "::grpc::Server::new_plain_pool(addr, conf, service_definition, cpu_pool)");
                 });
             });
 

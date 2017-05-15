@@ -86,17 +86,17 @@ impl MetadataEntry {
 }
 
 #[derive(Default, Debug)]
-pub struct GrpcMetadata {
+pub struct Metadata {
     pub entries: Vec<MetadataEntry>,
 }
 
-impl GrpcMetadata {
-    pub fn new() -> GrpcMetadata {
+impl Metadata {
+    pub fn new() -> Metadata {
         Default::default()
     }
 
-    pub fn from_headers(headers: Headers) -> Result<GrpcMetadata, MetadataDecodeError> {
-        let mut r = GrpcMetadata::new();
+    pub fn from_headers(headers: Headers) -> Result<Metadata, MetadataDecodeError> {
+        let mut r = Metadata::new();
         for h in headers.0 {
             if let Some(e) = MetadataEntry::from_header(h)? {
                 r.entries.push(e);
@@ -119,7 +119,7 @@ impl GrpcMetadata {
         None
     }
 
-    pub fn extend(&mut self, extend: GrpcMetadata) {
+    pub fn extend(&mut self, extend: Metadata) {
         self.entries.extend(extend.entries);
     }
 

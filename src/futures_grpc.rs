@@ -3,12 +3,12 @@ use futures::BoxFuture;
 use futures::stream::Stream;
 use futures::stream::BoxStream;
 
-use error::GrpcError;
+use error::Error;
 
 
-pub type GrpcFuture<T> = Box<Future<Item=T, Error=GrpcError>>;
-pub type GrpcStream<T> = Box<Stream<Item=T, Error=GrpcError>>;
+pub type GrpcFuture<T> = Box<Future<Item=T, Error=Error>>;
+pub type GrpcStream<T> = Box<Stream<Item=T, Error=Error>>;
 
-pub type GrpcFutureSend<T> = BoxFuture<T, GrpcError>;
-pub type GrpcStreamSend<T> = BoxStream<T, GrpcError>;
+pub type GrpcFutureSend<T> = BoxFuture<T, Error>;
+pub type GrpcStreamSend<T> = BoxStream<T, Error>;
 

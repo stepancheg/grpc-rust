@@ -4,7 +4,7 @@ use futures::stream;
 use futures::stream::Stream;
 
 use error::*;
-use result::*;
+use result;
 
 use httpbis::http_common::*;
 
@@ -32,17 +32,17 @@ pub const GRPC_HEADER_LEN: usize = 5;
 
 
 /// Return frame len
-pub fn parse_grpc_frame_0(stream: &[u8]) -> GrpcResult<Option<usize>> {
+pub fn parse_grpc_frame_0(stream: &[u8]) -> result::Result<Option<usize>> {
     if stream.len() < GRPC_HEADER_LEN {
         return Ok(None);
     }
     let compressed = match stream[0] {
         0 => false,
         1 => true,
-        _ => return Err(GrpcError::Other("unknown compression flag")),
+        _ => return Err(Error::Other("unknown compression flag")),
     };
     if compressed {
-        return Err(GrpcError::Other("compression is not implemented"));
+        return Err(Error::Other("compression is not implemented"));
     }
     let len = read_u32_be(&stream[1..]) as usize;
     let end = len + GRPC_HEADER_LEN;
@@ -55,7 +55,7 @@ pub fn parse_grpc_frame_0(stream: &[u8]) -> GrpcResult<Option<usize>> {
 
 
 // return message and size consumed
-pub fn parse_grpc_frame(stream: &[u8]) -> GrpcResult<Option<(&[u8], usize)>> {
+pub fn parse_grpc_frame(stream: &[u8]) -> result::Result<Option<(&[u8], usize)>> {
     parse_grpc_frame_0(stream)
         .map(|o| {
             o.map(|len| {
@@ -64,13 +64,13 @@ pub fn parse_grpc_frame(stream: &[u8]) -> GrpcResult<Option<(&[u8], usize)>> {
         })
 }
 
-pub fn parse_grpc_frames_completely(stream: &[u8]) -> GrpcResult<Vec<&[u8]>> {
+pub fn parse_grpc_frames_completely(stream: &[u8]) -> result::Result<Vec<&[u8]>> {
     let mut r = Vec::new();
     let mut pos = 0;
     while pos < stream.len() {
         let frame_opt = parse_grpc_frame(&stream[pos..])?;
         match frame_opt {
-            None => return Err(GrpcError::Other("not complete frames")),
+            None => return Err(Error::Other("not complete frames")),
             Some((frame, len)) => {
                 r.push(frame);
                 pos += len;
@@ -81,12 +81,12 @@ pub fn parse_grpc_frames_completely(stream: &[u8]) -> GrpcResult<Vec<&[u8]>> {
 }
 
 #[allow(dead_code)]
-pub fn parse_grpc_frame_completely(stream: &[u8]) -> GrpcResult<&[u8]> {
+pub fn parse_grpc_frame_completely(stream: &[u8]) -> result::Result<&[u8]> {
     let frames = parse_grpc_frames_completely(stream)?;
     if frames.len() == 1 {
         Ok(frames[0])
     } else {
-        Err(GrpcError::Other("expecting exactly one frame"))
+        Err(Error::Other("expecting exactly one frame"))
     }
 }
 
@@ -111,7 +111,7 @@ trait RequestOrResponse {
 pub struct GrpcFrameFromHttpFramesStreamRequest {
     http_stream_stream: HttpPartStream,
     buf: Vec<u8>,
-    error: Option<stream::Once<Vec<u8>, GrpcError>>,
+    error: Option<stream::Once<Vec<u8>, Error>>,
 }
 
 impl GrpcFrameFromHttpFramesStreamRequest {
@@ -127,7 +127,7 @@ impl GrpcFrameFromHttpFramesStreamRequest {
 
 impl Stream for GrpcFrameFromHttpFramesStreamRequest {
     type Item = Vec<u8>;
-    type Error = GrpcError;
+    type Error = Error;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
         loop {
@@ -146,7 +146,7 @@ impl Stream for GrpcFrameFromHttpFramesStreamRequest {
                     if self.buf.is_empty() {
                         return Ok(Async::Ready(None));
                     } else {
-                        self.error = Some(stream::once(Err(GrpcError::Other("partial frame"))));
+                        self.error = Some(stream::once(Err(Error::Other("partial frame"))));
                         continue;
                     }
                 },

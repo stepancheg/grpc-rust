@@ -21,9 +21,9 @@ use grpc_frame::*;
 
 use bytes::Bytes;
 
-use result::*;
+use result;
 
-use error::GrpcError;
+use error::Error;
 use error::GrpcMessageError;
 
 use resp::*;
@@ -32,9 +32,9 @@ use metadata::*;
 
 
 
-fn init_headers_to_metadata(headers: Headers) -> GrpcResult<GrpcMetadata> {
+fn init_headers_to_metadata(headers: Headers) -> result::Result<Metadata> {
     if headers.get_opt(":status") != Some("200") {
-        return Err(GrpcError::Other("not 200"));
+        return Err(Error::Other("not 200"));
     }
 
     // Check gRPC status code and message
@@ -43,7 +43,7 @@ fn init_headers_to_metadata(headers: Headers) -> GrpcResult<GrpcMetadata> {
         if grpc_status != GrpcStatus::Ok as i32 {
             let message = headers.get_opt(HEADER_GRPC_MESSAGE).unwrap_or("unknown error");
             return Err(
-                GrpcError::GrpcMessage(GrpcMessageError{
+                Error::GrpcMessage(GrpcMessageError{
                     grpc_status: grpc_status,
                     grpc_message: message.to_owned(),
                 })
@@ -51,12 +51,12 @@ fn init_headers_to_metadata(headers: Headers) -> GrpcResult<GrpcMetadata> {
         }
     }
 
-    Ok(GrpcMetadata::from_headers(headers)?)
+    Ok(Metadata::from_headers(headers)?)
 }
 
 
-pub fn http_response_to_grpc_frames(response: HttpResponse) -> GrpcStreamingResponse<Bytes> {
-    GrpcStreamingResponse::new(response.0.map_err(|e| GrpcError::from(e)).and_then(|(headers, rem)| {
+pub fn http_response_to_grpc_frames(response: HttpResponse) -> StreamingResponse<Bytes> {
+    StreamingResponse::new(response.0.map_err(|e| Error::from(e)).and_then(|(headers, rem)| {
         let metadata = init_headers_to_metadata(headers)?;
         let frames: GrpcStreamWithTrailingMetadata<Bytes> =
             GrpcStreamWithTrailingMetadata::new(GrpcFrameFromHttpFramesStreamResponse::new(rem));
@@ -68,7 +68,7 @@ pub fn http_response_to_grpc_frames(response: HttpResponse) -> GrpcStreamingResp
 struct GrpcFrameFromHttpFramesStreamResponse {
     http_stream_stream: HttpPartStream,
     buf: Bytes,
-    error: Option<stream::Once<GrpcItemOrMetadata<Bytes>, GrpcError>>,
+    error: Option<stream::Once<ItemOrMetadata<Bytes>, Error>>,
 }
 
 impl GrpcFrameFromHttpFramesStreamResponse {
@@ -82,8 +82,8 @@ impl GrpcFrameFromHttpFramesStreamResponse {
 }
 
 impl Stream for GrpcFrameFromHttpFramesStreamResponse {
-    type Item = GrpcItemOrMetadata<Bytes>;
-    type Error = GrpcError;
+    type Item = ItemOrMetadata<Bytes>;
+    type Error = Error;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
         loop {
@@ -95,7 +95,7 @@ impl Stream for GrpcFrameFromHttpFramesStreamResponse {
                 let frame = self.buf
                     .split_to(frame_len + GRPC_HEADER_LEN)
                     .slice_from(GRPC_HEADER_LEN);
-                return Ok(Async::Ready(Some(GrpcItemOrMetadata::Item(frame))));
+                return Ok(Async::Ready(Some(ItemOrMetadata::Item(frame))));
             }
 
             let part_opt = try_ready!(self.http_stream_stream.poll());
@@ -104,7 +104,7 @@ impl Stream for GrpcFrameFromHttpFramesStreamResponse {
                     if self.buf.is_empty() {
                         return Ok(Async::Ready(None));
                     } else {
-                        self.error = Some(stream::once(Err(GrpcError::Other("partial frame"))));
+                        self.error = Some(stream::once(Err(Error::Other("partial frame"))));
                         continue;
                     }
                 },
@@ -117,20 +117,20 @@ impl Stream for GrpcFrameFromHttpFramesStreamResponse {
                 HttpStreamPartContent::Headers(headers) => {
                     if part.last {
                         if !self.buf.is_empty() {
-                            self.error = Some(stream::once(Err(GrpcError::Other("partial frame"))));
+                            self.error = Some(stream::once(Err(Error::Other("partial frame"))));
                         } else {
                             let grpc_status = headers.get_opt_parse(HEADER_GRPC_STATUS);
                             if grpc_status == Some(GrpcStatus::Ok as i32) {
-                                return Ok(Async::Ready(Some(GrpcItemOrMetadata::TrailingMetadata(
-                                    GrpcMetadata::from_headers(headers)?))));
+                                return Ok(Async::Ready(Some(ItemOrMetadata::TrailingMetadata(
+                                    Metadata::from_headers(headers)?))));
                             } else {
                                 self.error = Some(stream::once(Err(if let Some(message) = headers.get_opt(HEADER_GRPC_MESSAGE) {
-                                    GrpcError::GrpcMessage(GrpcMessageError {
+                                    Error::GrpcMessage(GrpcMessageError {
                                         grpc_status: grpc_status.unwrap_or(GrpcStatus::Unknown as i32),
                                         grpc_message: message.to_owned(),
                                     })
                                 } else {
-                                    GrpcError::Other("not xxx")
+                                    Error::Other("not xxx")
                                 })));
                             }
                         }

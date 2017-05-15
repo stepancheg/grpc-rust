@@ -15,14 +15,13 @@ use grpc_interop::*;
 
 use bytes::Bytes;
 
-use grpc::*;
 use grpc::metadata::MetadataKey;
 
 use chrono::*;
 use clap::{App, Arg};
 
 fn empty_unary(client: TestServiceClient) {
-    client.empty_call(GrpcRequestOptions::new(), Empty::new())
+    client.empty_call(grpc::RequestOptions::new(), Empty::new())
         .wait_drop_metadata()
         .expect("failed to get EmptyUnary result");
     println!("{} EmptyUnary done", Local::now().to_rfc3339());
@@ -35,7 +34,7 @@ fn large_unary(client: TestServiceClient) {
     let mut request = SimpleRequest::new();
     request.set_payload(payload);
     request.set_response_size(314159);
-    let response = client.unary_call(GrpcRequestOptions::new(), request).wait_drop_metadata().expect("expected full frame");
+    let response = client.unary_call(grpc::RequestOptions::new(), request).wait_drop_metadata().expect("expected full frame");
     assert!(response.get_payload().body.len() == 314159);
     println!("{} LargeUnary done", Local::now().to_rfc3339());
 }
@@ -50,7 +49,7 @@ fn client_streaming(client: TestServiceClient) {
         requests.push(request);
     }
 
-    let response = client.streaming_input_call(GrpcRequestOptions::new(), GrpcStreamingRequest::iter(requests)).wait_drop_metadata()
+    let response = client.streaming_input_call(grpc::RequestOptions::new(), grpc::StreamingRequest::iter(requests)).wait_drop_metadata()
         .expect("expected response");
     assert!(response.aggregated_payload_size == 74922);
     println!("{} ClientStreaming done", Local::now().to_rfc3339());
@@ -68,7 +67,7 @@ fn server_streaming(client: TestServiceClient) {
     }
     req.set_response_parameters(::protobuf::RepeatedField::from_vec(params));
 
-    let response_stream = client.streaming_output_call(GrpcRequestOptions::new(), req).wait_drop_metadata();
+    let response_stream = client.streaming_output_call(grpc::RequestOptions::new(), req).wait_drop_metadata();
 
     let mut response_sizes = Vec::new();
 
@@ -102,7 +101,7 @@ fn ping_pong(client: TestServiceClient) {
         req.set_payload(payload);
         requests.push(req);
     }
-    let response = client.full_duplex_call(GrpcRequestOptions::new(), GrpcStreamingRequest::iter(requests)).wait_drop_metadata();
+    let response = client.full_duplex_call(grpc::RequestOptions::new(), grpc::StreamingRequest::iter(requests)).wait_drop_metadata();
     let mut response_sizes = Vec::new();
     {
         // this scope is to satisfy the borrow checker.
@@ -123,19 +122,19 @@ fn ping_pong(client: TestServiceClient) {
 
 fn empty_stream(client: TestServiceClient) {
     let response = client.full_duplex_call(
-        GrpcRequestOptions::new(),
-        GrpcStreamingRequest::empty())
+        grpc::RequestOptions::new(),
+        grpc::StreamingRequest::empty())
             .wait_drop_metadata();
     assert!(response.count() == 0);
     println!("{} EmptyStream done", Local::now().to_rfc3339());
 }
 
 fn custom_metadata(client: TestServiceClient) {
-    fn make_options() -> GrpcRequestOptions {
+    fn make_options() -> grpc::RequestOptions {
         // The client attaches custom metadata with the following keys and values:
         // key: "x-grpc-test-echo-initial", value: "test_initial_metadata_value"
         // key: "x-grpc-test-echo-initial", value: "test_initial_metadata_value"
-        let mut options = GrpcRequestOptions::new();
+        let mut options = grpc::RequestOptions::new();
         options.metadata.add(
             MetadataKey::from("x-grpc-test-echo-initial"),
             Bytes::from("test_initial_metadata_value"));
@@ -145,7 +144,7 @@ fn custom_metadata(client: TestServiceClient) {
         options
     }
 
-    fn assert_result_metadata(initial: GrpcMetadata, trailing: GrpcMetadata) {
+    fn assert_result_metadata(initial: grpc::Metadata, trailing: grpc::Metadata) {
         assert_eq!(Some(&b"test_initial_metadata_value"[..]), initial.get("x-grpc-test-echo-initial"));
         assert_eq!(Some(&b"\xab\xab\xab"[..]), trailing.get("x-grpc-test-echo-trailing-bin"));
     }
@@ -191,7 +190,7 @@ fn custom_metadata(client: TestServiceClient) {
             req.set_payload(p);
         }
 
-        let (initial, _res, trailing) = client.full_duplex_call(make_options(), GrpcStreamingRequest::single(req))
+        let (initial, _res, trailing) = client.full_duplex_call(make_options(), grpc::StreamingRequest::single(req))
             .collect().wait().expect("FullDuplexCall");
 
         assert_result_metadata(initial, trailing);

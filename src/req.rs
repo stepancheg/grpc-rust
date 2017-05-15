@@ -1,56 +1,56 @@
 use futures::stream;
 use futures::stream::Stream;
 
-use metadata::GrpcMetadata;
+use metadata::Metadata;
 
 use futures_grpc::GrpcStreamSend;
-use error::GrpcError;
+use error::Error;
 
 #[derive(Debug, Default)]
-pub struct GrpcRequestOptions {
-    pub metadata: GrpcMetadata,
+pub struct RequestOptions {
+    pub metadata: Metadata,
 }
 
-impl GrpcRequestOptions {
-    pub fn new() -> GrpcRequestOptions {
+impl RequestOptions {
+    pub fn new() -> RequestOptions {
         Default::default()
     }
 }
 
 /// Excluding initial metadata which is passed separately
-pub struct GrpcStreamingRequest<T : Send + 'static>(pub GrpcStreamSend<T>);
+pub struct StreamingRequest<T : Send + 'static>(pub GrpcStreamSend<T>);
 
-impl<T : Send + 'static> GrpcStreamingRequest<T> {
+impl<T : Send + 'static> StreamingRequest<T> {
 
     // constructors
 
-    pub fn new<S>(stream: S) -> GrpcStreamingRequest<T>
-        where S : Stream<Item=T, Error=GrpcError> + Send + 'static
+    pub fn new<S>(stream: S) -> StreamingRequest<T>
+        where S : Stream<Item=T, Error=Error> + Send + 'static
     {
-        GrpcStreamingRequest(Box::new(stream))
+        StreamingRequest(Box::new(stream))
     }
 
-    pub fn once(item: T) -> GrpcStreamingRequest<T> {
-        GrpcStreamingRequest::new(stream::once(Ok(item)))
+    pub fn once(item: T) -> StreamingRequest<T> {
+        StreamingRequest::new(stream::once(Ok(item)))
     }
 
-    pub fn iter<I>(iter: I) -> GrpcStreamingRequest<T>
+    pub fn iter<I>(iter: I) -> StreamingRequest<T>
         where
             I : IntoIterator<Item=T>,
             I::IntoIter : Send + 'static,
     {
-        GrpcStreamingRequest::new(stream::iter(iter.into_iter().map(Ok)))
+        StreamingRequest::new(stream::iter(iter.into_iter().map(Ok)))
     }
 
-    pub fn single(item: T) -> GrpcStreamingRequest<T> {
-        GrpcStreamingRequest::new(stream::once(Ok(item)))
+    pub fn single(item: T) -> StreamingRequest<T> {
+        StreamingRequest::new(stream::once(Ok(item)))
     }
 
-    pub fn empty() -> GrpcStreamingRequest<T> {
-        GrpcStreamingRequest::new(stream::empty())
+    pub fn empty() -> StreamingRequest<T> {
+        StreamingRequest::new(stream::empty())
     }
 
-    pub fn err(err: GrpcError) -> GrpcStreamingRequest<T> {
-        GrpcStreamingRequest::new(stream::once(Err(err)))
+    pub fn err(err: Error) -> StreamingRequest<T> {
+        StreamingRequest::new(stream::once(Err(err)))
     }
 }

@@ -13,37 +13,36 @@ use futures::Future;
 use long_tests::long_tests_pb::*;
 use long_tests::long_tests_pb_grpc::*;
 
-use grpc::error::GrpcError;
 use grpc::*;
 
 struct LongTestsServerImpl {
 }
 
 impl LongTests for LongTestsServerImpl {
-    fn echo(&self, _o: GrpcRequestOptions, mut p: EchoRequest)
-        -> GrpcSingleResponse<EchoResponse>
+    fn echo(&self, _o: RequestOptions, mut p: EchoRequest)
+        -> grpc::SingleResponse<EchoResponse>
     {
         let mut resp = EchoResponse::new();
         resp.set_payload(p.take_payload());
-        GrpcSingleResponse::completed(resp)
+        grpc::SingleResponse::completed(resp)
     }
 
-    fn char_count(&self, _o: GrpcRequestOptions, p: GrpcStreamingRequest<CharCountRequest>)
-        -> GrpcSingleResponse<CharCountResponse>
+    fn char_count(&self, _o: grpc::RequestOptions, p: grpc::StreamingRequest<CharCountRequest>)
+        -> grpc::SingleResponse<CharCountResponse>
     {
         let r = p.0
             .map(|c| c.part.len() as u64)
-            .fold(0, |a, b| futures::finished::<_, GrpcError>(a + b))
+            .fold(0, |a, b| futures::finished::<_, grpc::Error>(a + b))
             .map(|s| {
                 let mut r = CharCountResponse::new();
                 r.char_count = s;
                 r
             });
-        GrpcSingleResponse::no_metadata(r)
+        grpc::SingleResponse::no_metadata(r)
     }
 
-    fn random_strings(&self, _o: GrpcRequestOptions, p: RandomStringsRequest)
-        -> GrpcStreamingResponse<RandomStringsResponse>
+    fn random_strings(&self, _o: grpc::RequestOptions, p: RandomStringsRequest)
+        -> grpc::StreamingResponse<RandomStringsResponse>
     {
         let iter = iter::repeat(())
             .map(|_| {
@@ -53,7 +52,7 @@ impl LongTests for LongTestsServerImpl {
                 resp
             })
             .take(p.count as usize);
-        GrpcStreamingResponse::iter(iter)
+        grpc::StreamingResponse::iter(iter)
     }
 }
 

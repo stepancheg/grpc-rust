@@ -22,25 +22,25 @@
 // interface
 
 pub trait TestService {
-    fn empty_call(&self, o: ::grpc::GrpcRequestOptions, p: super::empty::Empty) -> ::grpc::GrpcSingleResponse<super::empty::Empty>;
+    fn empty_call(&self, o: ::grpc::RequestOptions, p: super::empty::Empty) -> ::grpc::SingleResponse<super::empty::Empty>;
 
-    fn unary_call(&self, o: ::grpc::GrpcRequestOptions, p: super::messages::SimpleRequest) -> ::grpc::GrpcSingleResponse<super::messages::SimpleResponse>;
+    fn unary_call(&self, o: ::grpc::RequestOptions, p: super::messages::SimpleRequest) -> ::grpc::SingleResponse<super::messages::SimpleResponse>;
 
-    fn cacheable_unary_call(&self, o: ::grpc::GrpcRequestOptions, p: super::messages::SimpleRequest) -> ::grpc::GrpcSingleResponse<super::messages::SimpleResponse>;
+    fn cacheable_unary_call(&self, o: ::grpc::RequestOptions, p: super::messages::SimpleRequest) -> ::grpc::SingleResponse<super::messages::SimpleResponse>;
 
-    fn streaming_output_call(&self, o: ::grpc::GrpcRequestOptions, p: super::messages::StreamingOutputCallRequest) -> ::grpc::GrpcStreamingResponse<super::messages::StreamingOutputCallResponse>;
+    fn streaming_output_call(&self, o: ::grpc::RequestOptions, p: super::messages::StreamingOutputCallRequest) -> ::grpc::StreamingResponse<super::messages::StreamingOutputCallResponse>;
 
-    fn streaming_input_call(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::GrpcStreamingRequest<super::messages::StreamingInputCallRequest>) -> ::grpc::GrpcSingleResponse<super::messages::StreamingInputCallResponse>;
+    fn streaming_input_call(&self, o: ::grpc::RequestOptions, p: ::grpc::StreamingRequest<super::messages::StreamingInputCallRequest>) -> ::grpc::SingleResponse<super::messages::StreamingInputCallResponse>;
 
-    fn full_duplex_call(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::GrpcStreamingRequest<super::messages::StreamingOutputCallRequest>) -> ::grpc::GrpcStreamingResponse<super::messages::StreamingOutputCallResponse>;
+    fn full_duplex_call(&self, o: ::grpc::RequestOptions, p: ::grpc::StreamingRequest<super::messages::StreamingOutputCallRequest>) -> ::grpc::StreamingResponse<super::messages::StreamingOutputCallResponse>;
 
-    fn half_duplex_call(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::GrpcStreamingRequest<super::messages::StreamingOutputCallRequest>) -> ::grpc::GrpcStreamingResponse<super::messages::StreamingOutputCallResponse>;
+    fn half_duplex_call(&self, o: ::grpc::RequestOptions, p: ::grpc::StreamingRequest<super::messages::StreamingOutputCallRequest>) -> ::grpc::StreamingResponse<super::messages::StreamingOutputCallResponse>;
 }
 
 // client
 
 pub struct TestServiceClient {
-    grpc_client: ::grpc::client::GrpcClient,
+    grpc_client: ::grpc::Client,
     method_EmptyCall: ::std::sync::Arc<::grpc::method::MethodDescriptor<super::empty::Empty, super::empty::Empty>>,
     method_UnaryCall: ::std::sync::Arc<::grpc::method::MethodDescriptor<super::messages::SimpleRequest, super::messages::SimpleResponse>>,
     method_CacheableUnaryCall: ::std::sync::Arc<::grpc::method::MethodDescriptor<super::messages::SimpleRequest, super::messages::SimpleResponse>>,
@@ -51,87 +51,87 @@ pub struct TestServiceClient {
 }
 
 impl TestServiceClient {
-    pub fn with_client(grpc_client: ::grpc::client::GrpcClient) -> Self {
+    pub fn with_client(grpc_client: ::grpc::Client) -> Self {
         TestServiceClient {
             grpc_client: grpc_client,
             method_EmptyCall: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
                 name: "/grpc.testing.TestService/EmptyCall".to_string(),
                 streaming: ::grpc::method::GrpcStreaming::Unary,
-                req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+                req_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
+                resp_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
             }),
             method_UnaryCall: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
                 name: "/grpc.testing.TestService/UnaryCall".to_string(),
                 streaming: ::grpc::method::GrpcStreaming::Unary,
-                req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+                req_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
+                resp_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
             }),
             method_CacheableUnaryCall: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
                 name: "/grpc.testing.TestService/CacheableUnaryCall".to_string(),
                 streaming: ::grpc::method::GrpcStreaming::Unary,
-                req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+                req_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
+                resp_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
             }),
             method_StreamingOutputCall: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
                 name: "/grpc.testing.TestService/StreamingOutputCall".to_string(),
                 streaming: ::grpc::method::GrpcStreaming::ServerStreaming,
-                req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+                req_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
+                resp_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
             }),
             method_StreamingInputCall: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
                 name: "/grpc.testing.TestService/StreamingInputCall".to_string(),
                 streaming: ::grpc::method::GrpcStreaming::ClientStreaming,
-                req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+                req_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
+                resp_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
             }),
             method_FullDuplexCall: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
                 name: "/grpc.testing.TestService/FullDuplexCall".to_string(),
                 streaming: ::grpc::method::GrpcStreaming::Bidi,
-                req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+                req_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
+                resp_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
             }),
             method_HalfDuplexCall: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
                 name: "/grpc.testing.TestService/HalfDuplexCall".to_string(),
                 streaming: ::grpc::method::GrpcStreaming::Bidi,
-                req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+                req_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
+                resp_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
             }),
         }
     }
 
-    pub fn new(host: &str, port: u16, tls: bool, conf: ::grpc::client::GrpcClientConf) -> ::grpc::result::GrpcResult<Self> {
-        ::grpc::client::GrpcClient::new(host, port, tls, conf).map(|c| {
+    pub fn new(host: &str, port: u16, tls: bool, conf: ::grpc::ClientConf) -> ::grpc::Result<Self> {
+        ::grpc::Client::new(host, port, tls, conf).map(|c| {
             TestServiceClient::with_client(c)
         })
     }
 }
 
 impl TestService for TestServiceClient {
-    fn empty_call(&self, o: ::grpc::GrpcRequestOptions, p: super::empty::Empty) -> ::grpc::GrpcSingleResponse<super::empty::Empty> {
+    fn empty_call(&self, o: ::grpc::RequestOptions, p: super::empty::Empty) -> ::grpc::SingleResponse<super::empty::Empty> {
         self.grpc_client.call_unary(o, p, self.method_EmptyCall.clone())
     }
 
-    fn unary_call(&self, o: ::grpc::GrpcRequestOptions, p: super::messages::SimpleRequest) -> ::grpc::GrpcSingleResponse<super::messages::SimpleResponse> {
+    fn unary_call(&self, o: ::grpc::RequestOptions, p: super::messages::SimpleRequest) -> ::grpc::SingleResponse<super::messages::SimpleResponse> {
         self.grpc_client.call_unary(o, p, self.method_UnaryCall.clone())
     }
 
-    fn cacheable_unary_call(&self, o: ::grpc::GrpcRequestOptions, p: super::messages::SimpleRequest) -> ::grpc::GrpcSingleResponse<super::messages::SimpleResponse> {
+    fn cacheable_unary_call(&self, o: ::grpc::RequestOptions, p: super::messages::SimpleRequest) -> ::grpc::SingleResponse<super::messages::SimpleResponse> {
         self.grpc_client.call_unary(o, p, self.method_CacheableUnaryCall.clone())
     }
 
-    fn streaming_output_call(&self, o: ::grpc::GrpcRequestOptions, p: super::messages::StreamingOutputCallRequest) -> ::grpc::GrpcStreamingResponse<super::messages::StreamingOutputCallResponse> {
+    fn streaming_output_call(&self, o: ::grpc::RequestOptions, p: super::messages::StreamingOutputCallRequest) -> ::grpc::StreamingResponse<super::messages::StreamingOutputCallResponse> {
         self.grpc_client.call_server_streaming(o, p, self.method_StreamingOutputCall.clone())
     }
 
-    fn streaming_input_call(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::GrpcStreamingRequest<super::messages::StreamingInputCallRequest>) -> ::grpc::GrpcSingleResponse<super::messages::StreamingInputCallResponse> {
+    fn streaming_input_call(&self, o: ::grpc::RequestOptions, p: ::grpc::StreamingRequest<super::messages::StreamingInputCallRequest>) -> ::grpc::SingleResponse<super::messages::StreamingInputCallResponse> {
         self.grpc_client.call_client_streaming(o, p, self.method_StreamingInputCall.clone())
     }
 
-    fn full_duplex_call(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::GrpcStreamingRequest<super::messages::StreamingOutputCallRequest>) -> ::grpc::GrpcStreamingResponse<super::messages::StreamingOutputCallResponse> {
+    fn full_duplex_call(&self, o: ::grpc::RequestOptions, p: ::grpc::StreamingRequest<super::messages::StreamingOutputCallRequest>) -> ::grpc::StreamingResponse<super::messages::StreamingOutputCallResponse> {
         self.grpc_client.call_bidi(o, p, self.method_FullDuplexCall.clone())
     }
 
-    fn half_duplex_call(&self, o: ::grpc::GrpcRequestOptions, p: ::grpc::GrpcStreamingRequest<super::messages::StreamingOutputCallRequest>) -> ::grpc::GrpcStreamingResponse<super::messages::StreamingOutputCallResponse> {
+    fn half_duplex_call(&self, o: ::grpc::RequestOptions, p: ::grpc::StreamingRequest<super::messages::StreamingOutputCallRequest>) -> ::grpc::StreamingResponse<super::messages::StreamingOutputCallResponse> {
         self.grpc_client.call_bidi(o, p, self.method_HalfDuplexCall.clone())
     }
 }
@@ -139,11 +139,11 @@ impl TestService for TestServiceClient {
 // server
 
 pub struct TestServiceServer {
-    pub grpc_server: ::grpc::server::GrpcServer,
+    pub grpc_server: ::grpc::Server,
 }
 
 impl ::std::ops::Deref for TestServiceServer {
-    type Target = ::grpc::server::GrpcServer;
+    type Target = ::grpc::Server;
 
     fn deref(&self) -> &Self::Target {
         &self.grpc_server
@@ -151,17 +151,17 @@ impl ::std::ops::Deref for TestServiceServer {
 }
 
 impl TestServiceServer {
-    pub fn new<A : ::std::net::ToSocketAddrs, H : TestService + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self {
+    pub fn new<A : ::std::net::ToSocketAddrs, H : TestService + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::ServerConf, h: H) -> Self {
         let service_definition = TestServiceServer::new_service_def(h);
         TestServiceServer {
-            grpc_server: ::grpc::server::GrpcServer::new_plain(addr, conf, service_definition),
+            grpc_server: ::grpc::Server::new_plain(addr, conf, service_definition),
         }
     }
 
-    pub fn new_pool<A : ::std::net::ToSocketAddrs, H : TestService + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H, cpu_pool: ::futures_cpupool::CpuPool) -> Self {
+    pub fn new_pool<A : ::std::net::ToSocketAddrs, H : TestService + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::ServerConf, h: H, cpu_pool: ::futures_cpupool::CpuPool) -> Self {
         let service_definition = TestServiceServer::new_service_def(h);
         TestServiceServer {
-            grpc_server: ::grpc::server::GrpcServer::new_plain_pool(addr, conf, service_definition, cpu_pool),
+            grpc_server: ::grpc::Server::new_plain_pool(addr, conf, service_definition, cpu_pool),
         }
     }
 
@@ -173,8 +173,8 @@ impl TestServiceServer {
                     ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
                         name: "/grpc.testing.TestService/EmptyCall".to_string(),
                         streaming: ::grpc::method::GrpcStreaming::Unary,
-                        req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                        resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+                        req_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
+                        resp_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
                     }),
                     {
                         let handler_copy = handler_arc.clone();
@@ -185,8 +185,8 @@ impl TestServiceServer {
                     ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
                         name: "/grpc.testing.TestService/UnaryCall".to_string(),
                         streaming: ::grpc::method::GrpcStreaming::Unary,
-                        req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                        resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+                        req_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
+                        resp_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
                     }),
                     {
                         let handler_copy = handler_arc.clone();
@@ -197,8 +197,8 @@ impl TestServiceServer {
                     ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
                         name: "/grpc.testing.TestService/CacheableUnaryCall".to_string(),
                         streaming: ::grpc::method::GrpcStreaming::Unary,
-                        req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                        resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+                        req_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
+                        resp_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
                     }),
                     {
                         let handler_copy = handler_arc.clone();
@@ -209,8 +209,8 @@ impl TestServiceServer {
                     ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
                         name: "/grpc.testing.TestService/StreamingOutputCall".to_string(),
                         streaming: ::grpc::method::GrpcStreaming::ServerStreaming,
-                        req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                        resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+                        req_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
+                        resp_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
                     }),
                     {
                         let handler_copy = handler_arc.clone();
@@ -221,8 +221,8 @@ impl TestServiceServer {
                     ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
                         name: "/grpc.testing.TestService/StreamingInputCall".to_string(),
                         streaming: ::grpc::method::GrpcStreaming::ClientStreaming,
-                        req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                        resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+                        req_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
+                        resp_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
                     }),
                     {
                         let handler_copy = handler_arc.clone();
@@ -233,8 +233,8 @@ impl TestServiceServer {
                     ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
                         name: "/grpc.testing.TestService/FullDuplexCall".to_string(),
                         streaming: ::grpc::method::GrpcStreaming::Bidi,
-                        req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                        resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+                        req_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
+                        resp_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
                     }),
                     {
                         let handler_copy = handler_arc.clone();
@@ -245,8 +245,8 @@ impl TestServiceServer {
                     ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
                         name: "/grpc.testing.TestService/HalfDuplexCall".to_string(),
                         streaming: ::grpc::method::GrpcStreaming::Bidi,
-                        req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                        resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+                        req_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
+                        resp_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
                     }),
                     {
                         let handler_copy = handler_arc.clone();
@@ -261,38 +261,38 @@ impl TestServiceServer {
 // interface
 
 pub trait UnimplementedService {
-    fn unimplemented_call(&self, o: ::grpc::GrpcRequestOptions, p: super::empty::Empty) -> ::grpc::GrpcSingleResponse<super::empty::Empty>;
+    fn unimplemented_call(&self, o: ::grpc::RequestOptions, p: super::empty::Empty) -> ::grpc::SingleResponse<super::empty::Empty>;
 }
 
 // client
 
 pub struct UnimplementedServiceClient {
-    grpc_client: ::grpc::client::GrpcClient,
+    grpc_client: ::grpc::Client,
     method_UnimplementedCall: ::std::sync::Arc<::grpc::method::MethodDescriptor<super::empty::Empty, super::empty::Empty>>,
 }
 
 impl UnimplementedServiceClient {
-    pub fn with_client(grpc_client: ::grpc::client::GrpcClient) -> Self {
+    pub fn with_client(grpc_client: ::grpc::Client) -> Self {
         UnimplementedServiceClient {
             grpc_client: grpc_client,
             method_UnimplementedCall: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
                 name: "/grpc.testing.UnimplementedService/UnimplementedCall".to_string(),
                 streaming: ::grpc::method::GrpcStreaming::Unary,
-                req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+                req_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
+                resp_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
             }),
         }
     }
 
-    pub fn new(host: &str, port: u16, tls: bool, conf: ::grpc::client::GrpcClientConf) -> ::grpc::result::GrpcResult<Self> {
-        ::grpc::client::GrpcClient::new(host, port, tls, conf).map(|c| {
+    pub fn new(host: &str, port: u16, tls: bool, conf: ::grpc::ClientConf) -> ::grpc::Result<Self> {
+        ::grpc::Client::new(host, port, tls, conf).map(|c| {
             UnimplementedServiceClient::with_client(c)
         })
     }
 }
 
 impl UnimplementedService for UnimplementedServiceClient {
-    fn unimplemented_call(&self, o: ::grpc::GrpcRequestOptions, p: super::empty::Empty) -> ::grpc::GrpcSingleResponse<super::empty::Empty> {
+    fn unimplemented_call(&self, o: ::grpc::RequestOptions, p: super::empty::Empty) -> ::grpc::SingleResponse<super::empty::Empty> {
         self.grpc_client.call_unary(o, p, self.method_UnimplementedCall.clone())
     }
 }
@@ -300,11 +300,11 @@ impl UnimplementedService for UnimplementedServiceClient {
 // server
 
 pub struct UnimplementedServiceServer {
-    pub grpc_server: ::grpc::server::GrpcServer,
+    pub grpc_server: ::grpc::Server,
 }
 
 impl ::std::ops::Deref for UnimplementedServiceServer {
-    type Target = ::grpc::server::GrpcServer;
+    type Target = ::grpc::Server;
 
     fn deref(&self) -> &Self::Target {
         &self.grpc_server
@@ -312,17 +312,17 @@ impl ::std::ops::Deref for UnimplementedServiceServer {
 }
 
 impl UnimplementedServiceServer {
-    pub fn new<A : ::std::net::ToSocketAddrs, H : UnimplementedService + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self {
+    pub fn new<A : ::std::net::ToSocketAddrs, H : UnimplementedService + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::ServerConf, h: H) -> Self {
         let service_definition = UnimplementedServiceServer::new_service_def(h);
         UnimplementedServiceServer {
-            grpc_server: ::grpc::server::GrpcServer::new_plain(addr, conf, service_definition),
+            grpc_server: ::grpc::Server::new_plain(addr, conf, service_definition),
         }
     }
 
-    pub fn new_pool<A : ::std::net::ToSocketAddrs, H : UnimplementedService + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H, cpu_pool: ::futures_cpupool::CpuPool) -> Self {
+    pub fn new_pool<A : ::std::net::ToSocketAddrs, H : UnimplementedService + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::ServerConf, h: H, cpu_pool: ::futures_cpupool::CpuPool) -> Self {
         let service_definition = UnimplementedServiceServer::new_service_def(h);
         UnimplementedServiceServer {
-            grpc_server: ::grpc::server::GrpcServer::new_plain_pool(addr, conf, service_definition, cpu_pool),
+            grpc_server: ::grpc::Server::new_plain_pool(addr, conf, service_definition, cpu_pool),
         }
     }
 
@@ -334,8 +334,8 @@ impl UnimplementedServiceServer {
                     ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
                         name: "/grpc.testing.UnimplementedService/UnimplementedCall".to_string(),
                         streaming: ::grpc::method::GrpcStreaming::Unary,
-                        req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                        resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+                        req_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
+                        resp_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
                     }),
                     {
                         let handler_copy = handler_arc.clone();
@@ -350,51 +350,51 @@ impl UnimplementedServiceServer {
 // interface
 
 pub trait ReconnectService {
-    fn start(&self, o: ::grpc::GrpcRequestOptions, p: super::messages::ReconnectParams) -> ::grpc::GrpcSingleResponse<super::empty::Empty>;
+    fn start(&self, o: ::grpc::RequestOptions, p: super::messages::ReconnectParams) -> ::grpc::SingleResponse<super::empty::Empty>;
 
-    fn stop(&self, o: ::grpc::GrpcRequestOptions, p: super::empty::Empty) -> ::grpc::GrpcSingleResponse<super::messages::ReconnectInfo>;
+    fn stop(&self, o: ::grpc::RequestOptions, p: super::empty::Empty) -> ::grpc::SingleResponse<super::messages::ReconnectInfo>;
 }
 
 // client
 
 pub struct ReconnectServiceClient {
-    grpc_client: ::grpc::client::GrpcClient,
+    grpc_client: ::grpc::Client,
     method_Start: ::std::sync::Arc<::grpc::method::MethodDescriptor<super::messages::ReconnectParams, super::empty::Empty>>,
     method_Stop: ::std::sync::Arc<::grpc::method::MethodDescriptor<super::empty::Empty, super::messages::ReconnectInfo>>,
 }
 
 impl ReconnectServiceClient {
-    pub fn with_client(grpc_client: ::grpc::client::GrpcClient) -> Self {
+    pub fn with_client(grpc_client: ::grpc::Client) -> Self {
         ReconnectServiceClient {
             grpc_client: grpc_client,
             method_Start: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
                 name: "/grpc.testing.ReconnectService/Start".to_string(),
                 streaming: ::grpc::method::GrpcStreaming::Unary,
-                req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+                req_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
+                resp_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
             }),
             method_Stop: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
                 name: "/grpc.testing.ReconnectService/Stop".to_string(),
                 streaming: ::grpc::method::GrpcStreaming::Unary,
-                req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+                req_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
+                resp_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
             }),
         }
     }
 
-    pub fn new(host: &str, port: u16, tls: bool, conf: ::grpc::client::GrpcClientConf) -> ::grpc::result::GrpcResult<Self> {
-        ::grpc::client::GrpcClient::new(host, port, tls, conf).map(|c| {
+    pub fn new(host: &str, port: u16, tls: bool, conf: ::grpc::ClientConf) -> ::grpc::Result<Self> {
+        ::grpc::Client::new(host, port, tls, conf).map(|c| {
             ReconnectServiceClient::with_client(c)
         })
     }
 }
 
 impl ReconnectService for ReconnectServiceClient {
-    fn start(&self, o: ::grpc::GrpcRequestOptions, p: super::messages::ReconnectParams) -> ::grpc::GrpcSingleResponse<super::empty::Empty> {
+    fn start(&self, o: ::grpc::RequestOptions, p: super::messages::ReconnectParams) -> ::grpc::SingleResponse<super::empty::Empty> {
         self.grpc_client.call_unary(o, p, self.method_Start.clone())
     }
 
-    fn stop(&self, o: ::grpc::GrpcRequestOptions, p: super::empty::Empty) -> ::grpc::GrpcSingleResponse<super::messages::ReconnectInfo> {
+    fn stop(&self, o: ::grpc::RequestOptions, p: super::empty::Empty) -> ::grpc::SingleResponse<super::messages::ReconnectInfo> {
         self.grpc_client.call_unary(o, p, self.method_Stop.clone())
     }
 }
@@ -402,11 +402,11 @@ impl ReconnectService for ReconnectServiceClient {
 // server
 
 pub struct ReconnectServiceServer {
-    pub grpc_server: ::grpc::server::GrpcServer,
+    pub grpc_server: ::grpc::Server,
 }
 
 impl ::std::ops::Deref for ReconnectServiceServer {
-    type Target = ::grpc::server::GrpcServer;
+    type Target = ::grpc::Server;
 
     fn deref(&self) -> &Self::Target {
         &self.grpc_server
@@ -414,17 +414,17 @@ impl ::std::ops::Deref for ReconnectServiceServer {
 }
 
 impl ReconnectServiceServer {
-    pub fn new<A : ::std::net::ToSocketAddrs, H : ReconnectService + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H) -> Self {
+    pub fn new<A : ::std::net::ToSocketAddrs, H : ReconnectService + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::ServerConf, h: H) -> Self {
         let service_definition = ReconnectServiceServer::new_service_def(h);
         ReconnectServiceServer {
-            grpc_server: ::grpc::server::GrpcServer::new_plain(addr, conf, service_definition),
+            grpc_server: ::grpc::Server::new_plain(addr, conf, service_definition),
         }
     }
 
-    pub fn new_pool<A : ::std::net::ToSocketAddrs, H : ReconnectService + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::server::GrpcServerConf, h: H, cpu_pool: ::futures_cpupool::CpuPool) -> Self {
+    pub fn new_pool<A : ::std::net::ToSocketAddrs, H : ReconnectService + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::ServerConf, h: H, cpu_pool: ::futures_cpupool::CpuPool) -> Self {
         let service_definition = ReconnectServiceServer::new_service_def(h);
         ReconnectServiceServer {
-            grpc_server: ::grpc::server::GrpcServer::new_plain_pool(addr, conf, service_definition, cpu_pool),
+            grpc_server: ::grpc::Server::new_plain_pool(addr, conf, service_definition, cpu_pool),
         }
     }
 
@@ -436,8 +436,8 @@ impl ReconnectServiceServer {
                     ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
                         name: "/grpc.testing.ReconnectService/Start".to_string(),
                         streaming: ::grpc::method::GrpcStreaming::Unary,
-                        req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                        resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+                        req_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
+                        resp_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
                     }),
                     {
                         let handler_copy = handler_arc.clone();
@@ -448,8 +448,8 @@ impl ReconnectServiceServer {
                     ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
                         name: "/grpc.testing.ReconnectService/Stop".to_string(),
                         streaming: ::grpc::method::GrpcStreaming::Unary,
-                        req_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
-                        resp_marshaller: Box::new(::grpc::grpc_protobuf::MarshallerProtobuf),
+                        req_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
+                        resp_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
                     }),
                     {
                         let handler_copy = handler_arc.clone();
