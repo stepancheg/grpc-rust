@@ -10,7 +10,7 @@ mod test_misc;
 use std::sync::Arc;
 
 use futures::future::*;
-use futures::stream;
+use futures::Sink;
 use futures::stream::Stream;
 
 use grpc::*;
@@ -172,13 +172,13 @@ impl TesterClientStreaming {
         }
     }
 
-    fn call(&self) -> (stream::Sender<String, GrpcError>, GrpcFutureSend<String>) {
-        let (tx, rx) = stream::channel();
+    fn call(&self) -> (futures::sync::mpsc::Sender<String>, GrpcFutureSend<String>) {
+        let (tx, rx) = futures::sync::mpsc::channel(0);
         (
             tx,
             self.client.call_client_streaming(
                 GrpcRequestOptions::new(),
-                GrpcStreamingRequest::new(rx),
+                GrpcStreamingRequest::new(rx.map_err(|()| unreachable!())),
                 string_string_method(&self.name, GrpcStreaming::ClientStreaming)).drop_metadata(),
         )
     }
@@ -258,9 +258,9 @@ fn client_streaming() {
     });
 
     let (tx, result) = tester.call();
-    let tx = tx.send(Ok("aa".to_owned())).wait().ok().expect("aa");
-    let tx = tx.send(Ok("bb".to_owned())).wait().ok().expect("bb");
-    let tx = tx.send(Ok("cc".to_owned())).wait().ok().expect("cc");
+    let tx = tx.send("aa".to_owned()).wait().ok().expect("aa");
+    let tx = tx.send("bb".to_owned()).wait().ok().expect("bb");
+    let tx = tx.send("cc".to_owned()).wait().ok().expect("cc");
     drop(tx);
 
     assert_eq!("aabbcc", result.wait().unwrap());
