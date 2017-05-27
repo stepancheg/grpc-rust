@@ -13,7 +13,6 @@ use grpc::HEADER_GRPC_MESSAGE;
 
 use httpbis;
 use httpbis::Headers;
-use httpbis::bytesx::bytes_extend_with;
 use httpbis::stream_part::HttpStreamPartContent;
 use httpbis::stream_part::HttpPartStream;
 
@@ -138,7 +137,7 @@ impl Stream for GrpcFrameFromHttpFramesStreamResponse {
                     }
                 },
                 HttpStreamPartContent::Data(data) => {
-                    bytes_extend_with(&mut self.buf, data);
+                    self.buf.extend_from_slice(&data);
                 }
             }
         }
