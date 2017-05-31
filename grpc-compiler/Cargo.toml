@@ -1,6 +1,6 @@
 [package]
 name = "grpc-compiler"
-version = "0.1.7"
+version = "0.1.8"
 description = "gRPC compiler for rust-grpc"
 license = "MIT/Apache-2.0"
 authors = ["Stepan Koltsov <stepan.koltsov@gmail.com>"]
