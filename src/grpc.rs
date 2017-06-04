@@ -95,7 +95,7 @@ pub enum GrpcStatus {
     OutOfRange = 11,
 
     /* Operation is not implemented or not supported/enabled in this service. */
-    Unimplemented1 = 12,
+    Unimplemented = 12,
 
     /* Internal errors.  Means some invariants expected by underlying
        system has been broken.  If you see one of these errors,

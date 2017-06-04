@@ -267,17 +267,28 @@ impl ServerServiceDefinition {
         }
     }
 
-    pub fn find_method(&self, name: &str) -> &ServerMethod {
+    pub fn find_method(&self, name: &str) -> Option<&ServerMethod> {
         self.methods.iter()
             .filter(|m| m.name == name)
             .next()
-            .expect(&format!("unknown method: {}", name))
     }
 
     pub fn handle_method(&self, name: &str, o: RequestOptions, message: StreamingRequest<Vec<u8>>)
         -> StreamingResponse<Vec<u8>>
     {
-        self.find_method(name).dispatch.start_request(o, message)
+        match self.find_method(name) {
+            Some(method) => method.dispatch.start_request(o, message),
+            None => {
+                StreamingResponse::no_metadata(Box::new(stream::once(Err(
+                    Error::GrpcMessage(
+                        GrpcMessageError {
+                            grpc_status: GrpcStatus::Unimplemented as i32,
+                            grpc_message: String::from("Unimplemented method"),
+                        }
+                    )
+                ))))
+            },
+        }
     }
 }
 
