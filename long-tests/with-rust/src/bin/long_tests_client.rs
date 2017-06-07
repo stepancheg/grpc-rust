@@ -49,7 +49,7 @@ fn main() {
         panic!("too few args")
     }
 
-    let client = LongTestsClient::new("localhost", 23432, false, Default::default()).expect("init");
+    let client = LongTestsClient::new_plain("localhost", 23432, Default::default()).expect("init");
 
     let cmd = &args[1];
     let cmd_args = &args[2..];

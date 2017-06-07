@@ -249,7 +249,7 @@ fn main() {
     let hostname = options.value_of("server_host").unwrap_or("localhost");
     let serverport = options.value_of("server_port").map(|s| s.parse().unwrap()).unwrap_or(DEFAULT_PORT);
 
-    let client = TestServiceClient::new(hostname, serverport, false, Default::default())
+    let client = TestServiceClient::new_plain(hostname, serverport, Default::default())
         .expect("init");
 
     let testcase = options.value_of("test_case").unwrap_or("");

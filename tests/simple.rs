@@ -1,6 +1,6 @@
 extern crate futures;
 extern crate tokio_core;
-extern crate tokio_tls;
+extern crate tokio_tls_api;
 extern crate grpc;
 #[macro_use]
 extern crate log;
@@ -87,7 +87,7 @@ impl TesterUnary {
         TesterUnary {
             name: name.to_owned(),
             _server: server,
-            client: Client::new("::1", port, false, Default::default()).unwrap()
+            client: Client::new_plain("::1", port, Default::default()).unwrap()
         }
     }
 
@@ -138,7 +138,7 @@ impl TesterServerStreaming {
         TesterServerStreaming {
             name: name.to_owned(),
             _server: server,
-            client: Client::new("::1", port, false, Default::default()).unwrap()
+            client: Client::new_plain("::1", port, Default::default()).unwrap()
         }
     }
 
@@ -167,7 +167,7 @@ impl TesterClientStreaming {
         TesterClientStreaming {
             name: name.to_owned(),
             _server: server,
-            client: Client::new("::1", port, false, Default::default()).unwrap()
+            client: Client::new_plain("::1", port, Default::default()).unwrap()
         }
     }
 
@@ -193,7 +193,7 @@ fn unary() {
 
 #[test]
 fn server_is_not_running() {
-    let client = Client::new("::1", 2, false, Default::default()).unwrap();
+    let client = Client::new_plain("::1", 2, Default::default()).unwrap();
 
     // TODO: https://github.com/tokio-rs/tokio-core/issues/12
     if false {

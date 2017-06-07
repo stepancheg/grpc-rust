@@ -16,6 +16,9 @@ use httpbis::futures_misc::*;
 use httpbis::HttpPartStream;
 use httpbis::stream_part::HttpStreamPart;
 
+use tls_api;
+use tls_api_stub;
+
 use futures::Future;
 use futures::stream;
 use futures::stream::Stream;
@@ -310,7 +313,8 @@ impl Server {
         service_definition: ServerServiceDefinition)
             -> Server
     {
-        Server::new(addr, httpbis::ServerTlsOption::Plain, conf, service_definition)
+        let plain = httpbis::ServerTlsOption::Plain::<tls_api_stub::TlsAcceptor>;
+        Server::new(addr, plain, conf, service_definition)
     }
 
     /// Without TLS and execute handler in given CpuPool
@@ -321,12 +325,13 @@ impl Server {
         cpu_pool: CpuPool)
             -> Server
     {
-        Server::new_pool(addr, httpbis::ServerTlsOption::Plain, conf, service_definition, cpu_pool)
+        let plain = httpbis::ServerTlsOption::Plain::<tls_api_stub::TlsAcceptor>;
+        Server::new_pool(addr, plain, conf, service_definition, cpu_pool)
     }
 
-    pub fn new<A : ToSocketAddrs>(
+    pub fn new<A : ToSocketAddrs, S : tls_api::TlsAcceptor>(
         addr: A,
-        tls: httpbis::ServerTlsOption,
+        tls: httpbis::ServerTlsOption<S>,
         conf: ServerConf,
         service_definition: ServerServiceDefinition)
             -> Server
@@ -334,9 +339,9 @@ impl Server {
         Server::with_starter(addr, tls, conf, service_definition, CallStarterSync)
     }
 
-    pub fn new_pool<A : ToSocketAddrs>(
+    pub fn new_pool<A : ToSocketAddrs, S : tls_api::TlsAcceptor>(
         addr: A,
-        tls: httpbis::ServerTlsOption,
+        tls: httpbis::ServerTlsOption<S>,
         conf: ServerConf,
         service_definition: ServerServiceDefinition,
         cpu_pool: CpuPool)
@@ -347,9 +352,9 @@ impl Server {
         })
     }
 
-    fn with_starter<A : ToSocketAddrs, S : CallStarter>(
+    fn with_starter<A : ToSocketAddrs, T : tls_api::TlsAcceptor, S : CallStarter>(
         addr: A,
-        tls: httpbis::ServerTlsOption,
+        tls: httpbis::ServerTlsOption<T>,
         conf: ServerConf,
         service_definition: ServerServiceDefinition,
         call_starter: S)
