@@ -231,15 +231,24 @@ impl<'a> ServiceGen<'a> {
 
             w.write_line("");
 
-            let sig = "new(host: &str, port: u16, tls: bool, conf: ::grpc::ClientConf) -> ::grpc::Result<Self>";
+            let sig = "new_plain(host: &str, port: u16, conf: ::grpc::ClientConf) -> ::grpc::Result<Self>";
             w.pub_fn(sig, |w| {
-                w.write_line("::grpc::Client::new(host, port, tls, conf).map(|c| {");
+                w.write_line("::grpc::Client::new_plain(host, port, conf).map(|c| {");
                 w.indented(|w| {
                     w.write_line(&format!("{}::with_client(c)", self.client_name()));
                 });
                 w.write_line("})");
             });
             
+            let sig = "new_tls<C : ::tls_api::TlsConnector>(host: &str, port: u16, conf: ::grpc::ClientConf) -> ::grpc::Result<Self>";
+            w.pub_fn(sig, |w| {
+                w.write_line("::grpc::Client::new_tls::<C>(host, port, conf).map(|c| {");
+                w.indented(|w| {
+                    w.write_line(&format!("{}::with_client(c)", self.client_name()));
+                });
+                w.write_line("})");
+            });
+
         });
 
         w.write_line("");

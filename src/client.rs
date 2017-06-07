@@ -13,6 +13,8 @@ use httpbis::Header;
 use httpbis::Headers;
 use httpbis::HttpPartStream;
 
+use tls_api;
+
 
 use method::MethodDescriptor;
 
@@ -44,25 +46,44 @@ pub struct Client {
 
 impl Client {
     /// Create a client connected to specified host and port.
-    pub fn new(host: &str, port: u16, tls: bool, conf: ClientConf)
+    pub fn new_plain(host: &str, port: u16, conf: ClientConf)
         -> result::Result<Client>
     {
         let mut conf = conf;
         conf.http.thread_name =
             Some(conf.http.thread_name.unwrap_or_else(|| "grpc-client-loop".to_owned()));
 
-        httpbis::Client::new(host, port, tls, conf.http)
+        httpbis::Client::new_plain(host, port, conf.http)
             .map(|client| {
                 Client {
                     client: client,
                     host: host.to_owned(),
-                    http_scheme: if tls { HttpScheme::Https } else { HttpScheme::Http },
+                    http_scheme: HttpScheme::Http,
                 }
             })
             .map_err(Error::from)
     }
 
-    pub fn new_expl(addr: &SocketAddr, host: &str, tls: httpbis::ClientTlsOption, conf: ClientConf)
+    /// Create a client connected to specified host and port.
+    pub fn new_tls<C : tls_api::TlsConnector>(host: &str, port: u16, conf: ClientConf)
+        -> result::Result<Client>
+    {
+        let mut conf = conf;
+        conf.http.thread_name =
+            Some(conf.http.thread_name.unwrap_or_else(|| "grpc-client-loop".to_owned()));
+
+        httpbis::Client::new_tls::<C>(host, port, conf.http)
+            .map(|client| {
+                Client {
+                    client: client,
+                    host: host.to_owned(),
+                    http_scheme: HttpScheme::Https,
+                }
+            })
+            .map_err(Error::from)
+    }
+
+    pub fn new_expl<C : tls_api::TlsConnector>(addr: &SocketAddr, host: &str, tls: httpbis::ClientTlsOption<C>, conf: ClientConf)
         -> result::Result<Client>
     {
         let mut conf = conf;

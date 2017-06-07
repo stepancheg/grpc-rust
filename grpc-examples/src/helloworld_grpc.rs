@@ -45,8 +45,13 @@ impl GreeterClient {
         }
     }
 
-    pub fn new(host: &str, port: u16, tls: bool, conf: ::grpc::ClientConf) -> ::grpc::Result<Self> {
-        ::grpc::Client::new(host, port, tls, conf).map(|c| {
+    pub fn new_plain(host: &str, port: u16, conf: ::grpc::ClientConf) -> ::grpc::Result<Self> {
+        ::grpc::Client::new_plain(host, port, conf).map(|c| {
+            GreeterClient::with_client(c)
+        })
+    }
+    pub fn new_tls<C : ::tls_api::TlsConnector>(host: &str, port: u16, conf: ::grpc::ClientConf) -> ::grpc::Result<Self> {
+        ::grpc::Client::new_tls::<C>(host, port, conf).map(|c| {
             GreeterClient::with_client(c)
         })
     }
