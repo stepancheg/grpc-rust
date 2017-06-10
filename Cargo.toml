@@ -11,12 +11,8 @@ keywords = ["grpc"]
 
 [dependencies]
 log             = "0.*"
-#protobuf       = { path = "../rust-protobuf" }
-#protobuf        = { git = "http://github.com/stepancheg/rust-protobuf" }
 protobuf         = "1.*"
-#futures         = { git = "https://github.com/alexcrichton/futures-rs" }
 futures         = "0.*"
-#futures-cpupool = { git = "https://github.com/alexcrichton/futures-rs" }
 futures-cpupool = "0.*"
 tokio-core      = "0.*"
 tokio-io        = "0.*"
