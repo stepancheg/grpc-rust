@@ -16,6 +16,8 @@ use httpbis::futures_misc::*;
 use httpbis::HttpPartStream;
 use httpbis::stream_part::HttpStreamPart;
 
+use stream_item::ItemOrMetadata;
+
 use tls_api;
 use tls_api_stub;
 
@@ -480,13 +482,11 @@ impl<S : CallStarter> httpbis::Service for GrpcHttpService<S> {
             init_headers.extend(metadata.into_headers());
 
             let s2 = grpc_frames
-                .drop_metadata() // TODO
-                .map(|frame| HttpStreamPart::intermediate_data(Bytes::from(write_grpc_frame_to_vec(&frame))))
-                .then(|result| {
+                .map_items(|frame| HttpStreamPart::intermediate_data(Bytes::from(write_grpc_frame_to_vec(&frame))))
+                .then_items(|result| {
                     match result {
                         Ok(part) => {
-                            let r: Result<_, httpbis::Error> = Ok(part);
-                            r
+                            Ok(part)
                         }
                         Err(e) =>
                             Ok(HttpStreamPart::last_headers(
@@ -510,8 +510,24 @@ impl<S : CallStarter> httpbis::Service for GrpcHttpService<S> {
                             ))
                     }
                 })
+                .0.map(|item| {
+                    match item {
+                        ItemOrMetadata::Item(part) => part,
+                        ItemOrMetadata::TrailingMetadata(trailing_metadata) => {
+                            HttpStreamPart::last_headers( {
+                                let mut trailing = Headers(vec![
+                                    Header::new(HEADER_GRPC_STATUS, "0")
+                                ]);
+                                trailing.extend(trailing_metadata.into_headers());
+                                trailing
+                            })
+                        },
+                    }
+                })
                 .map_err(httpbis::Error::from);
 
+            // If stream contains trailing metadata, it is converted to grpc status 0,
+            // here we add trailing headers after trailing headers are ignored by HTTP server.
             let s3 = stream::once(Ok(HttpStreamPart::last_headers(Headers(vec![
                 Header::new(HEADER_GRPC_STATUS, "0"),
             ]))));
