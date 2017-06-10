@@ -1,3 +1,4 @@
+extern crate bytes;
 extern crate protobuf;
 extern crate grpc;
 extern crate futures;
@@ -9,12 +10,16 @@ use grpc_interop::*;
 
 use std::thread;
 
+use bytes::Bytes;
+
 use futures::stream::Stream;
 use futures::stream;
 use futures::Future;
+use futures::future;
 
 use grpc::futures_grpc::*;
 use grpc::error::*;
+use grpc::metadata::*;
 
 static DICTIONARY: &'static str = "ABCDEFGHIJKLMNOPQRSTUVabcdefghijklmnoqprstuvwxyz0123456789";
 // Note: due to const restrictions, this is calculated by hand.
@@ -32,6 +37,30 @@ fn make_string(size: usize) -> Vec<u8> {
     }
 
     return result;
+}
+
+fn echo_custom_metadata(req_metadata: &Metadata) -> Metadata {
+    static TEST_ECHO_KEY: &'static str = "x-grpc-test-echo-initial";
+    let mut metadata = Metadata::new();
+    if let Some(value) = req_metadata.get(TEST_ECHO_KEY) {
+        metadata.add(
+            MetadataKey::from(TEST_ECHO_KEY),
+            Bytes::from(value)
+        );
+    }
+    metadata
+}
+
+fn echo_custom_trailing(req_metadata: &Metadata) -> Metadata {
+    static TEST_ECHO_TRAILING_KEY: &'static str = "x-grpc-test-echo-trailing-bin";
+    let mut metadata = Metadata::new();
+    if let Some(value) = req_metadata.get(TEST_ECHO_TRAILING_KEY) {
+        metadata.add(
+            MetadataKey::from(TEST_ECHO_TRAILING_KEY),
+            Bytes::from(value)
+        );
+    }
+    metadata
 }
 
 struct TestServerImpl {}
@@ -53,7 +82,12 @@ impl TestService for TestServerImpl {
         payload.set_body(make_string(req.get_response_size() as usize));
         let mut response = SimpleResponse::new();
         response.set_payload(payload);
-        grpc::SingleResponse::completed(response)
+        let return_value = grpc::SingleResponse::metadata_and_future_and_trailing_metadata(
+            echo_custom_metadata(&_o.metadata),
+            future::ok(response),
+            future::ok(echo_custom_trailing(&_o.metadata)),
+        );
+        return return_value;
     }
 
     // TODO: is this needed? I can't find it implemented in grpc-go/interop/client/client.go
@@ -108,7 +142,11 @@ impl TestService for TestServerImpl {
             }));
             ss
         }).flatten();
-        grpc::StreamingResponse::no_metadata(response)
+        grpc::StreamingResponse::metadata_and_stream_and_trailing_metadata(
+            echo_custom_metadata(&_o.metadata),
+            response,
+            future::ok(echo_custom_trailing(&_o.metadata))
+        )
     }
 
     // TODO: implement this if we find an interop client that needs it.

@@ -480,13 +480,11 @@ impl<S : CallStarter> httpbis::Service for GrpcHttpService<S> {
             init_headers.extend(metadata.into_headers());
 
             let s2 = grpc_frames
-                .drop_metadata() // TODO
-                .map(|frame| HttpStreamPart::intermediate_data(Bytes::from(write_grpc_frame_to_vec(&frame))))
-                .then(|result| {
+                .map_items(|frame| HttpStreamPart::intermediate_data(Bytes::from(write_grpc_frame_to_vec(&frame))))
+                .then_items(|result| {
                     match result {
                         Ok(part) => {
-                            let r: Result<_, httpbis::Error> = Ok(part);
-                            r
+                          Ok(part)
                         }
                         Err(e) =>
                             Ok(HttpStreamPart::last_headers(
@@ -509,6 +507,17 @@ impl<S : CallStarter> httpbis::Service for GrpcHttpService<S> {
                                 }
                             ))
                     }
+                })
+                .normalize_metadata(
+                |item| { item },
+                |trailing_metadata| {
+                    HttpStreamPart::last_headers( {
+                        let mut trailing = Headers(vec![
+                            Header::new(HEADER_GRPC_STATUS, "0")
+                        ]);
+                        trailing.extend(trailing_metadata.into_headers());
+                        trailing
+                    })
                 })
                 .map_err(httpbis::Error::from);
 

@@ -42,6 +42,20 @@ impl<T : Send + 'static> GrpcStreamWithTrailingMetadata<T> {
         GrpcStreamWithTrailingMetadata::new(stream.map(ItemOrMetadata::Item))
     }
 
+    /// Stream of items with no trailing metadata
+    pub fn stream_with_trailing<S, F>(stream: S, trailing: F) -> GrpcStreamWithTrailingMetadata<T>
+        where
+            S : Stream<Item=T, Error=Error> + Send + 'static,
+            F : Future<Item=Metadata, Error=Error> + Send + 'static
+    {
+        let stream = stream.map(ItemOrMetadata::Item);
+        GrpcStreamWithTrailingMetadata::new(stream.chain(stream::once(
+            Ok(ItemOrMetadata::TrailingMetadata(
+                trailing.wait().unwrap_or(Metadata::new())
+            ))
+        )))
+    }
+
     /// Single element stream with no trailing metadata
     pub fn once(item: T) -> GrpcStreamWithTrailingMetadata<T> {
         GrpcStreamWithTrailingMetadata::stream(stream::once(Ok(item)))
@@ -115,6 +129,46 @@ impl<T : Send + 'static> GrpcStreamWithTrailingMetadata<T> {
                 }
             }))
         })
+    }
+
+    /// Apply `then` operation to items, preserving trailing metadata
+    pub fn then_items<F>(self, mut f: F) -> GrpcStreamWithTrailingMetadata<T>
+        where
+            T : Send + 'static,
+            F : FnMut(Result<T, Error>) -> Result<T, Error> + Send + 'static,
+    {
+        GrpcStreamWithTrailingMetadata::new(self.0.then( move |result| {
+            match result {
+                Ok(item) => {
+                    match item {
+                        ItemOrMetadata::Item(i) => match f(Ok(i)) {
+                            Ok(returned_item) => Ok(ItemOrMetadata::Item(returned_item)),
+                            Err(e) => Err(e)
+                        },
+                        ItemOrMetadata::TrailingMetadata(m) => Ok(ItemOrMetadata::TrailingMetadata(m)),
+                    }
+                },
+                Err(t) => match f(Err(t)) {
+                    Ok(returned_item) => Ok(ItemOrMetadata::Item(returned_item)),
+                    Err(e) => Err(e)
+                },
+            }
+        }))
+    }
+
+    /// transform Items and trailing metadata into the same type
+    pub fn normalize_metadata<U, F, H>(self, mut f: F, mut h: H) -> GrpcStreamSend<U>
+        where
+            U : Send + 'static,
+            F : FnMut(T) -> U + Send + 'static,
+            H : FnMut(Metadata) -> U + Send + 'static,
+    {
+        Box::new(self.0.map(move |stream| {
+            match stream {
+                ItemOrMetadata::Item(item) => f(item),
+                ItemOrMetadata::TrailingMetadata(trailing) => h(trailing),
+            }
+        }))
     }
 
     /// Return raw futures `Stream` without trailing metadata
