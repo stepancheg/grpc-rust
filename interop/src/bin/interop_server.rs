@@ -82,10 +82,10 @@ impl TestService for TestServerImpl {
         payload.set_body(make_string(req.get_response_size() as usize));
         let mut response = SimpleResponse::new();
         response.set_payload(payload);
-        let return_value = grpc::SingleResponse::metadata_and_future(
+        let return_value = grpc::SingleResponse::metadata_and_future_and_trailing_metadata(
             echo_custom_metadata(&_o.metadata),
             future::ok(response),
-            future::ok(echo_custom_trailing(&_o.metadata)).boxed(),
+            future::ok(echo_custom_trailing(&_o.metadata)),
         );
         return return_value;
     }
@@ -142,10 +142,10 @@ impl TestService for TestServerImpl {
             }));
             ss
         }).flatten();
-        grpc::StreamingResponse::metadata_and_stream(
+        grpc::StreamingResponse::metadata_and_stream_and_trailing_metadata(
             echo_custom_metadata(&_o.metadata),
             response,
-            future::ok(echo_custom_trailing(&_o.metadata)).boxed()
+            future::ok(echo_custom_trailing(&_o.metadata))
         )
     }
 

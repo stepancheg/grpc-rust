@@ -25,7 +25,6 @@ use futures::stream::Stream;
 
 use method::*;
 use error::*;
-//use error::Error;
 use grpc::*;
 use grpc_frame::*;
 use req::*;

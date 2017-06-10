@@ -24,8 +24,19 @@ impl<T : Send + 'static> SingleResponse<T> {
         SingleResponse(Box::new(f))
     }
 
-    pub fn metadata_and_future<F>(metadata: Metadata, result: F, trailing: GrpcFutureSend<Metadata>) -> SingleResponse<T>
+    pub fn metadata_and_future<F>(metadata: Metadata, result: F) -> SingleResponse<T>
         where F : Future<Item=T, Error=error::Error> + Send + 'static
+    {
+        SingleResponse::metadata_and_future_and_trailing_metadata(
+            metadata,
+            result,
+            future::ok(Metadata::new()))
+    }
+
+    pub fn metadata_and_future_and_trailing_metadata<F, M>(metadata: Metadata, result: F, trailing: M) -> SingleResponse<T>
+        where
+            F : Future<Item=T, Error=error::Error> + Send + 'static,
+            M : Future<Item=Metadata, Error=error::Error> + Send + 'static,
     {
         let boxed: GrpcFutureSend<(T, Metadata)> = Box::new((result.map(|r| (
             r,
@@ -34,18 +45,22 @@ impl<T : Send + 'static> SingleResponse<T> {
         SingleResponse::new(future::ok((metadata, boxed)))
     }
 
-    pub fn completed_with_metadata(metadata: Metadata, r: T, trailing:Metadata) -> SingleResponse<T> {
-        SingleResponse::metadata_and_future(metadata, future::ok(r), future::ok(trailing).boxed())
+    pub fn completed_with_metadata_and_trailing_metadata(metadata: Metadata, r: T, trailing:Metadata) -> SingleResponse<T> {
+        SingleResponse::metadata_and_future_and_trailing_metadata(metadata, future::ok(r), future::ok(trailing))
+    }
+
+    pub fn completed_with_metadata(metadata: Metadata, r: T) -> SingleResponse<T> {
+        SingleResponse::completed_with_metadata_and_trailing_metadata(metadata, r, Metadata::new())
     }
 
     pub fn completed(r: T) -> SingleResponse<T> {
-        SingleResponse::completed_with_metadata(Metadata::new(), r, Metadata::new())
+        SingleResponse::completed_with_metadata_and_trailing_metadata(Metadata::new(), r, Metadata::new())
     }
 
     pub fn no_metadata<F>(r: F) -> SingleResponse<T>
         where F : Future<Item=T, Error=error::Error> + Send + 'static
     {
-        SingleResponse::metadata_and_future(Metadata::new(), r, future::ok(Metadata::new()).boxed())
+        SingleResponse::metadata_and_future(Metadata::new(), r)
     }
 
     pub fn err(err: error::Error) -> SingleResponse<T> {
@@ -103,41 +118,66 @@ impl<T : Send + 'static> StreamingResponse<T> {
         StreamingResponse(Box::new(f))
     }
 
-    pub fn metadata_and_stream<S>(metadata: Metadata, result: S, trailing: GrpcFutureSend<Metadata>) -> StreamingResponse<T>
-        where S : Stream<Item=T, Error=error::Error> + Send + 'static
+    pub fn metadata_and_stream_and_trailing_metadata<S, M>(metadata: Metadata, result: S, trailing: M) -> StreamingResponse<T>
+        where
+            S : Stream<Item=T, Error=error::Error> + Send + 'static,
+            M : Future<Item=Metadata, Error=error::Error> + Send + 'static
     {
         let boxed = GrpcStreamWithTrailingMetadata::stream_with_trailing(result, trailing);
+        StreamingResponse::new(future::ok((metadata, boxed)))
+    }
+
+    pub fn metadata_and_stream<S>(metadata: Metadata, result: S) -> StreamingResponse<T>
+        where S : Stream<Item=T, Error=error::Error> + Send + 'static
+    {
+        let boxed = GrpcStreamWithTrailingMetadata::stream(result);
         StreamingResponse::new(future::ok((metadata, boxed)))
     }
 
     pub fn no_metadata<S>(s: S) -> StreamingResponse<T>
         where S : Stream<Item=T, Error=error::Error> + Send + 'static
     {
-        StreamingResponse::metadata_and_stream(Metadata::new(), s, future::ok(Metadata::new()).boxed())
+        StreamingResponse::metadata_and_stream_and_trailing_metadata(Metadata::new(), s, future::ok(Metadata::new()))
     }
 
-    pub fn completed_with_metadata(metadata: Metadata, r: Vec<T>, trailing: Metadata) -> StreamingResponse<T> {
-        StreamingResponse::iter_with_metadata(metadata, r.into_iter(), future::ok(trailing).boxed())
+    pub fn completed_with_metadata_and_trailing_metadata(metadata: Metadata, r: Vec<T>, trailing: Metadata) -> StreamingResponse<T> {
+        StreamingResponse::iter_with_metadata_and_trailing_metadata(metadata, r.into_iter(), future::ok(trailing))
     }
 
-    pub fn iter_with_metadata<I>(metadata: Metadata, iter: I, trailing: GrpcFutureSend<Metadata>) -> StreamingResponse<T>
-        where I: Iterator<Item=T> + Send + 'static
+    pub fn completed_with_metadata(metadata: Metadata, r: Vec<T>) -> StreamingResponse<T> {
+        StreamingResponse::completed_with_metadata_and_trailing_metadata(metadata, r, Metadata::new())
+    }
+
+    pub fn iter_with_metadata_and_trailing_metadata<I, M>(metadata: Metadata, iter: I, trailing: M) -> StreamingResponse<T>
+        where
+            I : Iterator<Item=T> + Send + 'static,
+            M : Future<Item=Metadata, Error=error::Error> + Send + 'static
     {
-        StreamingResponse::metadata_and_stream(
+        StreamingResponse::metadata_and_stream_and_trailing_metadata(
             metadata,
             stream::iter(iter.map(Ok)),
             trailing
         )
     }
 
+    pub fn iter_with_metadata<I>(metadata: Metadata, iter: I) -> StreamingResponse<T>
+        where I : Iterator<Item=T> + Send + 'static,
+    {
+        StreamingResponse::iter_with_metadata_and_trailing_metadata(
+            metadata,
+            iter,
+            future::ok(Metadata::new())
+        )
+    }
+
     pub fn completed(r: Vec<T>) -> StreamingResponse<T> {
-        StreamingResponse::completed_with_metadata(Metadata::new(), r, Metadata::new())
+        StreamingResponse::completed_with_metadata_and_trailing_metadata(Metadata::new(), r, Metadata::new())
     }
 
     pub fn iter<I>(iter: I) -> StreamingResponse<T>
         where I : Iterator<Item=T> + Send + 'static
     {
-        StreamingResponse::iter_with_metadata(Metadata::new(), iter, future::ok(Metadata::new()).boxed())
+        StreamingResponse::iter_with_metadata_and_trailing_metadata(Metadata::new(), iter, future::ok(Metadata::new()))
     }
 
     pub fn empty() -> StreamingResponse<T> {

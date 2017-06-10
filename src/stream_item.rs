@@ -48,8 +48,8 @@ impl<T : Send + 'static> GrpcStreamWithTrailingMetadata<T> {
             S : Stream<Item=T, Error=Error> + Send + 'static,
             F : Future<Item=Metadata, Error=Error> + Send + 'static
     {
-        let stream = GrpcStreamWithTrailingMetadata::new(stream.map(ItemOrMetadata::Item));
-        GrpcStreamWithTrailingMetadata::new(stream.0.chain(stream::once(
+        let stream = stream.map(ItemOrMetadata::Item);
+        GrpcStreamWithTrailingMetadata::new(stream.chain(stream::once(
             Ok(ItemOrMetadata::TrailingMetadata(
                 trailing.wait().unwrap_or(Metadata::new())
             ))
@@ -163,13 +163,12 @@ impl<T : Send + 'static> GrpcStreamWithTrailingMetadata<T> {
             F : FnMut(T) -> U + Send + 'static,
             H : FnMut(Metadata) -> U + Send + 'static,
     {
-        self.0.map(move |stream| {
+        Box::new(self.0.map(move |stream| {
             match stream {
                 ItemOrMetadata::Item(item) => f(item),
                 ItemOrMetadata::TrailingMetadata(trailing) => h(trailing),
             }
-        })
-        .boxed()
+        }))
     }
 
     /// Return raw futures `Stream` without trailing metadata
