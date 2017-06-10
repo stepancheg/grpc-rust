@@ -521,7 +521,11 @@ impl<S : CallStarter> httpbis::Service for GrpcHttpService<S> {
                 })
                 .map_err(httpbis::Error::from);
 
-            let http_parts = HttpPartStream::new(s2);
+            let s3 = stream::once(Ok(HttpStreamPart::last_headers(Headers(vec![
+                Header::new(HEADER_GRPC_STATUS, "0"),
+            ]))));
+
+            let http_parts = HttpPartStream::new(s2.chain(s3));
 
             (init_headers, http_parts)
         }))
