@@ -30,7 +30,9 @@ doctest = false
 members = [
     "grpc-examples",
     "grpc-compiler",
+    "grpc-compiler/test-protoc-plugin",
     "long-tests/with-rust",
     "interop",
+    "protoc-rust-grpc",
 ]
 

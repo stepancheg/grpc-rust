@@ -1,0 +1,10 @@
+[package]
+name = "test-protoc-plugin"
+version = "0.1.0"
+authors = ["Stepan Koltsov <stepan.koltsov@gmail.com>"]
+
+[dependencies]
+tls-api         = "0.*"
+protobuf        = "1.*"
+grpc            = { path = "../.." }
+futures-cpupool = "0.*"

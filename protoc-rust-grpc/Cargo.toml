@@ -1,0 +1,16 @@
+[package]
+name = "protoc-rust-grpc"
+version = "0.1.10"
+authors = ["Stepan Koltsov <stepan.koltsov@gmail.com>"]
+homepage = "https://github.com/stepancheg/rust-protobuf/protoc-rust/"
+repository = "https://github.com/stepancheg/rust-protobuf/protoc-rust/"
+description = """
+protoc --rust-grpc_out=... available as API. protoc needs to be in $PATH, protoc-gen-rust-grpc does not.
+"""
+
+[dependencies]
+protoc        = "1.*"
+protoc-rust   = "1.*"
+protobuf      = "1.*"
+grpc-compiler = { version = "0.1.10", path = "../grpc-compiler" }
+tempdir       = "0.3"

@@ -27,3 +27,5 @@ path = "src/bin/interop_server.rs"
 name = "grpc-rust-interop-client"
 path = "src/bin/interop_client.rs"
 
+[build-dependencies]
+protoc-rust-grpc = { path = "../protoc-rust-grpc" }
