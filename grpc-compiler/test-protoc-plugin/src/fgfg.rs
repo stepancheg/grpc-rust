@@ -22,32 +22,32 @@ use protobuf::Message as Message_imported_for_functions;
 use protobuf::ProtobufEnum as ProtobufEnum_imported_for_functions;
 
 #[derive(PartialEq,Clone,Default)]
-pub struct Empty {
+pub struct FooBar {
     // special fields
     unknown_fields: ::protobuf::UnknownFields,
     cached_size: ::protobuf::CachedSize,
 }
 
 // see codegen.rs for the explanation why impl Sync explicitly
-unsafe impl ::std::marker::Sync for Empty {}
+unsafe impl ::std::marker::Sync for FooBar {}
 
-impl Empty {
-    pub fn new() -> Empty {
+impl FooBar {
+    pub fn new() -> FooBar {
         ::std::default::Default::default()
     }
 
-    pub fn default_instance() -> &'static Empty {
-        static mut instance: ::protobuf::lazy::Lazy<Empty> = ::protobuf::lazy::Lazy {
+    pub fn default_instance() -> &'static FooBar {
+        static mut instance: ::protobuf::lazy::Lazy<FooBar> = ::protobuf::lazy::Lazy {
             lock: ::protobuf::lazy::ONCE_INIT,
-            ptr: 0 as *const Empty,
+            ptr: 0 as *const FooBar,
         };
         unsafe {
-            instance.get(Empty::new)
+            instance.get(FooBar::new)
         }
     }
 }
 
-impl ::protobuf::Message for Empty {
+impl ::protobuf::Message for FooBar {
     fn is_initialized(&self) -> bool {
         true
     }
@@ -105,12 +105,12 @@ impl ::protobuf::Message for Empty {
     }
 }
 
-impl ::protobuf::MessageStatic for Empty {
-    fn new() -> Empty {
-        Empty::new()
+impl ::protobuf::MessageStatic for FooBar {
+    fn new() -> FooBar {
+        FooBar::new()
     }
 
-    fn descriptor_static(_: ::std::option::Option<Empty>) -> &'static ::protobuf::reflect::MessageDescriptor {
+    fn descriptor_static(_: ::std::option::Option<FooBar>) -> &'static ::protobuf::reflect::MessageDescriptor {
         static mut descriptor: ::protobuf::lazy::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::lazy::Lazy {
             lock: ::protobuf::lazy::ONCE_INIT,
             ptr: 0 as *const ::protobuf::reflect::MessageDescriptor,
@@ -118,8 +118,8 @@ impl ::protobuf::MessageStatic for Empty {
         unsafe {
             descriptor.get(|| {
                 let fields = ::std::vec::Vec::new();
-                ::protobuf::reflect::MessageDescriptor::new::<Empty>(
-                    "Empty",
+                ::protobuf::reflect::MessageDescriptor::new::<FooBar>(
+                    "FooBar",
                     fields,
                     file_descriptor_proto()
                 )
@@ -128,26 +128,33 @@ impl ::protobuf::MessageStatic for Empty {
     }
 }
 
-impl ::protobuf::Clear for Empty {
+impl ::protobuf::Clear for FooBar {
     fn clear(&mut self) {
         self.unknown_fields.clear();
     }
 }
 
-impl ::std::fmt::Debug for Empty {
+impl ::std::fmt::Debug for FooBar {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         ::protobuf::text_format::fmt(self, f)
     }
 }
 
-impl ::protobuf::reflect::ProtobufValue for Empty {
+impl ::protobuf::reflect::ProtobufValue for FooBar {
     fn as_ref(&self) -> ::protobuf::reflect::ProtobufValueRef {
         ::protobuf::reflect::ProtobufValueRef::Message(self)
     }
 }
 
 static file_descriptor_proto_data: &'static [u8] = b"\
-    \n\x0bempty.proto\x12\x0cgrpc.testing\"\x07\n\x05Emptyb\x06proto3\
+    \n\nfgfg.proto\"\x08\n\x06FooBar2\x20\n\x03Baz\x12\x19\n\x03qux\x12\x07.\
+    FooBar\x1a\x07.FooBar\"\0Jy\n\x06\x12\x04\0\0\x08\x01\n\x08\n\x01\x0c\
+    \x12\x03\0\0\x12\n\n\n\x02\x04\0\x12\x04\x02\0\x04\x01\n\n\n\x03\x04\0\
+    \x01\x12\x03\x02\x08\x0e\n\n\n\x02\x06\0\x12\x04\x06\0\x08\x01\n\n\n\x03\
+    \x06\0\x01\x12\x03\x06\x08\x0b\n\x0b\n\x04\x06\0\x02\0\x12\x03\x07\x04'\
+    \n\x0c\n\x05\x06\0\x02\0\x01\x12\x03\x07\x08\x0b\n\x0c\n\x05\x06\0\x02\0\
+    \x02\x12\x03\x07\x0c\x12\n\x0c\n\x05\x06\0\x02\0\x03\x12\x03\x07\x1d#b\
+    \x06proto3\
 ";
 
 static mut file_descriptor_proto_lazy: ::protobuf::lazy::Lazy<::protobuf::descriptor::FileDescriptorProto> = ::protobuf::lazy::Lazy {

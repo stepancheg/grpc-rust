@@ -21,8 +21,8 @@ script:
   - ./test.sh
   - ./install-protobuf.sh
   - cargo install protobuf
-  - ./gen-rs.sh
-  - ./build-all.sh
+  - ./grpc-compiler/test-protoc-plugin/gen.sh
+  - cargo check --all
 
 notifications:
   email:
