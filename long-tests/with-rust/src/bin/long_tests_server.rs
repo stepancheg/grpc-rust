@@ -59,7 +59,9 @@ impl LongTests for LongTestsServerImpl {
 fn main() {
     env_logger::init().unwrap();
 
-    let _server = LongTestsServer::new(long_tests::TEST_HOST, Default::default(), LongTestsServerImpl {});
+    let _server = LongTestsServer::new(
+        long_tests::TEST_HOST, Default::default(), LongTestsServerImpl {})
+            .expect("server");
 
     loop {
         thread::park();

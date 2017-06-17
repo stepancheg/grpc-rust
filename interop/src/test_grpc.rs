@@ -156,18 +156,18 @@ impl ::std::ops::Deref for TestServiceServer {
 }
 
 impl TestServiceServer {
-    pub fn new<A : ::std::net::ToSocketAddrs, H : TestService + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::ServerConf, h: H) -> Self {
+    pub fn new<A : ::std::net::ToSocketAddrs, H : TestService + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::ServerConf, h: H) -> ::grpc::Result<Self> {
         let service_definition = TestServiceServer::new_service_def(h);
-        TestServiceServer {
-            grpc_server: ::grpc::Server::new_plain(addr, conf, service_definition),
-        }
+        Ok(TestServiceServer {
+            grpc_server: ::grpc::Server::new_plain(addr, conf, service_definition)?,
+        })
     }
 
-    pub fn new_pool<A : ::std::net::ToSocketAddrs, H : TestService + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::ServerConf, h: H, cpu_pool: ::futures_cpupool::CpuPool) -> Self {
+    pub fn new_pool<A : ::std::net::ToSocketAddrs, H : TestService + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::ServerConf, h: H, cpu_pool: ::futures_cpupool::CpuPool) -> ::grpc::Result<Self> {
         let service_definition = TestServiceServer::new_service_def(h);
-        TestServiceServer {
-            grpc_server: ::grpc::Server::new_plain_pool(addr, conf, service_definition, cpu_pool),
-        }
+        Ok(TestServiceServer {
+            grpc_server: ::grpc::Server::new_plain_pool(addr, conf, service_definition, cpu_pool)?,
+        })
     }
 
     pub fn new_service_def<H : TestService + 'static + Sync + Send + 'static>(handler: H) -> ::grpc::server::ServerServiceDefinition {
@@ -322,18 +322,18 @@ impl ::std::ops::Deref for UnimplementedServiceServer {
 }
 
 impl UnimplementedServiceServer {
-    pub fn new<A : ::std::net::ToSocketAddrs, H : UnimplementedService + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::ServerConf, h: H) -> Self {
+    pub fn new<A : ::std::net::ToSocketAddrs, H : UnimplementedService + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::ServerConf, h: H) -> ::grpc::Result<Self> {
         let service_definition = UnimplementedServiceServer::new_service_def(h);
-        UnimplementedServiceServer {
-            grpc_server: ::grpc::Server::new_plain(addr, conf, service_definition),
-        }
+        Ok(UnimplementedServiceServer {
+            grpc_server: ::grpc::Server::new_plain(addr, conf, service_definition)?,
+        })
     }
 
-    pub fn new_pool<A : ::std::net::ToSocketAddrs, H : UnimplementedService + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::ServerConf, h: H, cpu_pool: ::futures_cpupool::CpuPool) -> Self {
+    pub fn new_pool<A : ::std::net::ToSocketAddrs, H : UnimplementedService + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::ServerConf, h: H, cpu_pool: ::futures_cpupool::CpuPool) -> ::grpc::Result<Self> {
         let service_definition = UnimplementedServiceServer::new_service_def(h);
-        UnimplementedServiceServer {
-            grpc_server: ::grpc::Server::new_plain_pool(addr, conf, service_definition, cpu_pool),
-        }
+        Ok(UnimplementedServiceServer {
+            grpc_server: ::grpc::Server::new_plain_pool(addr, conf, service_definition, cpu_pool)?,
+        })
     }
 
     pub fn new_service_def<H : UnimplementedService + 'static + Sync + Send + 'static>(handler: H) -> ::grpc::server::ServerServiceDefinition {
@@ -429,18 +429,18 @@ impl ::std::ops::Deref for ReconnectServiceServer {
 }
 
 impl ReconnectServiceServer {
-    pub fn new<A : ::std::net::ToSocketAddrs, H : ReconnectService + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::ServerConf, h: H) -> Self {
+    pub fn new<A : ::std::net::ToSocketAddrs, H : ReconnectService + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::ServerConf, h: H) -> ::grpc::Result<Self> {
         let service_definition = ReconnectServiceServer::new_service_def(h);
-        ReconnectServiceServer {
-            grpc_server: ::grpc::Server::new_plain(addr, conf, service_definition),
-        }
+        Ok(ReconnectServiceServer {
+            grpc_server: ::grpc::Server::new_plain(addr, conf, service_definition)?,
+        })
     }
 
-    pub fn new_pool<A : ::std::net::ToSocketAddrs, H : ReconnectService + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::ServerConf, h: H, cpu_pool: ::futures_cpupool::CpuPool) -> Self {
+    pub fn new_pool<A : ::std::net::ToSocketAddrs, H : ReconnectService + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::ServerConf, h: H, cpu_pool: ::futures_cpupool::CpuPool) -> ::grpc::Result<Self> {
         let service_definition = ReconnectServiceServer::new_service_def(h);
-        ReconnectServiceServer {
-            grpc_server: ::grpc::Server::new_plain_pool(addr, conf, service_definition, cpu_pool),
-        }
+        Ok(ReconnectServiceServer {
+            grpc_server: ::grpc::Server::new_plain_pool(addr, conf, service_definition, cpu_pool)?,
+        })
     }
 
     pub fn new_service_def<H : ReconnectService + 'static + Sync + Send + 'static>(handler: H) -> ::grpc::server::ServerServiceDefinition {

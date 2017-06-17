@@ -25,7 +25,8 @@ impl Greeter for GreeterImpl {
 
 fn main() {
     let _server = GreeterServer::new_pool(
-        "[::]:50051", Default::default(), GreeterImpl, CpuPool::new(4));
+        "[::]:50051", Default::default(), GreeterImpl, CpuPool::new(4))
+            .expect("server");
 
     loop {
         thread::park();

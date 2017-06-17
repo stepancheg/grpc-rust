@@ -159,7 +159,9 @@ impl TestService for TestServerImpl {
 fn main() {
     env_logger::init().expect("env_logger::init");
 
-    let _server = TestServiceServer::new(("::", DEFAULT_PORT), Default::default(), TestServerImpl {});
+    let _server = TestServiceServer::new(
+        ("::", DEFAULT_PORT), Default::default(), TestServerImpl {})
+            .expect("server");
 
     loop {
         thread::park();

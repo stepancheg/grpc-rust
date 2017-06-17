@@ -304,26 +304,26 @@ impl<'a> ServiceGen<'a> {
 
         w.impl_self_block(&self.server_name(), |w| {
             let sig = format!(
-                "new<A : ::std::net::ToSocketAddrs, H : {} + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::ServerConf, h: H) -> Self",
+                "new<A : ::std::net::ToSocketAddrs, H : {} + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::ServerConf, h: H) -> ::grpc::Result<Self>",
                 self.intf_name());
             w.pub_fn(&sig, |w| {
                 w.write_line(format!("let service_definition = {}::new_service_def(h);", self.server_name()));
 
-                w.expr_block(&self.server_name(), |w| {
-                    w.field_entry("grpc_server", "::grpc::Server::new_plain(addr, conf, service_definition)");
+                w.block(&format!("Ok({} {{", self.server_name()), "})", |w| {
+                    w.field_entry("grpc_server", "::grpc::Server::new_plain(addr, conf, service_definition)?");
                 });
             });
 
             w.write_line("");
 
             let sig = format!(
-                "new_pool<A : ::std::net::ToSocketAddrs, H : {} + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::ServerConf, h: H, cpu_pool: ::futures_cpupool::CpuPool) -> Self",
+                "new_pool<A : ::std::net::ToSocketAddrs, H : {} + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::ServerConf, h: H, cpu_pool: ::futures_cpupool::CpuPool) -> ::grpc::Result<Self>",
                 self.intf_name());
             w.pub_fn(&sig, |w| {
                 w.write_line(format!("let service_definition = {}::new_service_def(h);", self.server_name()));
 
-                w.expr_block(&self.server_name(), |w| {
-                    w.field_entry("grpc_server", "::grpc::Server::new_plain_pool(addr, conf, service_definition, cpu_pool)");
+                w.block(&format!("Ok({} {{", self.server_name()), "})", |w| {
+                    w.field_entry("grpc_server", "::grpc::Server::new_plain_pool(addr, conf, service_definition, cpu_pool)?");
                 });
             });
 

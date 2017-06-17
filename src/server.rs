@@ -18,6 +18,8 @@ use httpbis::stream_part::HttpStreamPart;
 
 use stream_item::ItemOrMetadata;
 
+use result::Result;
+
 use tls_api;
 use tls_api_stub;
 
@@ -313,10 +315,10 @@ impl Server {
         addr: A,
         conf: ServerConf,
         service_definition: ServerServiceDefinition)
-            -> Server
+            -> Result<Server>
     {
         let plain = httpbis::ServerTlsOption::Plain::<tls_api_stub::TlsAcceptor>;
-        Server::new(addr, plain, conf, service_definition)
+        Server::new_single_thread(addr, plain, conf, service_definition)
     }
 
     /// Without TLS and execute handler in given CpuPool
@@ -325,20 +327,21 @@ impl Server {
         conf: ServerConf,
         service_definition: ServerServiceDefinition,
         cpu_pool: CpuPool)
-            -> Server
+            -> Result<Server>
     {
         let plain = httpbis::ServerTlsOption::Plain::<tls_api_stub::TlsAcceptor>;
         Server::new_pool(addr, plain, conf, service_definition, cpu_pool)
     }
 
-    pub fn new<A : ToSocketAddrs, S : tls_api::TlsAcceptor>(
+    pub fn new_single_thread<A : ToSocketAddrs, S : tls_api::TlsAcceptor>(
         addr: A,
         tls: httpbis::ServerTlsOption<S>,
         conf: ServerConf,
         service_definition: ServerServiceDefinition)
-            -> Server
+            -> Result<Server>
     {
-        Server::with_starter(addr, tls, conf, service_definition, CallStarterSync)
+        Server::with_exec(
+            addr, tls, conf, service_definition, httpbis::CpuPoolOption::SingleThread)
     }
 
     pub fn new_pool<A : ToSocketAddrs, S : tls_api::TlsAcceptor>(
@@ -347,32 +350,31 @@ impl Server {
         conf: ServerConf,
         service_definition: ServerServiceDefinition,
         cpu_pool: CpuPool)
-            -> Server
+            -> Result<Server>
     {
-        Server::with_starter(addr, tls, conf, service_definition, CallStarterCpupool {
-            cpu_pool: cpu_pool,
-        })
+        Server::with_exec(
+            addr, tls, conf, service_definition, httpbis::CpuPoolOption::CpuPool(cpu_pool))
     }
 
-    fn with_starter<A : ToSocketAddrs, T : tls_api::TlsAcceptor, S : CallStarter>(
+    fn with_exec<A : ToSocketAddrs, T : tls_api::TlsAcceptor>(
         addr: A,
         tls: httpbis::ServerTlsOption<T>,
         conf: ServerConf,
         service_definition: ServerServiceDefinition,
-        call_starter: S)
-            -> Server
+        exec: httpbis::CpuPoolOption)
+            -> Result<Server>
     {
         let mut conf = conf;
         conf.http.thread_name =
             Some(conf.http.thread_name.unwrap_or_else(|| "grpc-server-loop".to_owned()));
 
-        let service_definition = Arc::new(service_definition);
-        Server {
-            server: httpbis::Server::new(addr, tls, conf.http, GrpcHttpService {
-                service_definition: service_definition.clone(),
-                call_starter: call_starter,
-            })
-        }
+        let service = GrpcHttpService {
+            service_definition: Arc::new(service_definition),
+        };
+
+        Ok(Server {
+            server: httpbis::Server::new(addr, tls, exec, conf.http, service)?
+        })
     }
 
     pub fn local_addr(&self) -> &SocketAddr {
@@ -384,60 +386,9 @@ impl Server {
     }
 }
 
-/// Utility to start a call
-trait CallStarter : Send + 'static {
-    fn start(
-        &self,
-        service_definition: &Arc<ServerServiceDefinition>,
-        name: &str,
-        o: RequestOptions,
-        message: StreamingRequest<Vec<u8>>)
-        -> StreamingResponse<Vec<u8>>;
-}
-
-/// Start a call in current task
-struct CallStarterSync;
-
-impl CallStarter for CallStarterSync {
-    fn start(
-        &self,
-        service_definition: &Arc<ServerServiceDefinition>,
-        name: &str,
-        o: RequestOptions,
-        message: StreamingRequest<Vec<u8>>)
-        -> StreamingResponse<Vec<u8>>
-    {
-        service_definition.handle_method(name, o, message)
-    }
-}
-
-/// Start a call in cpupool
-struct CallStarterCpupool {
-    cpu_pool: CpuPool,
-}
-
-impl CallStarter for CallStarterCpupool {
-    fn start(
-        &self,
-        service_definition: &Arc<ServerServiceDefinition>,
-        name: &str,
-        o: RequestOptions,
-        message: StreamingRequest<Vec<u8>>)
-        -> StreamingResponse<Vec<u8>>
-    {
-        let service_definition = service_definition.clone();
-        let name = name.to_owned();
-        let f = self.cpu_pool.spawn_fn(move || {
-            service_definition.handle_method(&name, o, message).0
-        });
-        StreamingResponse::new(f)
-    }
-}
-
 /// Implementation of gRPC over http2 HttpService
-struct GrpcHttpService<S : CallStarter> {
+struct GrpcHttpService {
     service_definition: Arc<ServerServiceDefinition>,
-    call_starter: S,
 }
 
 
@@ -451,7 +402,7 @@ fn http_response_500(message: &str) -> httpbis::Response {
     httpbis::Response::headers_and_stream(headers, httpbis::HttpPartStream::empty())
 }
 
-impl<S : CallStarter> httpbis::Service for GrpcHttpService<S> {
+impl httpbis::Service for GrpcHttpService {
     fn start_request(&self, headers: Headers, req: HttpPartStream) -> httpbis::Response {
 
         let path = match headers.get_opt(":path") {
@@ -466,12 +417,10 @@ impl<S : CallStarter> httpbis::Service for GrpcHttpService<S> {
             Err(_) => return http_response_500("decode metadata error"),
         };
 
+        let request_options = RequestOptions { metadata: metadata };
         // TODO: catch unwind
-        let grpc_response = self.call_starter.start(
-            &self.service_definition,
-            &path,
-            RequestOptions { metadata: metadata },
-            StreamingRequest::new(grpc_request));
+        let grpc_response = self.service_definition.handle_method(
+            &path, request_options, StreamingRequest::new(grpc_request));
 
         httpbis::Response::new(grpc_response.0.map_err(httpbis::Error::from).map(|(metadata, grpc_frames)| {
             let mut init_headers = Headers(vec![

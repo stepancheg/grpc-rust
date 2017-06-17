@@ -46,6 +46,7 @@ fn new_server<H>(name: &str, handler: H) -> Server
         handler,
     ));
     Server::new_plain("[::1]:0", Default::default(), ServerServiceDefinition::new(methods))
+        .expect("server")
 }
 
 /// Single unary method server

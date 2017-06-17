@@ -78,18 +78,18 @@ impl ::std::ops::Deref for GreeterServer {
 }
 
 impl GreeterServer {
-    pub fn new<A : ::std::net::ToSocketAddrs, H : Greeter + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::ServerConf, h: H) -> Self {
+    pub fn new<A : ::std::net::ToSocketAddrs, H : Greeter + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::ServerConf, h: H) -> ::grpc::Result<Self> {
         let service_definition = GreeterServer::new_service_def(h);
-        GreeterServer {
-            grpc_server: ::grpc::Server::new_plain(addr, conf, service_definition),
-        }
+        Ok(GreeterServer {
+            grpc_server: ::grpc::Server::new_plain(addr, conf, service_definition)?,
+        })
     }
 
-    pub fn new_pool<A : ::std::net::ToSocketAddrs, H : Greeter + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::ServerConf, h: H, cpu_pool: ::futures_cpupool::CpuPool) -> Self {
+    pub fn new_pool<A : ::std::net::ToSocketAddrs, H : Greeter + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::ServerConf, h: H, cpu_pool: ::futures_cpupool::CpuPool) -> ::grpc::Result<Self> {
         let service_definition = GreeterServer::new_service_def(h);
-        GreeterServer {
-            grpc_server: ::grpc::Server::new_plain_pool(addr, conf, service_definition, cpu_pool),
-        }
+        Ok(GreeterServer {
+            grpc_server: ::grpc::Server::new_plain_pool(addr, conf, service_definition, cpu_pool)?,
+        })
     }
 
     pub fn new_service_def<H : Greeter + 'static + Sync + Send + 'static>(handler: H) -> ::grpc::server::ServerServiceDefinition {

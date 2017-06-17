@@ -24,8 +24,10 @@ fn main() {
     let mut conf = grpc::ServerConf::default();
     conf.http.reuse_port = Some(true);
 
-    let _server1 = GreeterServer::new("[::]:50051", conf.clone(), GreeterImpl);
-    let _server2 = GreeterServer::new("[::]:50051", conf, GreeterImpl);
+    let _server1 = GreeterServer::new("[::]:50051", conf.clone(), GreeterImpl)
+        .expect("server 1");
+    let _server2 = GreeterServer::new("[::]:50051", conf, GreeterImpl)
+        .expect("server 2");
 
     loop {
         thread::park();
