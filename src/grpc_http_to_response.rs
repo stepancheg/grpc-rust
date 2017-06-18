@@ -1,5 +1,6 @@
 ///! Convert HTTP response stream to gRPC stream
 
+use std::collections::VecDeque;
 
 use futures::Async;
 use futures::Poll;
@@ -67,6 +68,7 @@ pub fn http_response_to_grpc_frames(response: httpbis::Response) -> StreamingRes
 struct GrpcFrameFromHttpFramesStreamResponse {
     http_stream_stream: HttpPartStream,
     buf: Bytes,
+    parsed_frames: VecDeque<Bytes>,
     error: Option<stream::Once<ItemOrMetadata<Bytes>, Error>>,
 }
 
@@ -75,6 +77,7 @@ impl GrpcFrameFromHttpFramesStreamResponse {
         GrpcFrameFromHttpFramesStreamResponse {
             http_stream_stream: http_stream_stream,
             buf: Bytes::new(),
+            parsed_frames: VecDeque::new(),
             error: None,
         }
     }
@@ -90,10 +93,15 @@ impl Stream for GrpcFrameFromHttpFramesStreamResponse {
                 return error.poll();
             }
 
-            if let Some(frame_len) = parse_grpc_frame_0(&self.buf)? {
-                let frame = self.buf
-                    .split_to(frame_len + GRPC_HEADER_LEN)
-                    .slice_from(GRPC_HEADER_LEN);
+            self.parsed_frames.extend(match parse_grpc_frames_from_bytes(&mut self.buf) {
+                Ok(r) => r,
+                Err(e) => {
+                    self.error = Some(stream::once(Err(e)));
+                    continue;
+                }
+            });
+
+            if let Some(frame) = self.parsed_frames.pop_front() {
                 return Ok(Async::Ready(Some(ItemOrMetadata::Item(frame))));
             }
 

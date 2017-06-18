@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use bytes::Bytes;
 
 use futures::Async;
@@ -67,6 +69,30 @@ pub fn parse_grpc_frame(stream: &[u8]) -> result::Result<Option<(&[u8], usize)>>
         })
 }
 
+pub fn parse_grpc_frame_from_bytes(stream: &mut Bytes) -> result::Result<Option<Bytes>> {
+    if let Some(len) = parse_grpc_frame_0(&stream)? {
+        let r = stream.slice(GRPC_HEADER_LEN, len + GRPC_HEADER_LEN);
+        stream.split_to(len + GRPC_HEADER_LEN);
+        Ok(Some(r))
+    } else {
+        Ok(None)
+    }
+}
+
+pub fn parse_grpc_frames_from_bytes(stream: &mut Bytes) -> result::Result<Vec<Bytes>> {
+    let mut r = Vec::new();
+    loop {
+        match parse_grpc_frame_from_bytes(stream)? {
+            Some(bytes) => {
+                r.push(bytes);
+            }
+            None => {
+                return Ok(r);
+            }
+        }
+    }
+}
+
 pub fn parse_grpc_frames_completely(stream: &[u8]) -> result::Result<Vec<&[u8]>> {
     let mut r = Vec::new();
     let mut pos = 0;
@@ -113,7 +139,8 @@ trait RequestOrResponse {
 
 pub struct GrpcFrameFromHttpFramesStreamRequest {
     http_stream_stream: HttpPartStream,
-    buf: Vec<u8>,
+    buf: Bytes,
+    parsed_frames: VecDeque<Bytes>,
     error: Option<stream::Once<Bytes, Error>>,
 }
 
@@ -121,7 +148,8 @@ impl GrpcFrameFromHttpFramesStreamRequest {
     pub fn new(http_stream_stream: HttpPartStream) -> Self {
         GrpcFrameFromHttpFramesStreamRequest {
             http_stream_stream: http_stream_stream,
-            buf: Vec::new(),
+            buf: Bytes::new(),
+            parsed_frames: VecDeque::new(),
             error: None,
         }
     }
@@ -138,11 +166,15 @@ impl Stream for GrpcFrameFromHttpFramesStreamRequest {
                 return error.poll();
             }
 
-            if let Some((frame, len)) = parse_grpc_frame(&self.buf)?
-                // TODO: share
-                .map(|(frame, len)| (Bytes::from(frame), len))
-            {
-                self.buf.drain(..len);
+            self.parsed_frames.extend(match parse_grpc_frames_from_bytes(&mut self.buf) {
+                Ok(r) => r,
+                Err(e) => {
+                    self.error = Some(stream::once(Err(e)));
+                    continue;
+                }
+            });
+
+            if let Some(frame) = self.parsed_frames.pop_front() {
                 return Ok(Async::Ready(Some(frame)));
             }
 
@@ -162,7 +194,9 @@ impl Stream for GrpcFrameFromHttpFramesStreamRequest {
             match part.content {
                 // unexpected but OK
                 HttpStreamPartContent::Headers(..) => (),
-                HttpStreamPartContent::Data(data) => self.buf.extend(data),
+                HttpStreamPartContent::Data(data) => {
+                    self.buf.extend_from_slice(&data);
+                },
             }
         }
     }
@@ -175,7 +209,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_parse_frame() {
+    fn test_parse_grpc_frame() {
         assert_eq!(None, parse_grpc_frame(b"").unwrap());
         assert_eq!(None, parse_grpc_frame(b"1").unwrap());
         assert_eq!(None, parse_grpc_frame(b"14sc").unwrap());
@@ -185,5 +219,28 @@ mod test {
         assert_eq!(
             Some((&b"\x0a\x05world"[..], 12)),
             parse_grpc_frame(b"\x00\x00\x00\x00\x07\x0a\x05world").unwrap());
+    }
+
+    #[test]
+    fn test_parse_grpc_frames_from_bytes() {
+        fn t(r: &[&[u8]], input: &[u8], trail: &[u8]) {
+            let mut b = Bytes::new();
+            b.extend_from_slice(input);
+            b.extend_from_slice(trail);
+
+            let r: Vec<Bytes> = r.into_iter().map(|&s| Bytes::from(s)).collect();
+
+            let rr = parse_grpc_frames_from_bytes(&mut b).unwrap();
+            assert_eq!(r, rr);
+            assert_eq!(trail, b.as_ref());
+        }
+
+        t(&[], &[], &[]);
+        t(&[], &[], &b"1"[..]);
+        t(&[], &[], &b"14sc"[..]);
+        t(&[&b"\x0a\x05world"[..]], &b"\x00\x00\x00\x00\x07\x0a\x05world"[..], &[]);
+        t(
+            &[&b"ab"[..], &b"cde"[..]],
+            &b"\0\x00\x00\x00\x02ab\0\x00\x00\x00\x03cde"[..], &b"\x00"[..]);
     }
 }
