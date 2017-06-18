@@ -1,3 +1,5 @@
+use bytes::Bytes;
+
 use futures::Async;
 use futures::Poll;
 use futures::stream;
@@ -112,7 +114,7 @@ trait RequestOrResponse {
 pub struct GrpcFrameFromHttpFramesStreamRequest {
     http_stream_stream: HttpPartStream,
     buf: Vec<u8>,
-    error: Option<stream::Once<Vec<u8>, Error>>,
+    error: Option<stream::Once<Bytes, Error>>,
 }
 
 impl GrpcFrameFromHttpFramesStreamRequest {
@@ -127,7 +129,7 @@ impl GrpcFrameFromHttpFramesStreamRequest {
 
 
 impl Stream for GrpcFrameFromHttpFramesStreamRequest {
-    type Item = Vec<u8>;
+    type Item = Bytes;
     type Error = Error;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
@@ -136,7 +138,10 @@ impl Stream for GrpcFrameFromHttpFramesStreamRequest {
                 return error.poll();
             }
 
-            if let Some((frame, len)) = parse_grpc_frame(&self.buf)?.map(|(frame, len)| (frame.to_owned(), len)) {
+            if let Some((frame, len)) = parse_grpc_frame(&self.buf)?
+                // TODO: share
+                .map(|(frame, len)| (Bytes::from(frame), len))
+            {
                 self.buf.drain(..len);
                 return Ok(Async::Ready(Some(frame)));
             }

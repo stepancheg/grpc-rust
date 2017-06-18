@@ -196,7 +196,7 @@ impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerBidi<F>
 
 
 trait MethodHandlerDispatch {
-    fn start_request(&self, m: RequestOptions, grpc_frames: StreamingRequest<Vec<u8>>)
+    fn start_request(&self, m: RequestOptions, grpc_frames: StreamingRequest<Bytes>)
                      -> StreamingResponse<Vec<u8>>;
 }
 
@@ -210,11 +210,11 @@ impl<Req, Resp> MethodHandlerDispatch for MethodHandlerDispatchImpl<Req, Resp>
         Req : Send + 'static,
         Resp : Send + 'static,
 {
-    fn start_request(&self, o: RequestOptions, req_grpc_frames: StreamingRequest<Vec<u8>>)
+    fn start_request(&self, o: RequestOptions, req_grpc_frames: StreamingRequest<Bytes>)
                      -> StreamingResponse<Vec<u8>>
     {
         let desc = self.desc.clone();
-        let req = req_grpc_frames.0.and_then(move |frame| desc.req_marshaller.read(&frame));
+        let req = req_grpc_frames.0.and_then(move |frame| desc.req_marshaller.read(frame));
         let resp =
             catch_unwind(AssertUnwindSafe(|| self.method_handler.handle(o, StreamingRequest::new(req))));
         match resp {
@@ -280,7 +280,7 @@ impl ServerServiceDefinition {
             .next()
     }
 
-    pub fn handle_method(&self, name: &str, o: RequestOptions, message: StreamingRequest<Vec<u8>>)
+    pub fn handle_method(&self, name: &str, o: RequestOptions, message: StreamingRequest<Bytes>)
         -> StreamingResponse<Vec<u8>>
     {
         match self.find_method(name) {

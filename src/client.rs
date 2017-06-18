@@ -159,7 +159,7 @@ impl Client {
 
         let grpc_frames = http_response_to_grpc_frames(http_response_stream);
 
-        grpc_frames.and_then_items(move |frame| method.resp_marshaller.read(&frame))
+        grpc_frames.and_then_items(move |frame| method.resp_marshaller.read(frame))
     }
 
     pub fn call_unary<Req, Resp>(&self, o: RequestOptions, req: Req, method: Arc<MethodDescriptor<Req, Resp>>)
