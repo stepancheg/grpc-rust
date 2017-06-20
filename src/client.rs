@@ -39,7 +39,7 @@ pub struct ClientConf {
 /// gRPC client implementation.
 /// Used by generated code.
 pub struct Client {
-    client: httpbis::Client,
+    client: ::std::sync::Arc<httpbis::Client>,
     host: String,
     http_scheme: HttpScheme,
 }
@@ -56,12 +56,23 @@ impl Client {
         httpbis::Client::new_plain(host, port, conf.http)
             .map(|client| {
                 Client {
-                    client: client,
+                    client: ::std::sync::Arc::new(client),
                     host: host.to_owned(),
                     http_scheme: HttpScheme::Http,
                 }
             })
             .map_err(Error::from)
+    }
+
+    /// Create a clone of this client but refer to same httpbis::Client.
+    pub fn clone(&self)
+        -> Client
+    {
+        Client {
+            client: self.client.clone(),
+            host: self.host.to_owned(),
+            http_scheme: HttpScheme::Http,
+        }
     }
 
     /// Create a client connected to specified host and port.
@@ -75,7 +86,7 @@ impl Client {
         httpbis::Client::new_tls::<C>(host, port, conf.http)
             .map(|client| {
                 Client {
-                    client: client,
+                    client: ::std::sync::Arc::new(client),
                     host: host.to_owned(),
                     http_scheme: HttpScheme::Https,
                 }
@@ -95,7 +106,7 @@ impl Client {
         httpbis::Client::new_expl(addr, tls, conf.http)
             .map(|client| {
                 Client {
-                    client: client,
+                    client: ::std::sync::Arc::new(client),
                     host: host.to_owned(),
                     http_scheme: http_scheme,
                 }
