@@ -35,9 +35,24 @@ $ greeter_client rust
 
 Client and server are implemented asynchronously.
 
-## How to use gRPC compiler
+## How to generate rust code
 
-### Build & install Rust protobuf and gRPC compiler:
+There are several ways to generate rust code from .proto files
+
+### Invoke protoc programmatically with protoc-rust crate
+
+(Recommended)
+
+Have a look at readme in
+[protoc-rust-grpc crate](https://github.com/stepancheg/grpc-rust/tree/master/protoc-rust-grpc).
+
+### Invoke protoc programmatically with protoc crate
+
+Have a look at readme in [protoc crate](https://github.com/stepancheg/rust-protobuf/tree/master/protoc).
+
+### With `protoc` command and `protoc-gen-rust-grpc` plugin
+
+#### Install compiler plugin
 
 ```bash
 cargo install protobuf
@@ -47,7 +62,7 @@ cargo install grpc-compiler
 These commands install `protoc-gen-rust` and `protoc-gen-rust-grpc`
 to `~/.cargo/bin`, which should be added to `$PATH`.
 
-### Compile your proto & gRPC to Rust:
+#### Compile your proto & gRPC to Rust:
 
 ```bash
 cd $YOURPROJECT
@@ -80,16 +95,8 @@ pub mod myproto;
 pub mod myproto_grpc;
 ```
 
-### Compiling protos manually is silly. Can Cargo do all of above for me?
-
-It seems possible, but looks like it requires some more work.
-
-See https://github.com/stepancheg/rust-protobuf/issues/57 and
-https://github.com/dwrensha/capnpc-rust for more details.
-
 ## TODO
 
-* Implement flow control. See issue #35
 * Fix performance
 * More tests
 * In particular, add more compatibility tests, they live in `interop` directory
