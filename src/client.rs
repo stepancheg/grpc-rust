@@ -190,3 +190,8 @@ impl Client {
         self.call_impl(o, req, method)
     }
 }
+
+fn _assert_types() {
+    ::assert_types::assert_send::<Client>();
+    ::assert_types::assert_sync::<Client>();
+}

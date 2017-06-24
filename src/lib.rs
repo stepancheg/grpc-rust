@@ -18,6 +18,8 @@ extern crate httpbis;
 pub mod client;
 pub mod server;
 
+mod assert_types;
+
 mod grpc;
 mod grpc_frame;
 mod grpc_http_to_response;
