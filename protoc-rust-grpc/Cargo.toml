@@ -1,9 +1,10 @@
 [package]
 name = "protoc-rust-grpc"
-version = "0.1.10"
+version = "0.1.11"
 authors = ["Stepan Koltsov <stepan.koltsov@gmail.com>"]
 homepage = "https://github.com/stepancheg/rust-protobuf/protoc-rust/"
 repository = "https://github.com/stepancheg/rust-protobuf/protoc-rust/"
+license = "MIT/Apache-2.0"
 description = """
 protoc --rust-grpc_out=... available as API. protoc needs to be in $PATH, protoc-gen-rust-grpc does not.
 """
