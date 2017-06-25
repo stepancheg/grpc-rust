@@ -101,3 +101,11 @@ pub mod myproto_grpc;
 * More tests
 * In particular, add more compatibility tests, they live in `interop` directory
 * Fix all TODO in sources
+
+## Related projects
+
+* [grpc-rs](https://github.com/pingcap/grpc-rs) — alternative implementation of gRPC in Rust,
+  a wrapper to C++ implementation
+* [httpbis](https://github.com/stepancheg/rust-http2) — implementation of HTTP/2,
+  which is used by this implementation of gRPC
+* [rust-protobuf](https://github.com/stepancheg/rust-protobuf/) — implementation of Google Protocol Buffers
