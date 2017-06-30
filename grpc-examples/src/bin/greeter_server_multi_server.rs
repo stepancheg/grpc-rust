@@ -2,6 +2,7 @@ extern crate futures;
 
 extern crate grpc_examples;
 extern crate grpc;
+extern crate httpbis;
 
 use std::thread;
 
@@ -21,13 +22,21 @@ impl Greeter for GreeterImpl {
 }
 
 fn main() {
-    let mut conf = grpc::ServerConf::default();
-    conf.http.reuse_port = Some(true);
+    
+    let mut conf = httpbis::ServerConf::default();
+    conf.reuse_port = Some(true);
 
-    let _server1 = GreeterServer::new("[::]:50051", conf.clone(), GreeterImpl)
-        .expect("server 1");
-    let _server2 = GreeterServer::new("[::]:50051", conf, GreeterImpl)
-        .expect("server 2");
+    let mut server1 = grpc::ServerBuilder::new_plain();
+    server1.http.conf = conf.clone();
+    server1.http.set_port(50051);
+    server1.set_service(GreeterServer::new_service_def(GreeterImpl));
+    let _server1 = server1.build().expect("server 1");
+
+    let mut server2 = grpc::ServerBuilder::new_plain();
+    server2.http.conf = conf.clone();
+    server2.http.set_port(50051);
+    server2.set_service(GreeterServer::new_service_def(GreeterImpl));
+    let _server2 = server2.build().expect("server 1");
 
     loop {
         thread::park();

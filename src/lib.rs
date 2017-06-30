@@ -49,6 +49,7 @@ pub use client::Client;
 pub use client::ClientConf;
 
 pub use server::Server;
+pub use server::ServerBuilder;
 pub use server::ServerConf;
 
 pub use resp::SingleResponse;

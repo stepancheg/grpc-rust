@@ -255,7 +255,7 @@ impl ServerMethod {
 }
 
 pub struct ServerServiceDefinition {
-    methods: Vec<ServerMethod>,
+    pub methods: Vec<ServerMethod>,
 }
 
 impl ServerServiceDefinition {
@@ -301,7 +301,47 @@ impl ServerServiceDefinition {
 
 #[derive(Default, Debug, Clone)]
 pub struct ServerConf {
-    pub http: httpbis::ServerConf,
+}
+
+impl ServerConf {
+    pub fn new() -> ServerConf {
+        Default::default()
+    }
+}
+
+pub struct ServerBuilder<A : tls_api::TlsAcceptor = tls_api_stub::TlsAcceptor> {
+    pub http: httpbis::ServerBuilder<A>,
+    pub conf: ServerConf,
+}
+
+impl ServerBuilder<tls_api_stub::TlsAcceptor> {
+    pub fn new_plain() -> ServerBuilder {
+        ServerBuilder::new()
+    }
+}
+
+impl<A : tls_api::TlsAcceptor> ServerBuilder<A> {
+    pub fn new() -> ServerBuilder<A> {
+        ServerBuilder {
+            http: httpbis::ServerBuilder::new(),
+            conf: ServerConf::new(),
+        }
+    }
+
+    pub fn set_service(&mut self, def: ServerServiceDefinition) {
+        self.http.service.add_service("/", Arc::new(GrpcHttpService {
+            service_definition: Arc::new(def),
+        }));
+    }
+
+    pub fn build(mut self) -> Result<Server> {
+        self.http.conf.thread_name =
+            Some(self.http.conf.thread_name.unwrap_or_else(|| "grpc-server-loop".to_owned()));
+
+        Ok(Server {
+            server: self.http.build()?,
+        })
+    }
 }
 
 
@@ -314,67 +354,62 @@ impl Server {
     pub fn new_plain<A : ToSocketAddrs>(
         addr: A,
         conf: ServerConf,
-        service_definition: ServerServiceDefinition)
+        def: ServerServiceDefinition)
             -> Result<Server>
     {
-        let plain = httpbis::ServerTlsOption::Plain::<tls_api_stub::TlsAcceptor>;
-        Server::new_single_thread(addr, plain, conf, service_definition)
+        let mut server = ServerBuilder::new_plain();
+        server.conf = conf;
+        server.http.set_addr(addr)?;
+        server.set_service(def);
+        server.build()
     }
 
     /// Without TLS and execute handler in given CpuPool
     pub fn new_plain_pool<A : ToSocketAddrs>(
         addr: A,
         conf: ServerConf,
-        service_definition: ServerServiceDefinition,
+        def: ServerServiceDefinition,
         cpu_pool: CpuPool)
             -> Result<Server>
     {
-        let plain = httpbis::ServerTlsOption::Plain::<tls_api_stub::TlsAcceptor>;
-        Server::new_pool(addr, plain, conf, service_definition, cpu_pool)
+        let mut server = ServerBuilder::new_plain();
+        server.conf = conf;
+        server.http.set_addr(addr)?;
+        server.set_service(def);
+        server.http.cpu_pool = httpbis::CpuPoolOption::CpuPool(cpu_pool);
+        server.build()
     }
 
     pub fn new_single_thread<A : ToSocketAddrs, S : tls_api::TlsAcceptor>(
         addr: A,
         tls: httpbis::ServerTlsOption<S>,
         conf: ServerConf,
-        service_definition: ServerServiceDefinition)
+        def: ServerServiceDefinition)
             -> Result<Server>
     {
-        Server::with_exec(
-            addr, tls, conf, service_definition, httpbis::CpuPoolOption::SingleThread)
+        let mut server = ServerBuilder::new();
+        server.conf = conf;
+        server.http.set_addr(addr)?;
+        server.http.tls = tls;
+        server.set_service(def);
+        server.build()
     }
 
     pub fn new_pool<A : ToSocketAddrs, S : tls_api::TlsAcceptor>(
         addr: A,
         tls: httpbis::ServerTlsOption<S>,
         conf: ServerConf,
-        service_definition: ServerServiceDefinition,
+        def: ServerServiceDefinition,
         cpu_pool: CpuPool)
             -> Result<Server>
     {
-        Server::with_exec(
-            addr, tls, conf, service_definition, httpbis::CpuPoolOption::CpuPool(cpu_pool))
-    }
-
-    fn with_exec<A : ToSocketAddrs, T : tls_api::TlsAcceptor>(
-        addr: A,
-        tls: httpbis::ServerTlsOption<T>,
-        conf: ServerConf,
-        service_definition: ServerServiceDefinition,
-        exec: httpbis::CpuPoolOption)
-            -> Result<Server>
-    {
-        let mut conf = conf;
-        conf.http.thread_name =
-            Some(conf.http.thread_name.unwrap_or_else(|| "grpc-server-loop".to_owned()));
-
-        let service = GrpcHttpService {
-            service_definition: Arc::new(service_definition),
-        };
-
-        Ok(Server {
-            server: httpbis::Server::new(addr, tls, exec, conf.http, service)?
-        })
+        let mut server = ServerBuilder::new();
+        server.conf = conf;
+        server.http.set_addr(addr)?;
+        server.http.cpu_pool = httpbis::CpuPoolOption::CpuPool(cpu_pool);
+        server.http.tls = tls;
+        server.set_service(def);
+        server.build()
     }
 
     pub fn local_addr(&self) -> &SocketAddr {
