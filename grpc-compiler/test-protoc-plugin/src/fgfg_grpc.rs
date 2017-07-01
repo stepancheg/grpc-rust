@@ -94,7 +94,7 @@ impl BazServer {
 
     pub fn new_service_def<H : Baz + 'static + Sync + Send + 'static>(handler: H) -> ::grpc::server::ServerServiceDefinition {
         let handler_arc = ::std::sync::Arc::new(handler);
-        ::grpc::server::ServerServiceDefinition::new(
+        ::grpc::server::ServerServiceDefinition::new("/Baz",
             vec![
                 ::grpc::server::ServerMethod::new(
                     ::std::sync::Arc::new(::grpc::method::MethodDescriptor {

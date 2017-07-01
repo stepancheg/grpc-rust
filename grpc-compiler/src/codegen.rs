@@ -146,7 +146,7 @@ struct ServiceGen<'a> {
     proto: &'a ServiceDescriptorProto,
     _root_scope: &'a RootScope<'a>,
     methods: Vec<MethodGen<'a>>,
-    _service_path: String,
+    service_path: String,
     _package: String,
 }
 
@@ -166,7 +166,7 @@ impl<'a> ServiceGen<'a> {
             proto: proto,
             _root_scope: root_scope,
             methods: methods,
-            _service_path: service_path,
+            service_path: service_path,
             _package: file.get_package().to_string(),
         }
     }
@@ -266,7 +266,8 @@ impl<'a> ServiceGen<'a> {
 
     fn write_service_definition(&self, before: &str, after: &str, handler: &str, w: &mut CodeWriter) {
         w.block(
-            &format!("{}::grpc::server::ServerServiceDefinition::new(", before),
+            &format!("{}::grpc::server::ServerServiceDefinition::new(\"{}\",",
+                before, self.service_path),
             &format!("){}", after),
             |w| {
                 w.block("vec![", "],", |w| {

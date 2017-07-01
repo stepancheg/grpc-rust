@@ -31,13 +31,13 @@ fn main() {
     let mut server1 = grpc::ServerBuilder::new_plain();
     server1.http.conf = conf.clone();
     server1.http.set_port(50051);
-    server1.set_service(GreeterServer::new_service_def(GreeterImpl { instance: 1 }));
+    server1.add_service(GreeterServer::new_service_def(GreeterImpl { instance: 1 }));
     let _server1 = server1.build().expect("server 1");
 
     let mut server2 = grpc::ServerBuilder::new_plain();
     server2.http.conf = conf.clone();
     server2.http.set_port(50051);
-    server2.set_service(GreeterServer::new_service_def(GreeterImpl { instance: 2 }));
+    server2.add_service(GreeterServer::new_service_def(GreeterImpl { instance: 2 }));
     let _server2 = server2.build().expect("server 1");
 
     loop {

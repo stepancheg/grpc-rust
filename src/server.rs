@@ -255,22 +255,15 @@ impl ServerMethod {
 }
 
 pub struct ServerServiceDefinition {
+    pub prefix: String,
     pub methods: Vec<ServerMethod>,
 }
 
 impl ServerServiceDefinition {
-    pub fn new(methods: Vec<ServerMethod>) -> ServerServiceDefinition {
+    pub fn new(prefix: &str, methods: Vec<ServerMethod>) -> ServerServiceDefinition {
         ServerServiceDefinition {
+            prefix: prefix.to_owned(),
             methods: methods,
-        }
-    }
-
-    /// Join multiple service definitions into one
-    pub fn join<I>(iter: I) -> ServerServiceDefinition
-        where I : IntoIterator<Item=ServerServiceDefinition>
-    {
-        ServerServiceDefinition {
-            methods: iter.into_iter().flat_map(|s| s.methods).collect()
         }
     }
 
@@ -328,8 +321,8 @@ impl<A : tls_api::TlsAcceptor> ServerBuilder<A> {
         }
     }
 
-    pub fn set_service(&mut self, def: ServerServiceDefinition) {
-        self.http.service.add_service("/", Arc::new(GrpcHttpService {
+    pub fn add_service(&mut self, def: ServerServiceDefinition) {
+        self.http.service.set_service(&def.prefix.clone(), Arc::new(GrpcHttpService {
             service_definition: Arc::new(def),
         }));
     }
@@ -360,7 +353,7 @@ impl Server {
         let mut server = ServerBuilder::new_plain();
         server.conf = conf;
         server.http.set_addr(addr)?;
-        server.set_service(def);
+        server.add_service(def);
         server.build()
     }
 
@@ -375,7 +368,7 @@ impl Server {
         let mut server = ServerBuilder::new_plain();
         server.conf = conf;
         server.http.set_addr(addr)?;
-        server.set_service(def);
+        server.add_service(def);
         server.http.cpu_pool = httpbis::CpuPoolOption::CpuPool(cpu_pool);
         server.build()
     }
@@ -391,7 +384,7 @@ impl Server {
         server.conf = conf;
         server.http.set_addr(addr)?;
         server.http.tls = tls;
-        server.set_service(def);
+        server.add_service(def);
         server.build()
     }
 
@@ -408,7 +401,7 @@ impl Server {
         server.http.set_addr(addr)?;
         server.http.cpu_pool = httpbis::CpuPoolOption::CpuPool(cpu_pool);
         server.http.tls = tls;
-        server.set_service(def);
+        server.add_service(def);
         server.build()
     }
 

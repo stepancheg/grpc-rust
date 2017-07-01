@@ -35,39 +35,42 @@ fn string_string_method(name: &str, streaming: GrpcStreaming)
 }
 
 /// Single method server on random port
-fn new_server<H>(name: &str, handler: H) -> Server
+fn new_server<H>(service: &str, method: &str, handler: H) -> Server
     where
         H : MethodHandler<String, String> + 'static + Sync + Send,
         H : GrpcStreamingFlavor,
 {
     let mut methods = Vec::new();
     methods.push(ServerMethod::new(
-        string_string_method(name, <H as GrpcStreamingFlavor>::streaming()),
+        string_string_method(
+            &format!("{}{}", service, method),
+            <H as GrpcStreamingFlavor>::streaming()),
         handler,
     ));
-    Server::new_plain("[::1]:0", Default::default(), ServerServiceDefinition::new(methods))
-        .expect("server")
+    Server::new_plain(
+        "[::1]:0", Default::default(), ServerServiceDefinition::new(service, methods))
+            .expect("server")
 }
 
 /// Single unary method server
-fn new_server_unary<H>(name: &str, handler: H) -> Server
+fn new_server_unary<H>(service: &str, method: &str, handler: H) -> Server
     where H : Fn(RequestOptions, String) -> SingleResponse<String> + Sync + Send + 'static
 {
-    new_server(name, MethodHandlerUnary::new(handler))
+    new_server(service, method, MethodHandlerUnary::new(handler))
 }
 
 /// Single server streaming method server
-fn new_server_server_streaming<H>(name: &str, handler: H) -> Server
+fn new_server_server_streaming<H>(service: &str, method: &str, handler: H) -> Server
     where H : Fn(RequestOptions, String) -> StreamingResponse<String> + Sync + Send + 'static
 {
-    new_server(name, MethodHandlerServerStreaming::new(handler))
+    new_server(service, method, MethodHandlerServerStreaming::new(handler))
 }
 
 /// Single server streaming method server
-fn new_server_client_streaming<H>(name: &str, handler: H) -> Server
+fn new_server_client_streaming<H>(service: &str, method: &str, handler: H) -> Server
     where H : Fn(RequestOptions, StreamingRequest<String>) -> SingleResponse<String> + Sync + Send + 'static
 {
-    new_server(name, MethodHandlerClientStreaming::new(handler))
+    new_server(service, method, MethodHandlerClientStreaming::new(handler))
 }
 
 
@@ -82,11 +85,10 @@ impl TesterUnary {
     fn new<H>(handler: H) -> TesterUnary
         where H : Fn(RequestOptions, String) -> SingleResponse<String> + Sync + Send + 'static
     {
-        let name = "/text/Unary";
-        let server = new_server_unary(name, handler);
+        let server = new_server_unary("/text", "/Unary", handler);
         let port = server.local_addr().port();
         TesterUnary {
-            name: name.to_owned(),
+            name: "/text/Unary".to_owned(),
             _server: server,
             client: Client::new_plain("::1", port, Default::default()).unwrap()
         }
@@ -133,11 +135,10 @@ impl TesterServerStreaming {
     fn new<H>(handler: H) -> Self
         where H : Fn(RequestOptions, String) -> StreamingResponse<String> + Sync + Send + 'static
     {
-        let name = "/test/ServerStreaming";
-        let server = new_server_server_streaming(name, handler);
+        let server = new_server_server_streaming("/test", "/ServerStreaming", handler);
         let port = server.local_addr().port();
         TesterServerStreaming {
-            name: name.to_owned(),
+            name: "/test/ServerStreaming".to_owned(),
             _server: server,
             client: Client::new_plain("::1", port, Default::default()).unwrap()
         }
@@ -162,11 +163,10 @@ impl TesterClientStreaming {
     fn new<H>(handler: H) -> Self
         where H : Fn(RequestOptions, StreamingRequest<String>) -> SingleResponse<String> + Sync + Send + 'static
     {
-        let name = "/test/ClientStreaming";
-        let server = new_server_client_streaming(name, handler);
+        let server = new_server_client_streaming("/test", "/ClientStreaming", handler);
         let port = server.local_addr().port();
         TesterClientStreaming {
-            name: name.to_owned(),
+            name: "/test/ClientStreaming".to_owned(),
             _server: server,
             client: Client::new_plain("::1", port, Default::default()).unwrap()
         }

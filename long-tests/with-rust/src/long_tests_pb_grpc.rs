@@ -120,7 +120,7 @@ impl LongTestsServer {
 
     pub fn new_service_def<H : LongTests + 'static + Sync + Send + 'static>(handler: H) -> ::grpc::server::ServerServiceDefinition {
         let handler_arc = ::std::sync::Arc::new(handler);
-        ::grpc::server::ServerServiceDefinition::new(
+        ::grpc::server::ServerServiceDefinition::new("/LongTests",
             vec![
                 ::grpc::server::ServerMethod::new(
                     ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
