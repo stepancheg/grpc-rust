@@ -1,7 +1,7 @@
 #!/bin/sh -e
 
 if test -z "$TRAVIS" && test -n "$TMPDIR" && rustc -Zhelp | egrep  '\<incremental=' > /dev/null; then
-    export RUSTFLAGS="$RUSTFLAGS -Zincremental=$TMPDIR/grpc-rust"
+    #export RUSTFLAGS="$RUSTFLAGS -Zincremental=$TMPDIR/grpc-rust"
 fi
 
 exec cargo "$@"
