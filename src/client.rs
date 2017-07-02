@@ -35,6 +35,12 @@ pub struct ClientConf {
     pub http: httpbis::ClientConf,
 }
 
+impl ClientConf {
+    pub fn new() -> ClientConf {
+        Default::default()
+    }
+}
+
 
 /// gRPC client implementation.
 /// Used by generated code.

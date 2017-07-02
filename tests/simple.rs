@@ -16,23 +16,11 @@ use futures::stream::Stream;
 use grpc::*;
 use grpc::server::*;
 use grpc::method::*;
-use grpc::marshall::*;
 use grpc::error::*;
 use grpc::futures_grpc::*;
 
 use test_misc::*;
 
-
-fn string_string_method(name: &str, streaming: GrpcStreaming)
-    -> Arc<MethodDescriptor<String, String>>
-{
-    Arc::new(MethodDescriptor {
-       name: name.to_owned(),
-       streaming: streaming,
-       req_marshaller: Box::new(MarshallerString),
-       resp_marshaller: Box::new(MarshallerString),
-   })
-}
 
 /// Single method server on random port
 fn new_server<H>(service: &str, method: &str, handler: H) -> Server
@@ -190,20 +178,6 @@ fn unary() {
     let tester = TesterUnary::new(|_m, s| SingleResponse::completed(s));
 
     assert_eq!("aa", tester.call("aa").wait().unwrap());
-}
-
-#[test]
-fn server_is_not_running() {
-    let client = Client::new_plain("::1", 2, Default::default()).unwrap();
-
-    // TODO: https://github.com/tokio-rs/tokio-core/issues/12
-    if false {
-        let result = client.call_unary(
-            RequestOptions::new(),
-            "aa".to_owned(),
-            string_string_method("/does/not/matter", GrpcStreaming::Unary)).wait();
-        assert!(result.is_err(), result);
-    }
 }
 
 #[test]
