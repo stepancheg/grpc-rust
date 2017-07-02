@@ -14,10 +14,7 @@ use futures::Sink;
 use futures::stream::Stream;
 
 use grpc::*;
-use grpc::server::*;
-use grpc::method::*;
-use grpc::error::*;
-use grpc::futures_grpc::*;
+use grpc::rt::*;
 
 use test_misc::*;
 
@@ -82,7 +79,7 @@ impl TesterUnary {
         }
     }
 
-    fn call(&self, param: &str) -> GrpcFutureSend<String> {
+    fn call(&self, param: &str) -> GrpcFuture<String> {
         self.client.call_unary(
             RequestOptions::new(),
             param.to_owned(),
@@ -160,7 +157,7 @@ impl TesterClientStreaming {
         }
     }
 
-    fn call(&self) -> (futures::sync::mpsc::Sender<String>, GrpcFutureSend<String>) {
+    fn call(&self) -> (futures::sync::mpsc::Sender<String>, GrpcFuture<String>) {
         let (tx, rx) = futures::sync::mpsc::channel(0);
         (
             tx,

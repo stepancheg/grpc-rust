@@ -7,7 +7,7 @@ extern crate grpc;
 mod test_misc;
 
 use grpc::*;
-use grpc::method::GrpcStreaming;
+use grpc::rt::GrpcStreaming;
 
 use test_misc::*;
 

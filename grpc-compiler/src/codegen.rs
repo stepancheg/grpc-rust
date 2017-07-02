@@ -103,7 +103,7 @@ impl<'a> MethodGen<'a> {
     }
 
     fn descriptor_type(&self) -> String {
-        format!("::grpc::method::MethodDescriptor<{}, {}>", self.input_message(), self.output_message())
+        format!("::grpc::rt::MethodDescriptor<{}, {}>", self.input_message(), self.output_message())
     }
 
     fn streaming_upper(&self) -> &'static str {
@@ -133,9 +133,9 @@ impl<'a> MethodGen<'a> {
     }
 
     fn write_descriptor(&self, w: &mut CodeWriter, before: &str, after: &str) {
-        w.block(&format!("{}{}", before, "::grpc::method::MethodDescriptor {"), &format!("{}{}", "}", after), |w| {
+        w.block(&format!("{}{}", before, "::grpc::rt::MethodDescriptor {"), &format!("{}{}", "}", after), |w| {
             w.field_entry("name", &format!("\"{}/{}\".to_string()", self.service_path, self.proto.get_name()));
-            w.field_entry("streaming", &format!("::grpc::method::GrpcStreaming::{}", self.streaming_upper()));
+            w.field_entry("streaming", &format!("::grpc::rt::GrpcStreaming::{}", self.streaming_upper()));
             w.field_entry("req_marshaller", "Box::new(::grpc::protobuf::MarshallerProtobuf)");
             w.field_entry("resp_marshaller", "Box::new(::grpc::protobuf::MarshallerProtobuf)");
         });
@@ -266,17 +266,17 @@ impl<'a> ServiceGen<'a> {
 
     fn write_service_definition(&self, before: &str, after: &str, handler: &str, w: &mut CodeWriter) {
         w.block(
-            &format!("{}::grpc::server::ServerServiceDefinition::new(\"{}\",",
+            &format!("{}::grpc::rt::ServerServiceDefinition::new(\"{}\",",
                 before, self.service_path),
             &format!("){}", after),
             |w| {
                 w.block("vec![", "],", |w| {
                     for method in &self.methods {
-                        w.block("::grpc::server::ServerMethod::new(", "),", |w| {
+                        w.block("::grpc::rt::ServerMethod::new(", "),", |w| {
                             method.write_descriptor(w, "::std::sync::Arc::new(", "),");
                             w.block("{", "},", |w| {
                                 w.write_line(&format!("let handler_copy = {}.clone();", handler));
-                                w.write_line(&format!("::grpc::server::MethodHandler{}::new(move |o, p| handler_copy.{}(o, p))",
+                                w.write_line(&format!("::grpc::rt::MethodHandler{}::new(move |o, p| handler_copy.{}(o, p))",
                                     method.streaming_upper(),
                                     method.snake_name()));
                             });
@@ -330,7 +330,7 @@ impl<'a> ServiceGen<'a> {
 
             w.write_line("");
 
-            w.pub_fn(&format!("new_service_def<H : {} + 'static + Sync + Send + 'static>(handler: H) -> ::grpc::server::ServerServiceDefinition", self.intf_name()), |w| {
+            w.pub_fn(&format!("new_service_def<H : {} + 'static + Sync + Send + 'static>(handler: H) -> ::grpc::rt::ServerServiceDefinition", self.intf_name()), |w| {
                 w.write_line("let handler_arc = ::std::sync::Arc::new(handler);");
 
                 self.write_service_definition("", "", "handler_arc", w);

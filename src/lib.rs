@@ -15,8 +15,12 @@ extern crate protobuf as protobuf_lib;
 
 extern crate httpbis;
 
-pub mod client;
-pub mod server;
+mod futures_misc;
+mod misc;
+
+mod client;
+mod server;
+mod server_method;
 
 mod assert_types;
 
@@ -29,18 +33,21 @@ mod req;
 mod resp;
 mod chars;
 
-pub mod method;
-pub mod marshall;
-pub mod futures_grpc;
-pub mod error;
-pub mod iter;
-pub mod rt;
-pub mod metadata;
+mod method;
+mod marshall;
+mod futures_grpc;
+mod error;
+mod iter;
+mod metadata;
 
+pub mod rt;
 pub mod protobuf;
+
+pub mod for_test;
 
 
 pub use error::Error;
+pub use error::GrpcMessageError;
 pub use result::Result;
 
 pub use stream_item::ItemOrMetadata;
@@ -58,4 +65,8 @@ pub use resp::StreamingResponse;
 pub use req::RequestOptions;
 pub use req::StreamingRequest;
 
+pub use futures_grpc::GrpcStream;
+pub use futures_grpc::GrpcFuture;
+
 pub use metadata::Metadata;
+pub use metadata::MetadataKey;

@@ -33,30 +33,30 @@ pub trait LongTests {
 
 pub struct LongTestsClient {
     grpc_client: ::grpc::Client,
-    method_echo: ::std::sync::Arc<::grpc::method::MethodDescriptor<super::long_tests_pb::EchoRequest, super::long_tests_pb::EchoResponse>>,
-    method_char_count: ::std::sync::Arc<::grpc::method::MethodDescriptor<super::long_tests_pb::CharCountRequest, super::long_tests_pb::CharCountResponse>>,
-    method_random_strings: ::std::sync::Arc<::grpc::method::MethodDescriptor<super::long_tests_pb::RandomStringsRequest, super::long_tests_pb::RandomStringsResponse>>,
+    method_echo: ::std::sync::Arc<::grpc::rt::MethodDescriptor<super::long_tests_pb::EchoRequest, super::long_tests_pb::EchoResponse>>,
+    method_char_count: ::std::sync::Arc<::grpc::rt::MethodDescriptor<super::long_tests_pb::CharCountRequest, super::long_tests_pb::CharCountResponse>>,
+    method_random_strings: ::std::sync::Arc<::grpc::rt::MethodDescriptor<super::long_tests_pb::RandomStringsRequest, super::long_tests_pb::RandomStringsResponse>>,
 }
 
 impl LongTestsClient {
     pub fn with_client(grpc_client: ::grpc::Client) -> Self {
         LongTestsClient {
             grpc_client: grpc_client,
-            method_echo: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
+            method_echo: ::std::sync::Arc::new(::grpc::rt::MethodDescriptor {
                 name: "/LongTests/echo".to_string(),
-                streaming: ::grpc::method::GrpcStreaming::Unary,
+                streaming: ::grpc::rt::GrpcStreaming::Unary,
                 req_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
                 resp_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
             }),
-            method_char_count: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
+            method_char_count: ::std::sync::Arc::new(::grpc::rt::MethodDescriptor {
                 name: "/LongTests/char_count".to_string(),
-                streaming: ::grpc::method::GrpcStreaming::ClientStreaming,
+                streaming: ::grpc::rt::GrpcStreaming::ClientStreaming,
                 req_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
                 resp_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
             }),
-            method_random_strings: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
+            method_random_strings: ::std::sync::Arc::new(::grpc::rt::MethodDescriptor {
                 name: "/LongTests/random_strings".to_string(),
-                streaming: ::grpc::method::GrpcStreaming::ServerStreaming,
+                streaming: ::grpc::rt::GrpcStreaming::ServerStreaming,
                 req_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
                 resp_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
             }),
@@ -118,44 +118,44 @@ impl LongTestsServer {
         })
     }
 
-    pub fn new_service_def<H : LongTests + 'static + Sync + Send + 'static>(handler: H) -> ::grpc::server::ServerServiceDefinition {
+    pub fn new_service_def<H : LongTests + 'static + Sync + Send + 'static>(handler: H) -> ::grpc::rt::ServerServiceDefinition {
         let handler_arc = ::std::sync::Arc::new(handler);
-        ::grpc::server::ServerServiceDefinition::new("/LongTests",
+        ::grpc::rt::ServerServiceDefinition::new("/LongTests",
             vec![
-                ::grpc::server::ServerMethod::new(
-                    ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
+                ::grpc::rt::ServerMethod::new(
+                    ::std::sync::Arc::new(::grpc::rt::MethodDescriptor {
                         name: "/LongTests/echo".to_string(),
-                        streaming: ::grpc::method::GrpcStreaming::Unary,
+                        streaming: ::grpc::rt::GrpcStreaming::Unary,
                         req_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
                         resp_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
                     }),
                     {
                         let handler_copy = handler_arc.clone();
-                        ::grpc::server::MethodHandlerUnary::new(move |o, p| handler_copy.echo(o, p))
+                        ::grpc::rt::MethodHandlerUnary::new(move |o, p| handler_copy.echo(o, p))
                     },
                 ),
-                ::grpc::server::ServerMethod::new(
-                    ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
+                ::grpc::rt::ServerMethod::new(
+                    ::std::sync::Arc::new(::grpc::rt::MethodDescriptor {
                         name: "/LongTests/char_count".to_string(),
-                        streaming: ::grpc::method::GrpcStreaming::ClientStreaming,
+                        streaming: ::grpc::rt::GrpcStreaming::ClientStreaming,
                         req_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
                         resp_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
                     }),
                     {
                         let handler_copy = handler_arc.clone();
-                        ::grpc::server::MethodHandlerClientStreaming::new(move |o, p| handler_copy.char_count(o, p))
+                        ::grpc::rt::MethodHandlerClientStreaming::new(move |o, p| handler_copy.char_count(o, p))
                     },
                 ),
-                ::grpc::server::ServerMethod::new(
-                    ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
+                ::grpc::rt::ServerMethod::new(
+                    ::std::sync::Arc::new(::grpc::rt::MethodDescriptor {
                         name: "/LongTests/random_strings".to_string(),
-                        streaming: ::grpc::method::GrpcStreaming::ServerStreaming,
+                        streaming: ::grpc::rt::GrpcStreaming::ServerStreaming,
                         req_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
                         resp_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
                     }),
                     {
                         let handler_copy = handler_arc.clone();
-                        ::grpc::server::MethodHandlerServerStreaming::new(move |o, p| handler_copy.random_strings(o, p))
+                        ::grpc::rt::MethodHandlerServerStreaming::new(move |o, p| handler_copy.random_strings(o, p))
                     },
                 ),
             ],

@@ -12,14 +12,14 @@ use stream_item::*;
 
 /// Single message response
 pub struct SingleResponse<T : Send + 'static>(
-    pub GrpcFutureSend<(Metadata, GrpcFutureSend<(T, Metadata)>)>
+    pub GrpcFuture<(Metadata, GrpcFuture<(T, Metadata)>)>
 );
 
 impl<T : Send + 'static> SingleResponse<T> {
     // constructors
 
     pub fn new<F>(f: F) -> SingleResponse<T>
-        where F : Future<Item=(Metadata, GrpcFutureSend<(T, Metadata)>), Error=error::Error> + Send + 'static
+        where F : Future<Item=(Metadata, GrpcFuture<(T, Metadata)>), Error=error::Error> + Send + 'static
     {
         SingleResponse(Box::new(f))
     }
@@ -39,7 +39,7 @@ impl<T : Send + 'static> SingleResponse<T> {
             F : Future<Item=T, Error=error::Error> + Send + 'static,
             M : Future<Item=Metadata, Error=error::Error> + Send + 'static,
     {
-        let future: GrpcFutureSend<(T, Metadata)> = Box::new(result.join(trailing));
+        let future: GrpcFuture<(T, Metadata)> = Box::new(result.join(trailing));
         SingleResponse::new(future::finished((metadata, future)))
     }
 
@@ -67,13 +67,13 @@ impl<T : Send + 'static> SingleResponse<T> {
 
     // getters
 
-    pub fn join_metadata_result(self) -> GrpcFutureSend<(Metadata, T, Metadata)> {
+    pub fn join_metadata_result(self) -> GrpcFuture<(Metadata, T, Metadata)> {
         Box::new(self.0.and_then(|(initial, result)| {
             result.map(|(result, trailing)| (initial, result, trailing))
         }))
     }
 
-    pub fn drop_metadata(self) -> GrpcFutureSend<T> {
+    pub fn drop_metadata(self) -> GrpcFuture<T> {
         Box::new(self.0.and_then(|(_initial, result)| result.map(|(result, _trailing)| result)))
     }
 
@@ -104,7 +104,7 @@ impl<T : Send + 'static> SingleResponse<T> {
 /// Streaming response
 pub struct StreamingResponse<T : Send + 'static>(
     /// Initial metadata, stream of items followed by trailing metadata
-    pub GrpcFutureSend<(Metadata, GrpcStreamWithTrailingMetadata<T>)>
+    pub GrpcFuture<(Metadata, GrpcStreamWithTrailingMetadata<T>)>
 );
 
 impl<T : Send + 'static> StreamingResponse<T> {
@@ -216,13 +216,13 @@ impl<T : Send + 'static> StreamingResponse<T> {
         self.map_stream(move |stream| stream.and_then_items(f))
     }
 
-    pub fn drop_metadata(self) -> GrpcStreamSend<T> {
+    pub fn drop_metadata(self) -> GrpcStream<T> {
         Box::new(self.0.map(|(_metadata, stream)| stream.drop_metadata()).flatten_stream())
     }
 
     pub fn into_future(self) -> SingleResponse<Vec<T>> {
         SingleResponse::new(self.0.map(|(initial, stream)| {
-            let future: GrpcFutureSend<(Vec<T>, Metadata)> = stream.collect_with_metadata();
+            let future: GrpcFuture<(Vec<T>, Metadata)> = stream.collect_with_metadata();
             (initial, future)
         }))
     }
@@ -243,7 +243,7 @@ impl<T : Send + 'static> StreamingResponse<T> {
         Box::new(self.drop_metadata().wait())
     }
 
-    pub fn collect(self) -> GrpcFutureSend<(Metadata, Vec<T>, Metadata)> {
+    pub fn collect(self) -> GrpcFuture<(Metadata, Vec<T>, Metadata)> {
         self.into_future().join_metadata_result()
     }
 }

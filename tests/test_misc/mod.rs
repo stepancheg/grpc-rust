@@ -3,9 +3,8 @@ use std::sync::Arc;
 mod test_sync;
 mod stream_thread_spawn_iter;
 
-use grpc::method::GrpcStreaming;
-use grpc::method::MethodDescriptor;
-use grpc::marshall::MarshallerString;
+use grpc::rt::*;
+use grpc::for_test::*;
 
 pub use self::test_sync::TestSync;
 pub use self::stream_thread_spawn_iter::stream_thread_spawn_iter;

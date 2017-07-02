@@ -17,9 +17,7 @@ use futures::stream;
 use futures::Future;
 use futures::future;
 
-use grpc::futures_grpc::*;
-use grpc::error::*;
-use grpc::metadata::*;
+use grpc::*;
 
 static DICTIONARY: &'static str = "ABCDEFGHIJKLMNOPQRSTUVabcdefghijklmnoqprstuvwxyz0123456789";
 // Note: due to const restrictions, this is calculated by hand.

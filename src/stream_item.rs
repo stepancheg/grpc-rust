@@ -21,7 +21,7 @@ pub enum ItemOrMetadata<T : Send + 'static> {
 /// Useful as part of GrpcStreamingResult
 pub struct GrpcStreamWithTrailingMetadata<T : Send + 'static>(
     /// Stream of items followed by optional trailing metadata
-    pub GrpcStreamSend<ItemOrMetadata<T>>
+    pub GrpcStream<ItemOrMetadata<T>>
 );
 
 impl<T : Send + 'static> GrpcStreamWithTrailingMetadata<T> {
@@ -91,7 +91,7 @@ impl<T : Send + 'static> GrpcStreamWithTrailingMetadata<T> {
     fn map_stream<U, F>(self, f: F) -> GrpcStreamWithTrailingMetadata<U>
         where
             U : Send + 'static,
-            F : FnOnce(GrpcStreamSend<ItemOrMetadata<T>>) -> GrpcStreamSend<ItemOrMetadata<U>> + Send + 'static,
+            F : FnOnce(GrpcStream<ItemOrMetadata<T>>) -> GrpcStream<ItemOrMetadata<U>> + Send + 'static,
     {
         GrpcStreamWithTrailingMetadata::new(Box::new(f(self.0)))
     }
@@ -154,7 +154,7 @@ impl<T : Send + 'static> GrpcStreamWithTrailingMetadata<T> {
     }
 
     /// Return raw futures `Stream` without trailing metadata
-    pub fn drop_metadata(self) -> GrpcStreamSend<T> {
+    pub fn drop_metadata(self) -> GrpcStream<T> {
         Box::new(self.0.filter_map(|item| {
             match item {
                 ItemOrMetadata::Item(t) => Some(t),
@@ -164,12 +164,12 @@ impl<T : Send + 'static> GrpcStreamWithTrailingMetadata<T> {
     }
 
     /// Collect all elements to a stream
-    pub fn collect(self) -> GrpcFutureSend<Vec<T>> {
+    pub fn collect(self) -> GrpcFuture<Vec<T>> {
         Box::new(self.drop_metadata().collect())
     }
 
     /// Collect all elements and trailing metadata
-    pub fn collect_with_metadata(self) -> GrpcFutureSend<(Vec<T>, Metadata)> {
+    pub fn collect_with_metadata(self) -> GrpcFuture<(Vec<T>, Metadata)> {
         Box::new(self.0.fold((Vec::new(), Metadata::new()), |(mut vec, mut metadata), item| {
             // Could also check that elements returned in proper order
             match item {
@@ -182,7 +182,7 @@ impl<T : Send + 'static> GrpcStreamWithTrailingMetadata<T> {
 
     /// Collect stream into single element future.
     /// It is an error if stream has no result items or more than one result item.
-    pub fn single_with_metadata(self) -> GrpcFutureSend<(T, Metadata)> {
+    pub fn single_with_metadata(self) -> GrpcFuture<(T, Metadata)> {
         Box::new(self.collect_with_metadata().and_then(|(mut v, trailing)| {
             if v.is_empty() {
                 Err(Error::Other("no result"))

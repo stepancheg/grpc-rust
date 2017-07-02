@@ -7,10 +7,7 @@ extern crate grpc;
 mod test_misc;
 
 use grpc::*;
-use grpc::server::ServerServiceDefinition;
-use grpc::server::ServerMethod;
-use grpc::method::GrpcStreaming;
-use grpc::server::MethodHandlerUnary;
+use grpc::rt::*;
 
 use test_misc::*;
 

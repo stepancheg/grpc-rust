@@ -15,7 +15,7 @@ use grpc_interop::*;
 
 use bytes::Bytes;
 
-use grpc::metadata::MetadataKey;
+use grpc::*;
 
 use chrono::*;
 use clap::{App, Arg};

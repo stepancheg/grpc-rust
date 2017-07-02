@@ -121,15 +121,15 @@ impl Client {
     }
 
     pub fn new_resp_channel<Resp : Send + 'static>(&self)
-        -> futures::Oneshot<(futures::sync::mpsc::UnboundedSender<ResultOrEof<Resp, Error>>, GrpcStreamSend<Resp>)>
+        -> futures::Oneshot<(futures::sync::mpsc::UnboundedSender<ResultOrEof<Resp, Error>>, GrpcStream<Resp>)>
     {
         let (one_sender, one_receiver) = futures::oneshot();
 
         let (sender, receiver) = futures::sync::mpsc::unbounded();
-        let receiver: GrpcStreamSend<ResultOrEof<Resp, Error>> =
+        let receiver: GrpcStream<ResultOrEof<Resp, Error>> =
             Box::new(receiver.map_err(|()| Error::Other("receive from resp channel")));
 
-        let receiver: GrpcStreamSend<Resp> = Box::new(stream_with_eof_and_error(receiver, || Error::Other("unexpected EOF")));
+        let receiver: GrpcStream<Resp> = Box::new(stream_with_eof_and_error(receiver, || Error::Other("unexpected EOF")));
 
         // TODO: oneshot sender is no longer necessary as we don't use tokio queues
         one_sender.send((sender, receiver)).ok().unwrap();

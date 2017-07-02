@@ -29,16 +29,16 @@ pub trait Baz {
 
 pub struct BazClient {
     grpc_client: ::grpc::Client,
-    method_qux: ::std::sync::Arc<::grpc::method::MethodDescriptor<super::fgfg::FooBar, super::fgfg::FooBar>>,
+    method_qux: ::std::sync::Arc<::grpc::rt::MethodDescriptor<super::fgfg::FooBar, super::fgfg::FooBar>>,
 }
 
 impl BazClient {
     pub fn with_client(grpc_client: ::grpc::Client) -> Self {
         BazClient {
             grpc_client: grpc_client,
-            method_qux: ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
+            method_qux: ::std::sync::Arc::new(::grpc::rt::MethodDescriptor {
                 name: "/Baz/qux".to_string(),
-                streaming: ::grpc::method::GrpcStreaming::Unary,
+                streaming: ::grpc::rt::GrpcStreaming::Unary,
                 req_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
                 resp_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
             }),
@@ -92,20 +92,20 @@ impl BazServer {
         })
     }
 
-    pub fn new_service_def<H : Baz + 'static + Sync + Send + 'static>(handler: H) -> ::grpc::server::ServerServiceDefinition {
+    pub fn new_service_def<H : Baz + 'static + Sync + Send + 'static>(handler: H) -> ::grpc::rt::ServerServiceDefinition {
         let handler_arc = ::std::sync::Arc::new(handler);
-        ::grpc::server::ServerServiceDefinition::new("/Baz",
+        ::grpc::rt::ServerServiceDefinition::new("/Baz",
             vec![
-                ::grpc::server::ServerMethod::new(
-                    ::std::sync::Arc::new(::grpc::method::MethodDescriptor {
+                ::grpc::rt::ServerMethod::new(
+                    ::std::sync::Arc::new(::grpc::rt::MethodDescriptor {
                         name: "/Baz/qux".to_string(),
-                        streaming: ::grpc::method::GrpcStreaming::Unary,
+                        streaming: ::grpc::rt::GrpcStreaming::Unary,
                         req_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
                         resp_marshaller: Box::new(::grpc::protobuf::MarshallerProtobuf),
                     }),
                     {
                         let handler_copy = handler_arc.clone();
-                        ::grpc::server::MethodHandlerUnary::new(move |o, p| handler_copy.qux(o, p))
+                        ::grpc::rt::MethodHandlerUnary::new(move |o, p| handler_copy.qux(o, p))
                     },
                 ),
             ],

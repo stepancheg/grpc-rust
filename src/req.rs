@@ -3,7 +3,7 @@ use futures::stream::Stream;
 
 use metadata::Metadata;
 
-use futures_grpc::GrpcStreamSend;
+use futures_grpc::GrpcStream;
 use error::Error;
 
 #[derive(Debug, Default)]
@@ -18,7 +18,7 @@ impl RequestOptions {
 }
 
 /// Excluding initial metadata which is passed separately
-pub struct StreamingRequest<T : Send + 'static>(pub GrpcStreamSend<T>);
+pub struct StreamingRequest<T : Send + 'static>(pub GrpcStream<T>);
 
 impl<T : Send + 'static> StreamingRequest<T> {
 
