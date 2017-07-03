@@ -131,8 +131,15 @@ impl Server {
 }
 
 /// Implementation of gRPC over http2 HttpService
-struct GrpcHttpService {
+#[derive(Clone)]
+pub struct GrpcHttpService {
     service_definition: Arc<ServerServiceDefinition>,
+}
+
+impl GrpcHttpService {
+    pub fn new(service_definition: ServerServiceDefinition) -> Self {
+        GrpcHttpService { service_definition: Arc::new(service_definition) }
+    }
 }
 
 
