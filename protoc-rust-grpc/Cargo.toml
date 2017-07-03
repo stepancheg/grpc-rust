@@ -9,6 +9,10 @@ description = """
 protoc --rust-grpc_out=... available as API. protoc needs to be in $PATH, protoc-gen-rust-grpc does not.
 """
 
+[lib]
+doctest = false
+test = false
+
 [dependencies]
 protoc        = "1.*"
 protoc-rust   = "1.*"

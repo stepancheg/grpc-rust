@@ -5,9 +5,10 @@ authors = ["Stepan Koltsov <stepan.koltsov@gmail.com>"]
 
 [lib]
 doctest = false
+test = false
 
 [dependencies.grpc]
-path = ".."
+path = "../grpc"
 
 [dependencies]
 protobuf        = "1.*"
@@ -18,3 +19,19 @@ httpbis         = "0.4.0"
 
 [build-dependencies]
 protoc-rust-grpc = { path = "../protoc-rust-grpc" }
+
+[[bin]]
+name = "greeter_client"
+test = false
+
+[[bin]]
+name = "greeter_client_multi"
+test = false
+
+[[bin]]
+name = "greeter_server"
+test = false
+
+[[bin]]
+name = "greeter_multi_server"
+test = false

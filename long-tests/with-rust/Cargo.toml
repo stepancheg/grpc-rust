@@ -4,10 +4,11 @@ version = "0.0.0"
 authors = ["Stepan Koltsov <stepan.koltsov@gmail.com>"]
 
 [lib]
+test = false
 doctest = false
 
 [dependencies.grpc]
-path = "../.."
+path = "../../grpc"
 
 [dependencies]
 log             = "0.*"
@@ -19,3 +20,11 @@ futures-cpupool = "0.1.*"
 
 [build-dependencies]
 protoc-rust-grpc = { path = "../../protoc-rust-grpc" }
+
+[[bin]]
+name = "long_test_server"
+test = false
+
+[[bin]]
+name = "long_test_client"
+test = false

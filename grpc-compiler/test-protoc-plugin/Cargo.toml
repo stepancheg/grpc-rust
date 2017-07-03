@@ -1,10 +1,15 @@
 [package]
 name = "test-protoc-plugin"
-version = "0.1.0"
+version = "0.0.0"
 authors = ["Stepan Koltsov <stepan.koltsov@gmail.com>"]
+publish = false
 
 [dependencies]
 tls-api         = "0.*"
 protobuf        = "1.*"
-grpc            = { path = "../.." }
+grpc            = { path = "../../grpc" }
 futures-cpupool = "0.*"
+
+[lib]
+test = false
+doctest = false

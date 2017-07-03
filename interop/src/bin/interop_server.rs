@@ -122,7 +122,7 @@ impl TestService for TestServerImpl {
     {
         let response = req_stream.0.map(|mut req| {
             if req.get_response_status().get_code() != 0 {
-                let s: GrpcStreamSend<StreamingOutputCallResponse> = Box::new(stream::once(Err(grpc::Error::GrpcMessage(GrpcMessageError {
+                let s: GrpcStream<StreamingOutputCallResponse> = Box::new(stream::once(Err(grpc::Error::GrpcMessage(GrpcMessageError {
                     grpc_status: req.get_response_status().get_code(),
                     grpc_message: req.mut_response_status().take_message(),
                 }))));
@@ -130,7 +130,7 @@ impl TestService for TestServerImpl {
             }
 
             let sizes = req.take_response_parameters().into_iter().map(|res| Ok(res.get_size() as usize));
-            let ss: GrpcStreamSend<StreamingOutputCallResponse> = Box::new(stream::iter(sizes).map(|size| {
+            let ss: GrpcStream<StreamingOutputCallResponse> = Box::new(stream::iter(sizes).map(|size| {
                 let mut response = StreamingOutputCallResponse::new();
                 let mut payload = Payload::new();
                 payload.set_body(make_string(size));

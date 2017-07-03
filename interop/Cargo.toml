@@ -4,9 +4,10 @@ description = "Implementation of the grpc-interop service."
 repository = "http://github.com/stephancheg/grpc-rust/interop"
 version = "0.0.0"
 authors = ["Steve Jenson <stevej@buoyant.io>"]
+publish = false
 
 [dependencies.grpc]
-path = ".."
+path = "../grpc"
 
 [dependencies]
 bytes           = "0.*"
@@ -19,13 +20,19 @@ tls-api         = "0.*"
 chrono          = "0.2.25"
 clap            = "2.20.0"
 
+[lib]
+test = false
+doctest = false
+
 [[bin]]
 name = "grpc-rust-interop-server"
 path = "src/bin/interop_server.rs"
+test = false
 
 [[bin]]
 name = "grpc-rust-interop-client"
 path = "src/bin/interop_client.rs"
+test = false
 
 [build-dependencies]
 protoc-rust-grpc = { path = "../protoc-rust-grpc" }
