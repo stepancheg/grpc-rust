@@ -59,9 +59,10 @@ impl LongTests for LongTestsServerImpl {
 fn main() {
     env_logger::init().unwrap();
 
-    let _server = LongTestsServer::new(
-        long_tests::TEST_HOST, Default::default(), LongTestsServerImpl {})
-            .expect("server");
+    let mut server = ServerBuilder::new_plain();
+    server.http.set_addr(long_tests::TEST_HOST).expect("set_addr");
+    server.add_service(LongTestsServer::new_service_def(LongTestsServerImpl {}));
+    let _server = server.build().expect("server");
 
     loop {
         thread::park();

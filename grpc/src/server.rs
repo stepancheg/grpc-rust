@@ -121,68 +121,6 @@ pub struct Server {
 }
 
 impl Server {
-    /// Without TLS
-    pub fn new_plain<A : ToSocketAddrs>(
-        addr: A,
-        conf: ServerConf,
-        def: ServerServiceDefinition)
-            -> Result<Server>
-    {
-        let mut server = ServerBuilder::new_plain();
-        server.conf = conf;
-        server.http.set_addr(addr)?;
-        server.add_service(def);
-        server.build()
-    }
-
-    /// Without TLS and execute handler in given CpuPool
-    pub fn new_plain_pool<A : ToSocketAddrs>(
-        addr: A,
-        conf: ServerConf,
-        def: ServerServiceDefinition,
-        cpu_pool: CpuPool)
-            -> Result<Server>
-    {
-        let mut server = ServerBuilder::new_plain();
-        server.conf = conf;
-        server.http.set_addr(addr)?;
-        server.add_service(def);
-        server.http.cpu_pool = httpbis::CpuPoolOption::CpuPool(cpu_pool);
-        server.build()
-    }
-
-    pub fn new_single_thread<A : ToSocketAddrs, S : tls_api::TlsAcceptor>(
-        addr: A,
-        tls: httpbis::ServerTlsOption<S>,
-        conf: ServerConf,
-        def: ServerServiceDefinition)
-            -> Result<Server>
-    {
-        let mut server = ServerBuilder::new();
-        server.conf = conf;
-        server.http.set_addr(addr)?;
-        server.http.tls = tls;
-        server.add_service(def);
-        server.build()
-    }
-
-    pub fn new_pool<A : ToSocketAddrs, S : tls_api::TlsAcceptor>(
-        addr: A,
-        tls: httpbis::ServerTlsOption<S>,
-        conf: ServerConf,
-        def: ServerServiceDefinition,
-        cpu_pool: CpuPool)
-            -> Result<Server>
-    {
-        let mut server = ServerBuilder::new();
-        server.conf = conf;
-        server.http.set_addr(addr)?;
-        server.http.cpu_pool = httpbis::CpuPoolOption::CpuPool(cpu_pool);
-        server.http.tls = tls;
-        server.add_service(def);
-        server.build()
-    }
-
     pub fn local_addr(&self) -> &SocketAddr {
         self.server.local_addr()
     }

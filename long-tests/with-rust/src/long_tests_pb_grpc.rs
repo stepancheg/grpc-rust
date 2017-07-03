@@ -91,33 +91,10 @@ impl LongTests for LongTestsClient {
 
 // server
 
-pub struct LongTestsServer {
-    pub grpc_server: ::grpc::Server,
-}
+pub struct LongTestsServer;
 
-impl ::std::ops::Deref for LongTestsServer {
-    type Target = ::grpc::Server;
-
-    fn deref(&self) -> &Self::Target {
-        &self.grpc_server
-    }
-}
 
 impl LongTestsServer {
-    pub fn new<A : ::std::net::ToSocketAddrs, H : LongTests + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::ServerConf, h: H) -> ::grpc::Result<Self> {
-        let service_definition = LongTestsServer::new_service_def(h);
-        Ok(LongTestsServer {
-            grpc_server: ::grpc::Server::new_plain(addr, conf, service_definition)?,
-        })
-    }
-
-    pub fn new_pool<A : ::std::net::ToSocketAddrs, H : LongTests + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::ServerConf, h: H, cpu_pool: ::futures_cpupool::CpuPool) -> ::grpc::Result<Self> {
-        let service_definition = LongTestsServer::new_service_def(h);
-        Ok(LongTestsServer {
-            grpc_server: ::grpc::Server::new_plain_pool(addr, conf, service_definition, cpu_pool)?,
-        })
-    }
-
     pub fn new_service_def<H : LongTests + 'static + Sync + Send + 'static>(handler: H) -> ::grpc::rt::ServerServiceDefinition {
         let handler_arc = ::std::sync::Arc::new(handler);
         ::grpc::rt::ServerServiceDefinition::new("/LongTests",

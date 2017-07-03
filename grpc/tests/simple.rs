@@ -32,9 +32,10 @@ fn new_server<H>(service: &str, method: &str, handler: H) -> Server
             <H as GrpcStreamingFlavor>::streaming()),
         handler,
     ));
-    Server::new_plain(
-        "[::1]:0", Default::default(), ServerServiceDefinition::new(service, methods))
-            .expect("server")
+    let mut server = ServerBuilder::new_plain();
+    server.http.set_port(0);
+    server.add_service(ServerServiceDefinition::new(service, methods));
+    server.build().expect("server")
 }
 
 /// Single unary method server

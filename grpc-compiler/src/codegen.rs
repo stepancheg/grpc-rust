@@ -287,49 +287,13 @@ impl<'a> ServiceGen<'a> {
     }
 
     fn write_server(&self, w: &mut CodeWriter) {
-        w.pub_struct(&self.server_name(), |w| {
-            w.pub_field_decl("grpc_server", "::grpc::Server");
-        });
+        w.write_line(&format!("pub struct {};", self.server_name()));
 
         w.write_line("");
-
-        w.impl_for_block("::std::ops::Deref", &self.server_name(), |w| {
-            w.write_line("type Target = ::grpc::Server;");
-            w.write_line("");
-            w.def_fn("deref(&self) -> &Self::Target", |w| {
-                w.write_line("&self.grpc_server");
-            })
-        });
 
         w.write_line("");
 
         w.impl_self_block(&self.server_name(), |w| {
-            let sig = format!(
-                "new<A : ::std::net::ToSocketAddrs, H : {} + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::ServerConf, h: H) -> ::grpc::Result<Self>",
-                self.intf_name());
-            w.pub_fn(&sig, |w| {
-                w.write_line(format!("let service_definition = {}::new_service_def(h);", self.server_name()));
-
-                w.block(&format!("Ok({} {{", self.server_name()), "})", |w| {
-                    w.field_entry("grpc_server", "::grpc::Server::new_plain(addr, conf, service_definition)?");
-                });
-            });
-
-            w.write_line("");
-
-            let sig = format!(
-                "new_pool<A : ::std::net::ToSocketAddrs, H : {} + 'static + Sync + Send + 'static>(addr: A, conf: ::grpc::ServerConf, h: H, cpu_pool: ::futures_cpupool::CpuPool) -> ::grpc::Result<Self>",
-                self.intf_name());
-            w.pub_fn(&sig, |w| {
-                w.write_line(format!("let service_definition = {}::new_service_def(h);", self.server_name()));
-
-                w.block(&format!("Ok({} {{", self.server_name()), "})", |w| {
-                    w.field_entry("grpc_server", "::grpc::Server::new_plain_pool(addr, conf, service_definition, cpu_pool)?");
-                });
-            });
-
-            w.write_line("");
-
             w.pub_fn(&format!("new_service_def<H : {} + 'static + Sync + Send + 'static>(handler: H) -> ::grpc::rt::ServerServiceDefinition", self.intf_name()), |w| {
                 w.write_line("let handler_arc = ::std::sync::Arc::new(handler);");
 

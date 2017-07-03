@@ -1,12 +1,9 @@
 extern crate futures;
-extern crate futures_cpupool;
 
 extern crate grpc_examples;
 extern crate grpc;
 
 use std::thread;
-
-use futures_cpupool::CpuPool;
 
 use grpc_examples::helloworld_grpc::*;
 use grpc_examples::helloworld::*;
@@ -24,9 +21,11 @@ impl Greeter for GreeterImpl {
 }
 
 fn main() {
-    let _server = GreeterServer::new_pool(
-        "[::]:50051", Default::default(), GreeterImpl, CpuPool::new(4))
-            .expect("server");
+    let mut server = grpc::ServerBuilder::new_plain();
+    server.http.set_port(50051);
+    server.add_service(GreeterServer::new_service_def(GreeterImpl));
+    server.http.set_cpu_pool_threads(4);
+    let _server = server.build().expect("server");
 
     loop {
         thread::park();
