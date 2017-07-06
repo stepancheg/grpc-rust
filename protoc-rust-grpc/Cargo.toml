@@ -1,6 +1,6 @@
 [package]
 name = "protoc-rust-grpc"
-version = "0.1.11"
+version = "0.2.0"
 authors = ["Stepan Koltsov <stepan.koltsov@gmail.com>"]
 homepage = "https://github.com/stepancheg/rust-protobuf/protoc-rust/"
 repository = "https://github.com/stepancheg/rust-protobuf/protoc-rust/"
