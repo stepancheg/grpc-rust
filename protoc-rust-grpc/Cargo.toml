@@ -17,5 +17,5 @@ test = false
 protoc        = "1.*"
 protoc-rust   = "1.*"
 protobuf      = "1.*"
-grpc-compiler = { version = "0.1.10", path = "../grpc-compiler" }
+grpc-compiler = { version = "0.2.0", path = "../grpc-compiler" }
 tempdir       = "0.3"
