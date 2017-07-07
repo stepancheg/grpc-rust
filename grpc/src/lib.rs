@@ -58,6 +58,7 @@ pub use client::ClientConf;
 pub use server::Server;
 pub use server::ServerBuilder;
 pub use server::ServerConf;
+pub use server::GrpcHttpService;
 
 pub use resp::SingleResponse;
 pub use resp::StreamingResponse;
