@@ -12,7 +12,7 @@ Some development questions in [FAQ](/docs/FAQ.md).
 
 ## Current status
 
-It basially works. See `grpc-examples/src/bin/greeter_{client,server}.rs`. It can be tested
+It basically works. See `grpc-examples/src/bin/greeter_{client,server}.rs`. It can be tested
 for example with [go client](https://github.com/grpc/grpc-go/tree/master/examples/helloworld):
 
 ```
