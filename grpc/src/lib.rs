@@ -48,6 +48,7 @@ pub mod for_test;
 
 pub use error::Error;
 pub use error::GrpcMessageError;
+pub use grpc::GrpcStatus
 pub use result::Result;
 
 pub use stream_item::ItemOrMetadata;
