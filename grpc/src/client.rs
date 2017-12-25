@@ -155,6 +155,7 @@ impl Client {
             Header::new(Bytes::from_static(b":authority"), self.host.clone()),
             Header::new(Bytes::from_static(b":scheme"), Bytes::from_static(self.http_scheme.as_bytes())),
             Header::new(Bytes::from_static(b"content-type"), Bytes::from_static(b"application/grpc")),
+            Header::new(Bytes::from_static(b"te"), Bytes::from_static(b"trailers")),
         ]);
 
         headers.extend(options.metadata.into_headers());
