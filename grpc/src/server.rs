@@ -1,6 +1,4 @@
 use std::sync::Arc;
-use std::net::SocketAddr;
-use std::net::ToSocketAddrs;
 
 use futures_cpupool::CpuPool;
 
@@ -11,6 +9,7 @@ use httpbis::Header;
 use httpbis::Headers;
 use httpbis::HttpPartStream;
 use httpbis::stream_part::HttpStreamPart;
+use httpbis::socket::AnySocketAddr;
 
 use stream_item::ItemOrMetadata;
 
@@ -99,6 +98,14 @@ impl<A : tls_api::TlsAcceptor> ServerBuilder<A> {
         }
     }
 
+    #[cfg(unix)]
+    pub fn new_unix() -> ServerBuilder<A> {
+        ServerBuilder {
+            http: httpbis::ServerBuilder::new(),
+            conf: ServerConf::new(),
+        }
+    }
+
     pub fn add_service(&mut self, def: ServerServiceDefinition) {
         self.http.service.set_service(&def.prefix.clone(), Arc::new(GrpcHttpService {
             service_definition: Arc::new(def),
@@ -121,7 +128,7 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn local_addr(&self) -> &SocketAddr {
+    pub fn local_addr(&self) -> &AnySocketAddr {
         self.server.local_addr()
     }
 

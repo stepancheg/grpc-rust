@@ -72,7 +72,7 @@ impl TesterUnary {
         where H : Fn(RequestOptions, String) -> SingleResponse<String> + Sync + Send + 'static
     {
         let server = new_server_unary("/text", "/Unary", handler);
-        let port = server.local_addr().port();
+        let port = server.local_addr().port().unwrap();
         TesterUnary {
             name: "/text/Unary".to_owned(),
             _server: server,
@@ -122,7 +122,7 @@ impl TesterServerStreaming {
         where H : Fn(RequestOptions, String) -> StreamingResponse<String> + Sync + Send + 'static
     {
         let server = new_server_server_streaming("/test", "/ServerStreaming", handler);
-        let port = server.local_addr().port();
+        let port = server.local_addr().port().unwrap();
         TesterServerStreaming {
             name: "/test/ServerStreaming".to_owned(),
             _server: server,
@@ -150,7 +150,7 @@ impl TesterClientStreaming {
         where H : Fn(RequestOptions, StreamingRequest<String>) -> SingleResponse<String> + Sync + Send + 'static
     {
         let server = new_server_client_streaming("/test", "/ClientStreaming", handler);
-        let port = server.local_addr().port();
+        let port = server.local_addr().port().unwrap();
         TesterClientStreaming {
             name: "/test/ClientStreaming".to_owned(),
             _server: server,
