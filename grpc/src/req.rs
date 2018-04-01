@@ -39,7 +39,7 @@ impl<T : Send + 'static> StreamingRequest<T> {
             I : IntoIterator<Item=T>,
             I::IntoIter : Send + 'static,
     {
-        StreamingRequest::new(stream::iter(iter.into_iter().map(Ok)))
+        StreamingRequest::new(stream::iter_ok(iter.into_iter()))
     }
 
     pub fn single(item: T) -> StreamingRequest<T> {

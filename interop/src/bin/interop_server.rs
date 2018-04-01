@@ -95,7 +95,7 @@ impl TestService for TestServerImpl {
 
     fn streaming_output_call(&self, _o: grpc::RequestOptions, mut req: StreamingOutputCallRequest) -> grpc::StreamingResponse<StreamingOutputCallResponse> {
         let sizes = req.take_response_parameters().into_iter().map(|res| Ok(res.get_size() as usize));
-        let output = stream::iter(sizes).map(|size| {
+        let output = stream::iter_ok(sizes).map(|size| {
             let mut response = StreamingOutputCallResponse::new();
             let mut payload = Payload::new();
             payload.set_body(make_string(size));
@@ -130,7 +130,7 @@ impl TestService for TestServerImpl {
             }
 
             let sizes = req.take_response_parameters().into_iter().map(|res| Ok(res.get_size() as usize));
-            let ss: GrpcStream<StreamingOutputCallResponse> = Box::new(stream::iter(sizes).map(|size| {
+            let ss: GrpcStream<StreamingOutputCallResponse> = Box::new(stream::iter_ok(sizes).map(|size| {
                 let mut response = StreamingOutputCallResponse::new();
                 let mut payload = Payload::new();
                 payload.set_body(make_string(size));

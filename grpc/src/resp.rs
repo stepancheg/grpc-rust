@@ -81,9 +81,9 @@ impl<T : Send + 'static> SingleResponse<T> {
     pub fn into_stream(self) -> StreamingResponse<T> {
         StreamingResponse::new(self.0.map(|(metadata, future)| {
             let stream = future.map(|(result, trailing)| {
-                stream::iter(vec![
-                    Ok(ItemOrMetadata::Item(result)),
-                    Ok(ItemOrMetadata::TrailingMetadata(trailing)),
+                stream::iter_ok(vec![
+                    ItemOrMetadata::Item(result),
+                    ItemOrMetadata::TrailingMetadata(trailing),
                 ])
             }).flatten_stream();
 
@@ -154,7 +154,7 @@ impl<T : Send + 'static> StreamingResponse<T> {
     {
         StreamingResponse::metadata_and_stream_and_trailing_metadata(
             metadata,
-            stream::iter(iter.map(Ok)),
+            stream::iter_ok(iter),
             trailing
         )
     }

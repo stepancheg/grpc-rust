@@ -20,7 +20,7 @@ pub fn stream_thread_spawn_iter<I, F, E>(f: F)
     let (sender, receiver) = futures::sync::mpsc::unbounded();
     thread::spawn(move || {
         for item in f() {
-            sender.send(item).expect("send");
+            sender.unbounded_send(item).expect("send");
         }
     });
 

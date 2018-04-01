@@ -60,10 +60,10 @@ impl<T : Send + 'static> GrpcStreamWithTrailingMetadata<T> {
 
     /// Single element stream with trailing metadata
     pub fn once_with_trailing_metadata(item: T, metadata: Metadata) -> GrpcStreamWithTrailingMetadata<T> {
-        GrpcStreamWithTrailingMetadata::new(stream::iter(vec![
+        GrpcStreamWithTrailingMetadata::new(stream::iter_ok(vec![
             ItemOrMetadata::Item(item),
             ItemOrMetadata::TrailingMetadata(metadata),
-        ].into_iter().map(Ok)))
+        ].into_iter()))
     }
 
     /// Create a result from iterator, no metadata
@@ -72,7 +72,7 @@ impl<T : Send + 'static> GrpcStreamWithTrailingMetadata<T> {
             I : IntoIterator<Item=T>,
             I::IntoIter : Send + 'static,
     {
-        GrpcStreamWithTrailingMetadata::stream(stream::iter(iter.into_iter().map(Ok)))
+        GrpcStreamWithTrailingMetadata::stream(stream::iter_ok(iter.into_iter()))
     }
 
     /// Create an empty stream

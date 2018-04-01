@@ -1,8 +1,4 @@
 use std::sync::Arc;
-use std::net::SocketAddr;
-use std::net::ToSocketAddrs;
-
-use futures_cpupool::CpuPool;
 
 use bytes::Bytes;
 
