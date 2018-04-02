@@ -1,4 +1,3 @@
-use std::net::SocketAddr;
 use std::sync::Arc;
 
 use bytes::Bytes;
@@ -119,7 +118,7 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn local_addr(&self) -> &SocketAddr {
+    pub fn local_addr(&self) -> &AnySocketAddr {
         self.server.local_addr()
     }
 
