@@ -12,7 +12,7 @@ path = "../../grpc"
 
 [dependencies]
 log             = "0.*"
-env_logger      = "0.*"
+env_logger      = "0.4"
 protobuf        = "1.*"
 tls-api         = "0.*"
 futures         = "0.1.*"
