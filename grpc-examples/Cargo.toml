@@ -14,8 +14,10 @@ path = "../grpc"
 protobuf        = "1.5"
 futures         = "0.1"
 futures-cpupool = "0.1"
-tls-api         = "0.1"
+tls-api            = "0.1"
+tls-api-native-tls = "0.1"
 httpbis         = "=0.4.3"
+env_logger      = "0.4"
 
 [build-dependencies]
 protoc-rust-grpc = { path = "../protoc-rust-grpc" }
