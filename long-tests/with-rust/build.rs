@@ -6,5 +6,6 @@ fn main() {
         includes: &[".."],
         input: &["../long_tests_pb.proto"],
         rust_protobuf: true,
+        ..Default::default()
     }).expect("protoc-rust-grpc");
 }

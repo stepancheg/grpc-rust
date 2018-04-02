@@ -40,6 +40,7 @@ pub fn run(args: Args) -> Result<()> {
             out_dir: args.out_dir,
             includes: args.includes,
             input: args.input,
+            ..Default::default()
         })?;
     }
 

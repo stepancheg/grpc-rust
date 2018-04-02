@@ -14,6 +14,7 @@ fn main() {
         includes: &["proto"],
         input: &["proto/aaa.proto", "proto/bbb.proto"],
         rust_protobuf: true, // also generate protobuf messages, not just services
+        ..Default::default()
     }).expect("protoc-rust-grpc");
 }
 ```

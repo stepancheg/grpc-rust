@@ -6,5 +6,6 @@ fn main() {
         includes: &["proto"],
         input: &["proto/messages.proto", "proto/empty.proto", "proto/test.proto"],
         rust_protobuf: true,
+        ..Default::default()
     }).expect("protoc-rust-grpc");
 }
