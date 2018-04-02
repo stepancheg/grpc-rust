@@ -78,7 +78,7 @@ In Cargo.toml:
 ```ini
 [dependencies]
 grpc            = "0.*"
-protobuf        = "1.*"
+protobuf        = "1.5"
 futures         = "0.1"
 futures-cpupool = "0.1"
 ```
