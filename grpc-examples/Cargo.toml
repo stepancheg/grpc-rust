@@ -14,7 +14,7 @@ path = "../grpc"
 protobuf        = "1.*"
 futures         = "0.1"
 futures-cpupool = "0.1"
-tls-api         = "0.*"
+tls-api         = "0.1"
 httpbis         = "=0.4.3"
 
 [build-dependencies]
