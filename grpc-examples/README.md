@@ -16,6 +16,7 @@ $ cargo run --bin greeter_client rust
 $ go get -u google.golang.org/grpc/examples/helloworld/greeter_client
 $ greeter_client rust
 > 2016/08/19 05:44:45 Greeting: Hello rust
+```
 
 # Test TLS
 
