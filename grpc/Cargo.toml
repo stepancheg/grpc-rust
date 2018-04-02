@@ -21,7 +21,7 @@ httpbis         = "=0.4.3"
 tls-api         = "0.*"
 tls-api-stub    = "0.*"
 bytes           = "0.4"
-base64          = "0.*"
+base64          = "0.9"
 
 [lib]
 doctest = false
