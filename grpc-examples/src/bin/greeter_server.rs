@@ -27,7 +27,7 @@ impl Greeter for GreeterImpl {
 }
 
 fn test_tls_acceptor() -> tls_api_native_tls::TlsAcceptor {
-    let pkcs12 = include_bytes!("../identity.p12");
+    let pkcs12 = include_bytes!("../foobar.com.p12");
     let builder = tls_api_native_tls::TlsAcceptorBuilder::from_pkcs12(pkcs12, "mypass").unwrap();
     builder.build().unwrap()
 }
