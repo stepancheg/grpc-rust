@@ -52,10 +52,12 @@ Have a look at readme in [protoc crate](https://github.com/stepancheg/rust-proto
 
 ### With `protoc` command and `protoc-gen-rust-grpc` plugin
 
+(Ideomatic, but not recommended)
+
 #### Install compiler plugin
 
 ```bash
-cargo install protobuf
+cargo install protobuf --version '~1.5'
 cargo install grpc-compiler
 ```
 
