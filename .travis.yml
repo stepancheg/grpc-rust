@@ -16,11 +16,13 @@ rust:
 #    packages:
 #    - protobuf-compiler
 
-script:
+install:
   - rustc --version
-  - ./test.sh
   - ./install-protobuf.sh
   - cargo install protobuf
+
+script:
+  - ./test.sh
   - ./grpc-compiler/test-protoc-plugin/gen.sh
   - cargo check --all
 
