@@ -2,6 +2,6 @@
 
 cd $(dirname $0)
 
-exec ../../cargo.sh build
+exec cargo build
 
 # vim: set ts=4 sw=4 et:

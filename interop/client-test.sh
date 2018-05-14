@@ -9,11 +9,11 @@ kill_server() {
 kill_server
 ./go-grpc-interop-server &
 
-../cargo.sh run --bin grpc-rust-interop-client -- --test_case empty_unary
-../cargo.sh run --bin grpc-rust-interop-client -- --test_case large_unary
-../cargo.sh run --bin grpc-rust-interop-client -- --test_case ping_pong
-../cargo.sh run --bin grpc-rust-interop-client -- --test_case empty_stream
-../cargo.sh run --bin grpc-rust-interop-client -- --test_case custom_metadata
+cargo run --bin grpc-rust-interop-client -- --test_case empty_unary
+cargo run --bin grpc-rust-interop-client -- --test_case large_unary
+cargo run --bin grpc-rust-interop-client -- --test_case ping_pong
+cargo run --bin grpc-rust-interop-client -- --test_case empty_stream
+cargo run --bin grpc-rust-interop-client -- --test_case custom_metadata
 
 kill_server
 

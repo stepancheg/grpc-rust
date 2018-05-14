@@ -6,7 +6,7 @@ kill_server() {
     killall -KILL grpc-rust-interop-server || true
 }
 
-../cargo.sh build
+cargo build
 kill_server
 ../target/debug/grpc-rust-interop-server &
 
