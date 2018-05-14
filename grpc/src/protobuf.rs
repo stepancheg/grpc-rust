@@ -5,7 +5,6 @@ use bytes::Bytes;
 use marshall::Marshaller;
 
 use protobuf_lib::Message;
-use protobuf_lib::MessageStatic;
 use protobuf_lib::CodedInputStream;
 
 use result;
@@ -13,7 +12,7 @@ use result;
 
 pub struct MarshallerProtobuf;
 
-impl<M : Message + MessageStatic> Marshaller<M> for MarshallerProtobuf {
+impl<M : Message> Marshaller<M> for MarshallerProtobuf {
     fn write(&self, m: &M) -> result::Result<Vec<u8>> {
         Ok(m.write_to_bytes()?)
     }

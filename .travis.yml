@@ -19,7 +19,7 @@ rust:
 install:
   - rustc --version
   - ./install-protobuf.sh
-  - cargo install protobuf
+  - cargo install protobuf-codegen --version '~1.6'
   - export RUST_BACKTRACE=1
 
 script:
