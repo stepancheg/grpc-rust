@@ -1,5 +1,6 @@
 #[macro_use]
 extern crate log;
+extern crate env_logger;
 
 extern crate futures;
 extern crate grpc;
@@ -23,6 +24,8 @@ fn reverse_fn(_: RequestOptions, req: String) -> SingleResponse<String> {
 
 #[test]
 fn multiple_services() {
+    drop(env_logger::try_init());
+
     let mut server = ServerBuilder::new_plain();
     server.http.set_port(0);
 
