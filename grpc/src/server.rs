@@ -178,26 +178,23 @@ impl httpbis::Service for GrpcHttpService {
                         Ok(part) => {
                             Ok(part)
                         }
-                        Err(e) =>
-                            Ok(HttpStreamPart::last_headers(
-                                match e {
-                                    Error::GrpcMessage(GrpcMessageError { grpc_status, grpc_message }) => {
-                                        Headers(vec![
-                                            Header::new(":status", "500"),
-                                            // TODO: check nonzero
-                                            Header::new(HEADER_GRPC_STATUS, format!("{}", grpc_status)),
-                                            // TODO: escape invalid
-                                            Header::new(HEADER_GRPC_MESSAGE, grpc_message),
-                                        ])
-                                    }
-                                    e => {
-                                        Headers(vec![
-                                            Header::new(":status", "500"),
-                                            Header::new(HEADER_GRPC_MESSAGE, format!("error: {:?}", e)),
-                                        ])
-                                    }
+                        Err(e) => {
+                            let (grpc_status, grpc_message) = match e {
+                                Error::GrpcMessage(GrpcMessageError { grpc_status, grpc_message }) => {
+                                    (grpc_status, grpc_message)
                                 }
+                                e => (
+                                    GrpcStatus::Internal as i32,
+                                    format!("error: {:?}", e),
+                                ),
+                            };
+                            Ok(HttpStreamPart::last_headers(
+                                Headers(vec![
+                                    Header::new(HEADER_GRPC_STATUS, format!("{}", grpc_status)),
+                                    Header::new(HEADER_GRPC_MESSAGE, grpc_message),
+                                ])
                             ))
+                        }
                     }
                 })
                 .0.map(|item| {

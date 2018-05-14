@@ -4,6 +4,7 @@ extern crate tokio_tls_api;
 extern crate grpc;
 #[macro_use]
 extern crate log;
+extern crate env_logger;
 
 mod test_misc;
 
@@ -180,6 +181,8 @@ fn unary() {
 
 #[test]
 fn error_in_handler() {
+    drop(env_logger::try_init());
+
     let tester = TesterUnary::new(|_m, _| SingleResponse::no_metadata(Err(Error::Other("my error")).into_future()));
 
     tester.call_expect_grpc_error_contain("aa", "my error");

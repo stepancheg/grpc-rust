@@ -17,11 +17,14 @@ futures-cpupool = "0.1.*"
 tokio-core      = "0.1.*"
 tokio-io        = "0.1.*"
 tokio-tls-api   = "0.1.*"
-httpbis         = "=0.5.0"
+httpbis         = "~0.6"
 tls-api         = "0.1"
 tls-api-stub    = "0.1"
 bytes           = "0.4"
 base64          = "0.9"
+
+[dev-dependencies]
+env_logger      = "~0.5"
 
 [lib]
 doctest = false
