@@ -20,6 +20,7 @@ install:
   - rustc --version
   - ./install-protobuf.sh
   - cargo install protobuf
+  - export RUST_BACKTRACE=1
 
 script:
   - ./test.sh

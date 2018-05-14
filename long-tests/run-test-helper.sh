@@ -32,8 +32,6 @@ $server &
 
 go_server_pid=$!
 
-export RUST_BACKTRACE=1
-
 sleep 0.1 # give server some time to start
 
 $client echo 10000
