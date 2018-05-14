@@ -23,7 +23,7 @@ install:
   - export RUST_BACKTRACE=1
 
 script:
-  - ./test.sh
+  - cargo test --all
   - ./grpc-compiler/test-protoc-plugin/gen.sh
   - cargo check --all
 
