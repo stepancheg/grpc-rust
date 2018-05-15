@@ -57,7 +57,7 @@ Have a look at readme in [protoc crate](https://github.com/stepancheg/rust-proto
 #### Install compiler plugin
 
 ```bash
-cargo install protobuf --version '~1.5'
+cargo install protobuf-codegen --version '~1.6'
 cargo install grpc-compiler
 ```
 
@@ -79,10 +79,10 @@ In Cargo.toml:
 
 ```ini
 [dependencies]
-grpc            = "0.*"
-protobuf        = "1.5"
-futures         = "0.1"
-futures-cpupool = "0.1"
+grpc            = "~0.4"
+protobuf        = "~1.6"
+futures         = "~0.1"
+futures-cpupool = "~0.1"
 ```
 
 In `lib.rs` or `main.rs` (or any other submodule):
