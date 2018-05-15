@@ -20,3 +20,6 @@ pub fn string_string_method(name: &str, streaming: GrpcStreaming)
        resp_marshaller: Box::new(MarshallerString),
    })
 }
+
+// Bind on IPv4 because IPv6 is broken on travis
+pub const BIND_HOST: &str = "127.0.0.1";

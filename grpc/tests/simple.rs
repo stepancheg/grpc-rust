@@ -77,7 +77,7 @@ impl TesterUnary {
         TesterUnary {
             name: "/text/Unary".to_owned(),
             _server: server,
-            client: Client::new_plain("::1", port, Default::default()).unwrap()
+            client: Client::new_plain(BIND_HOST, port, Default::default()).unwrap()
         }
     }
 
@@ -127,7 +127,7 @@ impl TesterServerStreaming {
         TesterServerStreaming {
             name: "/test/ServerStreaming".to_owned(),
             _server: server,
-            client: Client::new_plain("::1", port, Default::default()).unwrap()
+            client: Client::new_plain(BIND_HOST, port, Default::default()).unwrap()
         }
     }
 
@@ -155,7 +155,7 @@ impl TesterClientStreaming {
         TesterClientStreaming {
             name: "/test/ClientStreaming".to_owned(),
             _server: server,
-            client: Client::new_plain("::1", port, Default::default()).unwrap()
+            client: Client::new_plain(BIND_HOST, port, Default::default()).unwrap()
         }
     }
 

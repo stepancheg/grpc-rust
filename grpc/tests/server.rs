@@ -48,7 +48,7 @@ fn multiple_services() {
 
     let port = server.local_addr().port().expect("port");
 
-    let client = Client::new_plain("::1", port, ClientConf::new())
+    let client = Client::new_plain(BIND_HOST, port, ClientConf::new())
         .expect("client");
 
     assert_eq!(

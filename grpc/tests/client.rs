@@ -14,7 +14,7 @@ use test_misc::*;
 
 #[test]
 fn server_is_not_running() {
-    let client = Client::new_plain("::1", 2, Default::default()).unwrap();
+    let client = Client::new_plain(BIND_HOST, 2, Default::default()).unwrap();
 
     // TODO: https://github.com/tokio-rs/tokio-core/issues/12
     if false {
