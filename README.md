@@ -37,43 +37,20 @@ Client and server are implemented asynchronously.
 
 ## How to generate rust code
 
-There are several ways to generate rust code from .proto files
+There are two ways to generate rust code from .proto files
 
-### Invoke protoc programmatically with protoc-rust crate
+### Invoke protoc programmatically with `protoc-rust-grpc` crate
 
 (Recommended)
 
 Have a look at readme in
 [protoc-rust-grpc crate](https://github.com/stepancheg/grpc-rust/tree/master/protoc-rust-grpc).
 
-### Invoke protoc programmatically with protoc crate
-
-Have a look at readme in [protoc crate](https://github.com/stepancheg/rust-protobuf/tree/master/protoc).
-
 ### With `protoc` command and `protoc-gen-rust-grpc` plugin
 
-(Ideomatic, but not recommended)
+[Readme](https://github.com/stepancheg/grpc-rust/tree/master/grpc-compiler)
 
-#### Install compiler plugin
-
-```bash
-cargo install protobuf-codegen --version '~1.6'
-cargo install grpc-compiler
-```
-
-These commands install `protoc-gen-rust` and `protoc-gen-rust-grpc`
-to `~/.cargo/bin`, which should be added to `$PATH`.
-
-#### Compile your proto & gRPC to Rust:
-
-```bash
-cd $YOURPROJECT
-mkdir -p src
-protoc --rust_out=src *.proto
-protoc --rust-grpc_out=src *.proto
-```
-
-### Use compiled protos in your project:
+### Use generated protos in your project:
 
 In Cargo.toml:
 
