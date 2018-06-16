@@ -3,11 +3,8 @@ use std::sync::Arc;
 use bytes::Bytes;
 
 use httpbis;
-use httpbis::socket::AnySocketAddr;
 use httpbis::Header;
 use httpbis::Headers;
-use httpbis::HttpPartStream;
-use httpbis::stream_part::HttpStreamPart;
 
 use stream_item::ItemOrMetadata;
 
@@ -27,6 +24,9 @@ use req::*;
 use resp::*;
 use metadata::Metadata;
 use server_method::*;
+use httpbis::DataOrTrailers;
+use httpbis::HttpStreamAfterHeaders;
+use httpbis::AnySocketAddr;
 
 
 pub struct ServerServiceDefinition {
@@ -140,11 +140,11 @@ fn http_response_500(message: &str) -> httpbis::Response {
         Header::new(":status", "500"),
         Header::new(HEADER_GRPC_MESSAGE, message.to_owned()),
     ]);
-    httpbis::Response::headers_and_stream(headers, httpbis::HttpPartStream::empty())
+    httpbis::Response::headers_and_stream(headers, httpbis::HttpStreamAfterHeaders::empty())
 }
 
 impl httpbis::Service for GrpcHttpService {
-    fn start_request(&self, headers: Headers, req: HttpPartStream) -> httpbis::Response {
+    fn start_request(&self, headers: Headers, req: HttpStreamAfterHeaders) -> httpbis::Response {
 
         let path = match headers.get_opt(":path") {
             Some(path) => path.to_owned(),
@@ -172,7 +172,7 @@ impl httpbis::Service for GrpcHttpService {
             init_headers.extend(metadata.into_headers());
 
             let s2 = grpc_frames
-                .map_items(|frame| HttpStreamPart::intermediate_data(Bytes::from(write_grpc_frame_to_vec(&frame))))
+                .map_items(|frame| DataOrTrailers::intermediate_data(Bytes::from(write_grpc_frame_to_vec(&frame))))
                 .then_items(|result| {
                     match result {
                         Ok(part) => {
@@ -188,7 +188,7 @@ impl httpbis::Service for GrpcHttpService {
                                     format!("error: {:?}", e),
                                 ),
                             };
-                            Ok(HttpStreamPart::last_headers(
+                            Ok(DataOrTrailers::Trailers(
                                 Headers(vec![
                                     Header::new(HEADER_GRPC_STATUS, format!("{}", grpc_status)),
                                     Header::new(HEADER_GRPC_MESSAGE, grpc_message),
@@ -201,7 +201,7 @@ impl httpbis::Service for GrpcHttpService {
                     match item {
                         ItemOrMetadata::Item(part) => part,
                         ItemOrMetadata::TrailingMetadata(trailing_metadata) => {
-                            HttpStreamPart::last_headers( {
+                            DataOrTrailers::Trailers( {
                                 let mut trailing = Headers(vec![
                                     Header::new(HEADER_GRPC_STATUS, "0")
                                 ]);
@@ -215,11 +215,11 @@ impl httpbis::Service for GrpcHttpService {
 
             // If stream contains trailing metadata, it is converted to grpc status 0,
             // here we add trailing headers after trailing headers are ignored by HTTP server.
-            let s3 = stream::once(Ok(HttpStreamPart::last_headers(Headers(vec![
+            let s3 = stream::once(Ok(DataOrTrailers::Trailers(Headers(vec![
                 Header::new(HEADER_GRPC_STATUS, "0"),
             ]))));
 
-            let http_parts = HttpPartStream::new(s2.chain(s3));
+            let http_parts = HttpStreamAfterHeaders::new(s2.chain(s3));
 
             (init_headers, http_parts)
         }))

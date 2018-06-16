@@ -9,10 +9,8 @@ use futures::stream::Stream;
 
 use error::*;
 use result;
-
-use httpbis::HttpPartStream;
-use httpbis::stream_part::HttpStreamPartContent;
-
+use httpbis::HttpStreamAfterHeaders;
+use httpbis::DataOrTrailers;
 
 
 fn read_u32_be(bytes: &[u8]) -> u32 {
@@ -138,16 +136,16 @@ trait RequestOrResponse {
 }
 
 pub struct GrpcFrameFromHttpFramesStreamRequest {
-    http_stream_stream: HttpPartStream,
+    http_stream_stream: HttpStreamAfterHeaders,
     buf: Bytes,
     parsed_frames: VecDeque<Bytes>,
     error: Option<stream::Once<Bytes, Error>>,
 }
 
 impl GrpcFrameFromHttpFramesStreamRequest {
-    pub fn new(http_stream_stream: HttpPartStream) -> Self {
+    pub fn new(http_stream_stream: HttpStreamAfterHeaders) -> Self {
         GrpcFrameFromHttpFramesStreamRequest {
-            http_stream_stream: http_stream_stream,
+            http_stream_stream,
             buf: Bytes::new(),
             parsed_frames: VecDeque::new(),
             error: None,
@@ -160,7 +158,7 @@ impl Stream for GrpcFrameFromHttpFramesStreamRequest {
     type Item = Bytes;
     type Error = Error;
 
-    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+    fn poll(&mut self) -> Poll<Option<Bytes>, Error> {
         loop {
             if let Some(ref mut error) = self.error {
                 return error.poll();
@@ -178,7 +176,10 @@ impl Stream for GrpcFrameFromHttpFramesStreamRequest {
                 return Ok(Async::Ready(Some(frame)));
             }
 
-            let part_opt = try_ready!(self.http_stream_stream.poll());
+            let part_opt = match self.http_stream_stream.poll()? {
+                Async::NotReady => return Ok(Async::NotReady),
+                Async::Ready(part_opt) => part_opt,
+            };
             let part = match part_opt {
                 None => {
                     if self.buf.is_empty() {
@@ -191,10 +192,10 @@ impl Stream for GrpcFrameFromHttpFramesStreamRequest {
                 Some(part) => part,
             };
 
-            match part.content {
+            match part {
                 // unexpected but OK
-                HttpStreamPartContent::Headers(..) => (),
-                HttpStreamPartContent::Data(data) => {
+                DataOrTrailers::Trailers(..) => (),
+                DataOrTrailers::Data(data, ..) => {
                     self.buf.extend_from_slice(&data);
                 },
             }

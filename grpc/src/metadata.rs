@@ -1,9 +1,10 @@
 use base64;
 
-use httpbis::solicit::header::*;
-
 use bytes::Bytes;
 use chars::Chars;
+
+use httpbis::Header;
+use httpbis::Headers;
 
 #[derive(Debug)]
 pub struct MetadataKey {

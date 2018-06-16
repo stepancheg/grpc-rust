@@ -3,7 +3,6 @@ use std::net::SocketAddr;
 
 use bytes::Bytes;
 
-use futures;
 use futures::stream::Stream;
 
 use httpbis;
@@ -11,7 +10,8 @@ use httpbis::Service as HttpbisService;
 use httpbis::HttpScheme;
 use httpbis::Header;
 use httpbis::Headers;
-use httpbis::HttpPartStream;
+use httpbis::HttpStreamAfterHeaders;
+
 
 use tls_api;
 
@@ -21,14 +21,12 @@ use method::MethodDescriptor;
 use error::*;
 use result;
 
-use httpbis::futures_misc::*;
-use futures_grpc::*;
-
 use grpc_frame::*;
 use grpc_http_to_response::*;
 
 use req::*;
 use resp::*;
+
 
 #[derive(Default, Debug, Clone)]
 pub struct ClientConf {
@@ -120,23 +118,6 @@ impl Client {
             .map_err(Error::from)
     }
 
-    pub fn new_resp_channel<Resp : Send + 'static>(&self)
-        -> futures::Oneshot<(futures::sync::mpsc::UnboundedSender<ResultOrEof<Resp, Error>>, GrpcStream<Resp>)>
-    {
-        let (one_sender, one_receiver) = futures::oneshot();
-
-        let (sender, receiver) = futures::sync::mpsc::unbounded();
-        let receiver: GrpcStream<ResultOrEof<Resp, Error>> =
-            Box::new(receiver.map_err(|()| Error::Other("receive from resp channel")));
-
-        let receiver: GrpcStream<Resp> = Box::new(stream_with_eof_and_error(receiver, || Error::Other("unexpected EOF")));
-
-        // TODO: oneshot sender is no longer necessary as we don't use tokio queues
-        one_sender.send((sender, receiver)).ok().unwrap();
-
-        one_receiver
-    }
-
     fn call_impl<Req, Resp>(
         &self,
         options: RequestOptions,
@@ -173,7 +154,7 @@ impl Client {
         let http_response_stream = self.client
             .start_request(
                 headers,
-                HttpPartStream::bytes(request_frames));
+                HttpStreamAfterHeaders::bytes(request_frames));
 
         let grpc_frames = http_response_to_grpc_frames(http_response_stream);
 
