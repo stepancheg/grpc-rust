@@ -96,6 +96,14 @@ impl<A : tls_api::TlsAcceptor> ServerBuilder<A> {
         }
     }
 
+    #[cfg(unix)]
+    pub fn new_unix() -> ServerBuilder<A> {
+        ServerBuilder {
+            http: httpbis::ServerBuilder::new(),
+            conf: ServerConf::new(),
+        }
+    }
+
     pub fn add_service(&mut self, def: ServerServiceDefinition) {
         self.http.service.set_service(&def.prefix.clone(), Arc::new(GrpcHttpService {
             service_definition: Arc::new(def),
