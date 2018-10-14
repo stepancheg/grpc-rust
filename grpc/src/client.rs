@@ -68,6 +68,26 @@ impl Client {
             .map_err(Error::from)
     }
 
+    /// Create a client connected to specified Unix domain socket.
+    #[cfg(unix)]
+    pub fn new_plain_unix(addr: &str, conf: ClientConf)
+        -> result::Result<Client>
+    {
+        let mut conf = conf;
+        conf.http.thread_name =
+            Some(conf.http.thread_name.unwrap_or_else(|| "grpc-client-loop".to_owned()));
+
+        httpbis::Client::new_plain_unix(addr, conf.http)
+            .map(|client| {
+                Client {
+                    client: ::std::sync::Arc::new(client),
+                    host: addr.to_owned(),
+                    http_scheme: HttpScheme::Http,
+                }
+            })
+            .map_err(Error::from)
+    }
+
     /// Create a clone of this client but refer to same httpbis::Client.
     pub fn clone(&self)
         -> Client
