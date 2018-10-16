@@ -1,6 +1,6 @@
 use std::error::Error as StdError;
-use std::io;
 use std::fmt;
+use std::io;
 
 use futures;
 
@@ -18,7 +18,6 @@ pub struct GrpcMessageError {
     pub grpc_message: String,
 }
 
-
 #[derive(Debug)]
 pub enum Error {
     Io(io::Error),
@@ -31,7 +30,7 @@ pub enum Error {
     Other(&'static str),
 }
 
-fn _assert_debug<D : ::std::fmt::Debug>(_: &D) {}
+fn _assert_debug<D: ::std::fmt::Debug>(_: &D) {}
 
 fn _assert_grpc_error_debug(e: &Error) {
     _assert_debug(e);
@@ -66,7 +65,6 @@ impl fmt::Display for Error {
         }
     }
 }
-
 
 impl From<io::Error> for Error {
     fn from(err: io::Error) -> Self {

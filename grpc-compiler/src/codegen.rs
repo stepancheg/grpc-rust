@@ -2,10 +2,9 @@ use std::collections::HashMap;
 
 use protobuf;
 use protobuf::compiler_plugin;
-use protobuf_codegen::code_writer::CodeWriter;
 use protobuf::descriptor::*;
 use protobuf::descriptorx::*;
-
+use protobuf_codegen::code_writer::CodeWriter;
 
 /// Adjust method name to follow the rust's style.
 fn snake_name(name: &str) -> String {
@@ -13,8 +12,7 @@ fn snake_name(name: &str) -> String {
     let mut chars = name.chars();
     // initial char can be any char except '_'.
     let mut last_char = '.';
-    'outer:
-    while let Some(c) = chars.next() {
+    'outer: while let Some(c) = chars.next() {
         // Please note that '_' is neither uppercase nor lowercase.
         if !c.is_uppercase() {
             last_char = c;
@@ -55,7 +53,11 @@ struct MethodGen<'a> {
 }
 
 impl<'a> MethodGen<'a> {
-    fn new(proto: &'a MethodDescriptorProto, service_path: String, root_scope: &'a RootScope<'a>) -> MethodGen<'a> {
+    fn new(
+        proto: &'a MethodDescriptorProto,
+        service_path: String,
+        root_scope: &'a RootScope<'a>,
+    ) -> MethodGen<'a> {
         MethodGen {
             proto: proto,
             service_path: service_path,
@@ -68,30 +70,44 @@ impl<'a> MethodGen<'a> {
     }
 
     fn input_message(&self) -> String {
-        format!("super::{}", self.root_scope.find_message(self.proto.get_input_type()).rust_fq_name())
+        format!(
+            "super::{}",
+            self.root_scope
+                .find_message(self.proto.get_input_type())
+                .rust_fq_name()
+        )
     }
 
     fn output_message(&self) -> String {
-        format!("super::{}", self.root_scope.find_message(self.proto.get_output_type()).rust_fq_name())
+        format!(
+            "super::{}",
+            self.root_scope
+                .find_message(self.proto.get_output_type())
+                .rust_fq_name()
+        )
     }
 
     fn input(&self) -> String {
         match self.proto.get_client_streaming() {
             false => self.input_message(),
-            true  => format!("::grpc::StreamingRequest<{}>", self.input_message()),
+            true => format!("::grpc::StreamingRequest<{}>", self.input_message()),
         }
     }
 
     fn output(&self) -> String {
         match self.proto.get_server_streaming() {
             false => format!("::grpc::SingleResponse<{}>", self.output_message()),
-            true  => format!("::grpc::StreamingResponse<{}>", self.output_message()),
+            true => format!("::grpc::StreamingResponse<{}>", self.output_message()),
         }
     }
 
     fn sig(&self) -> String {
-        format!("{}(&self, o: ::grpc::RequestOptions, p: {}) -> {}",
-                self.snake_name(), self.input(), self.output())
+        format!(
+            "{}(&self, o: ::grpc::RequestOptions, p: {}) -> {}",
+            self.snake_name(),
+            self.input(),
+            self.output()
+        )
     }
 
     fn write_intf(&self, w: &mut CodeWriter) {
@@ -103,11 +119,18 @@ impl<'a> MethodGen<'a> {
     }
 
     fn descriptor_type(&self) -> String {
-        format!("::grpc::rt::MethodDescriptor<{}, {}>", self.input_message(), self.output_message())
+        format!(
+            "::grpc::rt::MethodDescriptor<{}, {}>",
+            self.input_message(),
+            self.output_message()
+        )
     }
 
     fn streaming_upper(&self) -> &'static str {
-        match (self.proto.get_client_streaming(), self.proto.get_server_streaming()) {
+        match (
+            self.proto.get_client_streaming(),
+            self.proto.get_server_streaming(),
+        ) {
             (false, false) => "Unary",
             (false, true) => "ServerStreaming",
             (true, false) => "ClientStreaming",
@@ -116,7 +139,10 @@ impl<'a> MethodGen<'a> {
     }
 
     fn streaming_lower(&self) -> &'static str {
-        match (self.proto.get_client_streaming(), self.proto.get_server_streaming()) {
+        match (
+            self.proto.get_client_streaming(),
+            self.proto.get_server_streaming(),
+        ) {
             (false, false) => "unary",
             (false, true) => "server_streaming",
             (true, false) => "client_streaming",
@@ -126,19 +152,41 @@ impl<'a> MethodGen<'a> {
 
     fn write_client(&self, w: &mut CodeWriter) {
         w.def_fn(&self.sig(), |w| {
-            w.write_line(&format!("self.grpc_client.call_{}(o, p, self.{}.clone())",
+            w.write_line(&format!(
+                "self.grpc_client.call_{}(o, p, self.{}.clone())",
                 self.streaming_lower(),
-                self.descriptor_field_name()))
+                self.descriptor_field_name()
+            ))
         });
     }
 
     fn write_descriptor(&self, w: &mut CodeWriter, before: &str, after: &str) {
-        w.block(&format!("{}{}", before, "::grpc::rt::MethodDescriptor {"), &format!("{}{}", "}", after), |w| {
-            w.field_entry("name", &format!("\"{}/{}\".to_string()", self.service_path, self.proto.get_name()));
-            w.field_entry("streaming", &format!("::grpc::rt::GrpcStreaming::{}", self.streaming_upper()));
-            w.field_entry("req_marshaller", "Box::new(::grpc::protobuf::MarshallerProtobuf)");
-            w.field_entry("resp_marshaller", "Box::new(::grpc::protobuf::MarshallerProtobuf)");
-        });
+        w.block(
+            &format!("{}{}", before, "::grpc::rt::MethodDescriptor {"),
+            &format!("{}{}", "}", after),
+            |w| {
+                w.field_entry(
+                    "name",
+                    &format!(
+                        "\"{}/{}\".to_string()",
+                        self.service_path,
+                        self.proto.get_name()
+                    ),
+                );
+                w.field_entry(
+                    "streaming",
+                    &format!("::grpc::rt::GrpcStreaming::{}", self.streaming_upper()),
+                );
+                w.field_entry(
+                    "req_marshaller",
+                    "Box::new(::grpc::protobuf::MarshallerProtobuf)",
+                );
+                w.field_entry(
+                    "resp_marshaller",
+                    "Box::new(::grpc::protobuf::MarshallerProtobuf)",
+                );
+            },
+        );
     }
 }
 
@@ -151,14 +199,19 @@ struct ServiceGen<'a> {
 }
 
 impl<'a> ServiceGen<'a> {
-    fn new(proto: &'a ServiceDescriptorProto, file: &FileDescriptorProto, root_scope: &'a RootScope) -> ServiceGen<'a> {
-        let service_path =
-            if file.get_package().is_empty() {
-                format!("/{}", proto.get_name())
-            } else {
-                format!("/{}.{}", file.get_package(), proto.get_name())
-            };
-        let methods = proto.get_method().into_iter()
+    fn new(
+        proto: &'a ServiceDescriptorProto,
+        file: &FileDescriptorProto,
+        root_scope: &'a RootScope,
+    ) -> ServiceGen<'a> {
+        let service_path = if file.get_package().is_empty() {
+            format!("/{}", proto.get_name())
+        } else {
+            format!("/{}.{}", file.get_package(), proto.get_name())
+        };
+        let methods = proto
+            .get_method()
+            .into_iter()
             .map(|m| MethodGen::new(m, service_path.clone(), root_scope))
             .collect();
 
@@ -205,7 +258,8 @@ impl<'a> ServiceGen<'a> {
                 method.write_descriptor(
                     w,
                     &format!("{}: ::std::sync::Arc::new(", method.descriptor_field_name()),
-                    "),");
+                    "),",
+                );
             }
         });
     }
@@ -216,7 +270,8 @@ impl<'a> ServiceGen<'a> {
             for method in &self.methods {
                 w.field_decl(
                     &method.descriptor_field_name(),
-                    &format!("::std::sync::Arc<{}>", method.descriptor_type()));
+                    &format!("::std::sync::Arc<{}>", method.descriptor_type()),
+                );
             }
         });
 
@@ -273,7 +328,13 @@ impl<'a> ServiceGen<'a> {
         });
     }
 
-    fn write_service_definition(&self, before: &str, after: &str, handler: &str, w: &mut CodeWriter) {
+    fn write_service_definition(
+        &self,
+        before: &str,
+        after: &str,
+        handler: &str,
+        w: &mut CodeWriter,
+    ) {
         w.block(
             &format!("{}::grpc::rt::ServerServiceDefinition::new(\"{}\",",
                 before, self.service_path),
@@ -329,8 +390,7 @@ impl<'a> ServiceGen<'a> {
 fn gen_file(
     file: &FileDescriptorProto,
     root_scope: &RootScope,
-) -> Option<compiler_plugin::GenResult>
-{
+) -> Option<compiler_plugin::GenResult> {
     if file.get_service().is_empty() {
         return None;
     }
@@ -355,13 +415,16 @@ fn gen_file(
     })
 }
 
-pub fn gen(file_descriptors: &[FileDescriptorProto], files_to_generate: &[String])
-        -> Vec<compiler_plugin::GenResult>
-{
+pub fn gen(
+    file_descriptors: &[FileDescriptorProto],
+    files_to_generate: &[String],
+) -> Vec<compiler_plugin::GenResult> {
     let files_map: HashMap<&str, &FileDescriptorProto> =
         file_descriptors.iter().map(|f| (f.get_name(), f)).collect();
 
-    let root_scope = RootScope { file_descriptors: file_descriptors };
+    let root_scope = RootScope {
+        file_descriptors: file_descriptors,
+    };
 
     let mut results = Vec::new();
 

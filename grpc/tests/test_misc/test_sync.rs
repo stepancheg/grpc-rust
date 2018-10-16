@@ -1,9 +1,8 @@
 #![allow(dead_code)]
 
-use std::sync::Mutex;
 use std::sync::Condvar;
+use std::sync::Mutex;
 use std::thread;
-
 
 /// Super duper utility to test multithreaded apps.
 pub struct TestSync {
@@ -25,14 +24,23 @@ impl TestSync {
         let mut guard = self.mutex.lock().expect("mutex poisoned");
         loop {
             if *guard == wait_for {
-                trace!("take {} from thread {}", wait_for, thread::current().name().unwrap_or("?"));
+                trace!(
+                    "take {} from thread {}",
+                    wait_for,
+                    thread::current().name().unwrap_or("?")
+                );
                 *guard += 1;
                 self.condvar.notify_all();
                 return;
             }
 
             // otherwise we would stuck here forever
-            assert!(wait_for > *guard, "wait_for = {}, *guard = {}", wait_for, *guard);
+            assert!(
+                wait_for > *guard,
+                "wait_for = {}, *guard = {}",
+                wait_for,
+                *guard
+            );
 
             guard = self.condvar.wait(guard).expect("wait");
         }

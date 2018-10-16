@@ -1,22 +1,30 @@
 extern crate futures;
 
-extern crate grpc_examples;
 extern crate grpc;
+extern crate grpc_examples;
 extern crate httpbis;
 
 use std::thread;
 
-use grpc_examples::helloworld_grpc::*;
 use grpc_examples::helloworld::*;
+use grpc_examples::helloworld_grpc::*;
 
 struct GreeterImpl {
     instance: u32,
 }
 
 impl Greeter for GreeterImpl {
-    fn say_hello(&self, _m: grpc::RequestOptions, req: HelloRequest) -> grpc::SingleResponse<HelloReply> {
+    fn say_hello(
+        &self,
+        _m: grpc::RequestOptions,
+        req: HelloRequest,
+    ) -> grpc::SingleResponse<HelloReply> {
         let mut r = HelloReply::new();
-        let name = if req.get_name().is_empty() { "world" } else { req.get_name() };
+        let name = if req.get_name().is_empty() {
+            "world"
+        } else {
+            req.get_name()
+        };
         println!("instance {}, greeting request from {}", self.instance, name);
         r.set_message(format!("Hello {}", name));
         grpc::SingleResponse::completed(r)
@@ -24,7 +32,6 @@ impl Greeter for GreeterImpl {
 }
 
 fn main() {
-    
     let mut conf = httpbis::ServerConf::default();
     conf.reuse_port = Some(true);
 

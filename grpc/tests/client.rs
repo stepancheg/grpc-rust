@@ -6,11 +6,10 @@ extern crate grpc;
 
 mod test_misc;
 
-use grpc::*;
 use grpc::rt::GrpcStreaming;
+use grpc::*;
 
 use test_misc::*;
-
 
 #[test]
 fn server_is_not_running() {
@@ -18,10 +17,12 @@ fn server_is_not_running() {
 
     // TODO: https://github.com/tokio-rs/tokio-core/issues/12
     if false {
-        let result = client.call_unary(
-            RequestOptions::new(),
-            "aa".to_owned(),
-            string_string_method("/does/not/matter", GrpcStreaming::Unary)).wait();
+        let result = client
+            .call_unary(
+                RequestOptions::new(),
+                "aa".to_owned(),
+                string_string_method("/does/not/matter", GrpcStreaming::Unary),
+            ).wait();
         assert!(result.is_err(), result);
     }
 }
@@ -33,10 +34,12 @@ fn server_is_not_running_unix() {
 
     // TODO: https://github.com/tokio-rs/tokio-core/issues/12
     if false {
-        let result = client.call_unary(
-            RequestOptions::new(),
-            "aa".to_owned(),
-            string_string_method("/does/not/matter", GrpcStreaming::Unary)).wait();
+        let result = client
+            .call_unary(
+                RequestOptions::new(),
+                "aa".to_owned(),
+                string_string_method("/does/not/matter", GrpcStreaming::Unary),
+            ).wait();
         assert!(result.is_err(), result);
     }
 }

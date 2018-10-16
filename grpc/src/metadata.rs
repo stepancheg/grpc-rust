@@ -12,15 +12,13 @@ pub struct MetadataKey {
 }
 
 impl MetadataKey {
-    pub fn from<S : Into<Chars>>(s: S) -> MetadataKey {
+    pub fn from<S: Into<Chars>>(s: S) -> MetadataKey {
         let chars = s.into();
 
         // TODO: assert ASCII
         assert!(!chars.is_empty());
 
-        MetadataKey {
-            name: chars
-        }
+        MetadataKey { name: chars }
     }
 
     pub fn is_bin(&self) -> bool {
@@ -73,7 +71,7 @@ impl MetadataEntry {
             return Ok(None);
         }
         let key = MetadataKey {
-            name: Chars::try_from(header.name).expect("utf-8")
+            name: Chars::try_from(header.name).expect("utf-8"),
         };
         let value = match key.is_bin() {
             true => Bytes::from(base64::decode(&header.value)?),
@@ -107,7 +105,12 @@ impl Metadata {
     }
 
     pub fn into_headers(self) -> Headers {
-        Headers(self.entries.into_iter().map(MetadataEntry::into_header).collect())
+        Headers(
+            self.entries
+                .into_iter()
+                .map(MetadataEntry::into_header)
+                .collect(),
+        )
     }
 
     // Get metadata by key

@@ -1,14 +1,13 @@
 extern crate env_logger;
 
+extern crate futures;
 extern crate grpc;
 extern crate long_tests;
-extern crate futures;
 
 use long_tests::long_tests_pb::*;
 use long_tests::long_tests_pb_grpc::*;
 
 use std::env;
-
 
 fn single_num_arg_or(cmd_args: &[String], or: u64) -> u64 {
     if cmd_args.len() == 0 {
@@ -19,7 +18,6 @@ fn single_num_arg_or(cmd_args: &[String], or: u64) -> u64 {
         panic!("too many args");
     }
 }
-
 
 fn run_echo(client: LongTestsClient, cmd_args: &[String]) {
     let count = single_num_arg_or(cmd_args, 1);
@@ -32,14 +30,16 @@ fn run_echo(client: LongTestsClient, cmd_args: &[String]) {
         let mut req = EchoRequest::new();
         req.set_payload(payload.clone());
 
-        let r = client.echo(grpc::RequestOptions::new(), req).wait_drop_metadata().expect("failed to get echo response");
+        let r = client
+            .echo(grpc::RequestOptions::new(), req)
+            .wait_drop_metadata()
+            .expect("failed to get echo response");
 
         assert!(payload == r.get_payload());
     }
 
     println!("done");
 }
-
 
 fn main() {
     env_logger::init().unwrap();

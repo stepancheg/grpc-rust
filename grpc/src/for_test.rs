@@ -1,13 +1,10 @@
 //! Code useful in tests.
 
-
 use bytes::Bytes;
 
-use result::Result;
 use error::Error;
 use marshall::Marshaller;
-
-
+use result::Result;
 
 pub struct MarshallerString;
 

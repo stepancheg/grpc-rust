@@ -112,4 +112,3 @@ pub enum GrpcStatus {
     /* Unrecoverable data loss or corruption. */
     DataLoss = 15,
 }
-

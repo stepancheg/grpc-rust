@@ -1,12 +1,12 @@
 extern crate bytes;
-extern crate protobuf;
-extern crate grpc;
-extern crate futures;
-extern crate futures_cpupool;
-extern crate log;
-extern crate env_logger;
 extern crate chrono;
 extern crate clap;
+extern crate env_logger;
+extern crate futures;
+extern crate futures_cpupool;
+extern crate grpc;
+extern crate log;
+extern crate protobuf;
 
 use futures::future::Future;
 
@@ -21,7 +21,8 @@ use chrono::*;
 use clap::{App, Arg};
 
 fn empty_unary(client: TestServiceClient) {
-    client.empty_call(grpc::RequestOptions::new(), Empty::new())
+    client
+        .empty_call(grpc::RequestOptions::new(), Empty::new())
         .wait_drop_metadata()
         .expect("failed to get EmptyUnary result");
     println!("{} EmptyUnary done", Local::now().to_rfc3339());
@@ -34,7 +35,10 @@ fn large_unary(client: TestServiceClient) {
     let mut request = SimpleRequest::new();
     request.set_payload(payload);
     request.set_response_size(314159);
-    let response = client.unary_call(grpc::RequestOptions::new(), request).wait_drop_metadata().expect("expected full frame");
+    let response = client
+        .unary_call(grpc::RequestOptions::new(), request)
+        .wait_drop_metadata()
+        .expect("expected full frame");
     assert!(response.get_payload().body.len() == 314159);
     println!("{} LargeUnary done", Local::now().to_rfc3339());
 }
@@ -49,7 +53,11 @@ fn client_streaming(client: TestServiceClient) {
         requests.push(request);
     }
 
-    let response = client.streaming_input_call(grpc::RequestOptions::new(), grpc::StreamingRequest::iter(requests)).wait_drop_metadata()
+    let response = client
+        .streaming_input_call(
+            grpc::RequestOptions::new(),
+            grpc::StreamingRequest::iter(requests),
+        ).wait_drop_metadata()
         .expect("expected response");
     assert!(response.aggregated_payload_size == 74922);
     println!("{} ClientStreaming done", Local::now().to_rfc3339());
@@ -67,14 +75,22 @@ fn server_streaming(client: TestServiceClient) {
     }
     req.set_response_parameters(::protobuf::RepeatedField::from_vec(params));
 
-    let response_stream = client.streaming_output_call(grpc::RequestOptions::new(), req).wait_drop_metadata();
+    let response_stream = client
+        .streaming_output_call(grpc::RequestOptions::new(), req)
+        .wait_drop_metadata();
 
     let mut response_sizes = Vec::new();
 
     {
         // this scope is to satisfy the borrow checker.
         let bar = response_stream.map(|response| {
-            response_sizes.push(response.expect("expected a response").get_payload().body.len());
+            response_sizes.push(
+                response
+                    .expect("expected a response")
+                    .get_payload()
+                    .body
+                    .len(),
+            );
         });
         assert!(bar.count() == 4);
     }
@@ -97,11 +113,15 @@ fn ping_pong(client: TestServiceClient) {
         params.set_size(size_body_len.0);
         req.set_response_parameters(::protobuf::RepeatedField::from_vec(vec![params]));
         let mut payload = Payload::new();
-        payload.set_body(vec![0;size_body_len.1]);
+        payload.set_body(vec![0; size_body_len.1]);
         req.set_payload(payload);
         requests.push(req);
     }
-    let response = client.full_duplex_call(grpc::RequestOptions::new(), grpc::StreamingRequest::iter(requests)).wait_drop_metadata();
+    let response = client
+        .full_duplex_call(
+            grpc::RequestOptions::new(),
+            grpc::StreamingRequest::iter(requests),
+        ).wait_drop_metadata();
     let mut response_sizes = Vec::new();
     {
         // this scope is to satisfy the borrow checker.
@@ -121,10 +141,9 @@ fn ping_pong(client: TestServiceClient) {
 }
 
 fn empty_stream(client: TestServiceClient) {
-    let response = client.full_duplex_call(
-        grpc::RequestOptions::new(),
-        grpc::StreamingRequest::empty())
-            .wait_drop_metadata();
+    let response = client
+        .full_duplex_call(grpc::RequestOptions::new(), grpc::StreamingRequest::empty())
+        .wait_drop_metadata();
     assert!(response.count() == 0);
     println!("{} EmptyStream done", Local::now().to_rfc3339());
 }
@@ -137,16 +156,24 @@ fn custom_metadata(client: TestServiceClient) {
         let mut options = grpc::RequestOptions::new();
         options.metadata.add(
             MetadataKey::from("x-grpc-test-echo-initial"),
-            Bytes::from("test_initial_metadata_value"));
+            Bytes::from("test_initial_metadata_value"),
+        );
         options.metadata.add(
             MetadataKey::from("x-grpc-test-echo-trailing-bin"),
-            Bytes::from(&b"\xab\xab\xab"[..]));
+            Bytes::from(&b"\xab\xab\xab"[..]),
+        );
         options
     }
 
     fn assert_result_metadata(initial: grpc::Metadata, trailing: grpc::Metadata) {
-        assert_eq!(Some(&b"test_initial_metadata_value"[..]), initial.get("x-grpc-test-echo-initial"));
-        assert_eq!(Some(&b"\xab\xab\xab"[..]), trailing.get("x-grpc-test-echo-trailing-bin"));
+        assert_eq!(
+            Some(&b"test_initial_metadata_value"[..]),
+            initial.get("x-grpc-test-echo-initial")
+        );
+        assert_eq!(
+            Some(&b"\xab\xab\xab"[..]),
+            trailing.get("x-grpc-test-echo-trailing-bin")
+        );
     }
 
     {
@@ -162,8 +189,10 @@ fn custom_metadata(client: TestServiceClient) {
         let mut payload = Payload::new();
         payload.set_body(vec![0; 271828]);
         req.set_payload(payload);
-        let (initial, _result, trailing) = client.unary_call(make_options(), req)
-            .wait().expect("UnaryCall");
+        let (initial, _result, trailing) = client
+            .unary_call(make_options(), req)
+            .wait()
+            .expect("UnaryCall");
 
         assert_result_metadata(initial, trailing);
     }
@@ -190,8 +219,11 @@ fn custom_metadata(client: TestServiceClient) {
             req.set_payload(p);
         }
 
-        let (initial, _res, trailing) = client.full_duplex_call(make_options(), grpc::StreamingRequest::single(req))
-            .collect().wait().expect("FullDuplexCall");
+        let (initial, _res, trailing) = client
+            .full_duplex_call(make_options(), grpc::StreamingRequest::single(req))
+            .collect()
+            .wait()
+            .expect("FullDuplexCall");
 
         assert_result_metadata(initial, trailing);
     }
@@ -206,51 +238,65 @@ fn main() {
         .version("0.1")
         .author("Steve Jenson <stevej@buoyant.io>")
         .about("Interoperability Test Client for grpc-rust")
-        .arg(Arg::with_name("server_host")
-            .long("server_host")
-            .help("The server host to connect to. For example, \"localhost\" or \"127.0.0.1\"")
-            .takes_value(true))
-        .arg(Arg::with_name("server_host_override")
-            .long("server_host_override")
-            .help("The server host to claim to be connecting to, for use in TLS and HTTP/2 \
-                   :authority header. If unspecified, the value of --server_host will be used")
-            .takes_value(true))
-        .arg(Arg::with_name("server_port")
-            .long("server_port")
-            .help("The server port to connect to. For example, \"8080\"")
-            .takes_value(true))
-        .arg(Arg::with_name("test_case")
-            .long("test_case")
-            .help("The name of the test case to execute. For example, \"empty_unary\"")
-            .takes_value(true))
-        .arg(Arg::with_name("use_tls") // boolean
+        .arg(
+            Arg::with_name("server_host")
+                .long("server_host")
+                .help("The server host to connect to. For example, \"localhost\" or \"127.0.0.1\"")
+                .takes_value(true),
+        ).arg(
+            Arg::with_name("server_host_override")
+                .long("server_host_override")
+                .help(
+                    "The server host to claim to be connecting to, for use in TLS and HTTP/2 \
+                     :authority header. If unspecified, the value of --server_host will be used",
+                ).takes_value(true),
+        ).arg(
+            Arg::with_name("server_port")
+                .long("server_port")
+                .help("The server port to connect to. For example, \"8080\"")
+                .takes_value(true),
+        ).arg(
+            Arg::with_name("test_case")
+                .long("test_case")
+                .help("The name of the test case to execute. For example, \"empty_unary\"")
+                .takes_value(true),
+        ).arg(
+            Arg::with_name("use_tls") // boolean
             .long("use_tls")
             .help("Whether to use a plaintext or encrypted connection")
-            .takes_value(true))
-        .arg(Arg::with_name("use_test_ca")
-            .long("use_test_ca")
-            .help("Whether to replace platform root CAs with ca.pem as the CA root")
-            .takes_value(true))
-        .arg(Arg::with_name("default_service_account")
-            .long("default_service_account")
-            .help("Email of the GCE default service account.")
-            .takes_value(true))
-        .arg(Arg::with_name("oauth_scope")
-            .long("oauth_scope")
-            .help("OAuth scope. For example, \"https://www.googleapis.com/auth/xapi.zoo\"")
-            .takes_value(true))
-        .arg(Arg::with_name("service_account_key_file")
-            .long("service_account_key_file")
-            .help("The path to the service account JSON key file generated from GCE developer \
-                   console.")
-            .takes_value(true))
-        .get_matches();
+            .takes_value(true),
+        ).arg(
+            Arg::with_name("use_test_ca")
+                .long("use_test_ca")
+                .help("Whether to replace platform root CAs with ca.pem as the CA root")
+                .takes_value(true),
+        ).arg(
+            Arg::with_name("default_service_account")
+                .long("default_service_account")
+                .help("Email of the GCE default service account.")
+                .takes_value(true),
+        ).arg(
+            Arg::with_name("oauth_scope")
+                .long("oauth_scope")
+                .help("OAuth scope. For example, \"https://www.googleapis.com/auth/xapi.zoo\"")
+                .takes_value(true),
+        ).arg(
+            Arg::with_name("service_account_key_file")
+                .long("service_account_key_file")
+                .help(
+                    "The path to the service account JSON key file generated from GCE developer \
+                     console.",
+                ).takes_value(true),
+        ).get_matches();
 
     let hostname = options.value_of("server_host").unwrap_or("localhost");
-    let serverport = options.value_of("server_port").map(|s| s.parse().unwrap()).unwrap_or(DEFAULT_PORT);
+    let serverport = options
+        .value_of("server_port")
+        .map(|s| s.parse().unwrap())
+        .unwrap_or(DEFAULT_PORT);
 
-    let client = TestServiceClient::new_plain(hostname, serverport, Default::default())
-        .expect("init");
+    let client =
+        TestServiceClient::new_plain(hostname, serverport, Default::default()).expect("init");
 
     let testcase = options.value_of("test_case").unwrap_or("");
     match testcase.as_ref() {

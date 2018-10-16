@@ -13,21 +13,20 @@ use result::Result;
 use tls_api;
 use tls_api_stub;
 
-use futures::Future;
 use futures::stream;
 use futures::stream::Stream;
+use futures::Future;
 
 use error::*;
 use grpc::*;
 use grpc_frame::*;
-use req::*;
-use resp::*;
-use metadata::Metadata;
-use server_method::*;
+use httpbis::AnySocketAddr;
 use httpbis::DataOrTrailers;
 use httpbis::HttpStreamAfterHeaders;
-use httpbis::AnySocketAddr;
-
+use metadata::Metadata;
+use req::*;
+use resp::*;
+use server_method::*;
 
 pub struct ServerServiceDefinition {
     pub prefix: String,
@@ -43,33 +42,29 @@ impl ServerServiceDefinition {
     }
 
     pub fn find_method(&self, name: &str) -> Option<&ServerMethod> {
-        self.methods.iter()
-            .filter(|m| m.name == name)
-            .next()
+        self.methods.iter().filter(|m| m.name == name).next()
     }
 
-    pub fn handle_method(&self, name: &str, o: RequestOptions, message: StreamingRequest<Bytes>)
-        -> StreamingResponse<Vec<u8>>
-    {
+    pub fn handle_method(
+        &self,
+        name: &str,
+        o: RequestOptions,
+        message: StreamingRequest<Bytes>,
+    ) -> StreamingResponse<Vec<u8>> {
         match self.find_method(name) {
             Some(method) => method.dispatch.start_request(o, message),
-            None => {
-                StreamingResponse::no_metadata(Box::new(stream::once(Err(
-                    Error::GrpcMessage(
-                        GrpcMessageError {
-                            grpc_status: GrpcStatus::Unimplemented as i32,
-                            grpc_message: String::from("Unimplemented method"),
-                        }
-                    )
-                ))))
-            },
+            None => StreamingResponse::no_metadata(Box::new(stream::once(Err(
+                Error::GrpcMessage(GrpcMessageError {
+                    grpc_status: GrpcStatus::Unimplemented as i32,
+                    grpc_message: String::from("Unimplemented method"),
+                }),
+            )))),
         }
     }
 }
 
 #[derive(Default, Debug, Clone)]
-pub struct ServerConf {
-}
+pub struct ServerConf {}
 
 impl ServerConf {
     pub fn new() -> ServerConf {
@@ -77,7 +72,7 @@ impl ServerConf {
     }
 }
 
-pub struct ServerBuilder<A : tls_api::TlsAcceptor = tls_api_stub::TlsAcceptor> {
+pub struct ServerBuilder<A: tls_api::TlsAcceptor = tls_api_stub::TlsAcceptor> {
     pub http: httpbis::ServerBuilder<A>,
     pub conf: ServerConf,
 }
@@ -88,7 +83,7 @@ impl ServerBuilder<tls_api_stub::TlsAcceptor> {
     }
 }
 
-impl<A : tls_api::TlsAcceptor> ServerBuilder<A> {
+impl<A: tls_api::TlsAcceptor> ServerBuilder<A> {
     pub fn new() -> ServerBuilder<A> {
         ServerBuilder {
             http: httpbis::ServerBuilder::new(),
@@ -105,21 +100,27 @@ impl<A : tls_api::TlsAcceptor> ServerBuilder<A> {
     }
 
     pub fn add_service(&mut self, def: ServerServiceDefinition) {
-        self.http.service.set_service(&def.prefix.clone(), Arc::new(GrpcHttpService {
-            service_definition: Arc::new(def),
-        }));
+        self.http.service.set_service(
+            &def.prefix.clone(),
+            Arc::new(GrpcHttpService {
+                service_definition: Arc::new(def),
+            }),
+        );
     }
 
     pub fn build(mut self) -> Result<Server> {
-        self.http.conf.thread_name =
-            Some(self.http.conf.thread_name.unwrap_or_else(|| "grpc-server-loop".to_owned()));
+        self.http.conf.thread_name = Some(
+            self.http
+                .conf
+                .thread_name
+                .unwrap_or_else(|| "grpc-server-loop".to_owned()),
+        );
 
         Ok(Server {
             server: self.http.build()?,
         })
     }
 }
-
 
 pub struct Server {
     server: httpbis::Server,
@@ -140,7 +141,6 @@ struct GrpcHttpService {
     service_definition: Arc<ServerServiceDefinition>,
 }
 
-
 /// Create HTTP response for gRPC error
 fn http_response_500(message: &str) -> httpbis::Response {
     // TODO: HttpResponse::headers
@@ -153,7 +153,6 @@ fn http_response_500(message: &str) -> httpbis::Response {
 
 impl httpbis::Service for GrpcHttpService {
     fn start_request(&self, headers: Headers, req: HttpStreamAfterHeaders) -> httpbis::Response {
-
         let path = match headers.get_opt(":path") {
             Some(path) => path.to_owned(),
             None => return http_response_500("no :path header"),
@@ -169,67 +168,64 @@ impl httpbis::Service for GrpcHttpService {
         let request_options = RequestOptions { metadata: metadata };
         // TODO: catch unwind
         let grpc_response = self.service_definition.handle_method(
-            &path, request_options, StreamingRequest::new(grpc_request));
+            &path,
+            request_options,
+            StreamingRequest::new(grpc_request),
+        );
 
-        httpbis::Response::new(grpc_response.0.map_err(httpbis::Error::from).map(|(metadata, grpc_frames)| {
-            let mut init_headers = Headers(vec![
-                Header::new(":status", "200"),
-                Header::new("content-type", "application/grpc"),
-            ]);
+        httpbis::Response::new(grpc_response.0.map_err(httpbis::Error::from).map(
+            |(metadata, grpc_frames)| {
+                let mut init_headers = Headers(vec![
+                    Header::new(":status", "200"),
+                    Header::new("content-type", "application/grpc"),
+                ]);
 
-            init_headers.extend(metadata.into_headers());
+                init_headers.extend(metadata.into_headers());
 
-            let s2 = grpc_frames
-                .map_items(|frame| DataOrTrailers::intermediate_data(Bytes::from(write_grpc_frame_to_vec(&frame))))
-                .then_items(|result| {
-                    match result {
-                        Ok(part) => {
-                            Ok(part)
-                        }
+                let s2 = grpc_frames
+                    .map_items(|frame| {
+                        DataOrTrailers::intermediate_data(Bytes::from(write_grpc_frame_to_vec(
+                            &frame,
+                        )))
+                    }).then_items(|result| match result {
+                        Ok(part) => Ok(part),
                         Err(e) => {
                             let (grpc_status, grpc_message) = match e {
-                                Error::GrpcMessage(GrpcMessageError { grpc_status, grpc_message }) => {
-                                    (grpc_status, grpc_message)
-                                }
-                                e => (
-                                    GrpcStatus::Internal as i32,
-                                    format!("error: {:?}", e),
-                                ),
+                                Error::GrpcMessage(GrpcMessageError {
+                                    grpc_status,
+                                    grpc_message,
+                                }) => (grpc_status, grpc_message),
+                                e => (GrpcStatus::Internal as i32, format!("error: {:?}", e)),
                             };
-                            Ok(DataOrTrailers::Trailers(
-                                Headers(vec![
-                                    Header::new(HEADER_GRPC_STATUS, format!("{}", grpc_status)),
-                                    Header::new(HEADER_GRPC_MESSAGE, grpc_message),
-                                ])
-                            ))
+                            Ok(DataOrTrailers::Trailers(Headers(vec![
+                                Header::new(HEADER_GRPC_STATUS, format!("{}", grpc_status)),
+                                Header::new(HEADER_GRPC_MESSAGE, grpc_message),
+                            ])))
                         }
-                    }
-                })
-                .0.map(|item| {
-                    match item {
+                    }).0
+                    .map(|item| match item {
                         ItemOrMetadata::Item(part) => part,
                         ItemOrMetadata::TrailingMetadata(trailing_metadata) => {
-                            DataOrTrailers::Trailers( {
-                                let mut trailing = Headers(vec![
-                                    Header::new(HEADER_GRPC_STATUS, "0")
-                                ]);
+                            DataOrTrailers::Trailers({
+                                let mut trailing =
+                                    Headers(vec![Header::new(HEADER_GRPC_STATUS, "0")]);
                                 trailing.extend(trailing_metadata.into_headers());
                                 trailing
                             })
-                        },
-                    }
-                })
-                .map_err(httpbis::Error::from);
+                        }
+                    }).map_err(httpbis::Error::from);
 
-            // If stream contains trailing metadata, it is converted to grpc status 0,
-            // here we add trailing headers after trailing headers are ignored by HTTP server.
-            let s3 = stream::once(Ok(DataOrTrailers::Trailers(Headers(vec![
-                Header::new(HEADER_GRPC_STATUS, "0"),
-            ]))));
+                // If stream contains trailing metadata, it is converted to grpc status 0,
+                // here we add trailing headers after trailing headers are ignored by HTTP server.
+                let s3 = stream::once(Ok(DataOrTrailers::Trailers(Headers(vec![Header::new(
+                    HEADER_GRPC_STATUS,
+                    "0",
+                )]))));
 
-            let http_parts = HttpStreamAfterHeaders::new(s2.chain(s3));
+                let http_parts = HttpStreamAfterHeaders::new(s2.chain(s3));
 
-            (init_headers, http_parts)
-        }))
+                (init_headers, http_parts)
+            },
+        ))
     }
 }

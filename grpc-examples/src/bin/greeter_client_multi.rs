@@ -1,17 +1,19 @@
-extern crate grpc_examples;
-extern crate grpc;
 extern crate futures;
+extern crate grpc;
+extern crate grpc_examples;
 
 use grpc::Client;
 
-use grpc_examples::helloworld_grpc::*;
 use grpc_examples::helloworld::*;
+use grpc_examples::helloworld_grpc::*;
 
 use std::env;
 
-
 fn main() {
-    let name = env::args().nth(1).map(|s| s.to_owned()).unwrap_or_else(|| "world".to_owned());
+    let name = env::args()
+        .nth(1)
+        .map(|s| s.to_owned())
+        .unwrap_or_else(|| "world".to_owned());
 
     let client = Client::new_plain("::1", 50051, Default::default()).unwrap();
     let greeter_client = GreeterClient::with_client(client.clone());

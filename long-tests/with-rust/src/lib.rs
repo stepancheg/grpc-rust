@@ -1,7 +1,7 @@
-extern crate protobuf;
 extern crate futures;
 extern crate futures_cpupool;
 extern crate grpc;
+extern crate protobuf;
 extern crate tls_api;
 
 pub mod long_tests_pb;

@@ -23,7 +23,7 @@ impl Chars {
         self.0
     }
 
-    pub fn try_from<B : Into<Bytes>>(b: B) -> Result<Chars, str::Utf8Error> {
+    pub fn try_from<B: Into<Bytes>>(b: B) -> Result<Chars, str::Utf8Error> {
         let bytes = b.into();
         str::from_utf8(&bytes)?;
         Ok(Chars(bytes))
@@ -36,9 +36,7 @@ impl Chars {
 
 impl AsRef<str> for Chars {
     fn as_ref(&self) -> &str {
-        unsafe {
-            str::from_utf8_unchecked(&self.0)
-        }
+        unsafe { str::from_utf8_unchecked(&self.0) }
     }
 }
 
@@ -49,7 +47,6 @@ impl Deref for Chars {
         self.as_ref()
     }
 }
-
 
 impl<'a> From<&'a str> for Chars {
     fn from(s: &'a str) -> Chars {

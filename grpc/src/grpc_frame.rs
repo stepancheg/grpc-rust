@@ -2,37 +2,33 @@ use std::collections::VecDeque;
 
 use bytes::Bytes;
 
-use futures::Async;
-use futures::Poll;
 use futures::stream;
 use futures::stream::Stream;
+use futures::Async;
+use futures::Poll;
 
 use error::*;
-use result;
-use httpbis::HttpStreamAfterHeaders;
 use httpbis::DataOrTrailers;
-
+use httpbis::HttpStreamAfterHeaders;
+use result;
 
 fn read_u32_be(bytes: &[u8]) -> u32 {
-    0
-        | ((bytes[0] as u32) << 24)
+    0 | ((bytes[0] as u32) << 24)
         | ((bytes[1] as u32) << 16)
-        | ((bytes[2] as u32) <<  8)
-        | ((bytes[3] as u32) <<  0)
+        | ((bytes[2] as u32) << 8)
+        | ((bytes[3] as u32) << 0)
 }
 
 fn write_u32_be(v: u32) -> [u8; 4] {
     [
         (v >> 24) as u8,
         (v >> 16) as u8,
-        (v >>  8) as u8,
-        (v >>  0) as u8,
+        (v >> 8) as u8,
+        (v >> 0) as u8,
     ]
 }
 
-
 pub const GRPC_HEADER_LEN: usize = 5;
-
 
 /// Return frame len
 pub fn parse_grpc_frame_0(stream: &[u8]) -> result::Result<Option<usize>> {
@@ -56,15 +52,16 @@ pub fn parse_grpc_frame_0(stream: &[u8]) -> result::Result<Option<usize>> {
     Ok(Some(len))
 }
 
-
 // return message and size consumed
 pub fn parse_grpc_frame(stream: &[u8]) -> result::Result<Option<(&[u8], usize)>> {
-    parse_grpc_frame_0(stream)
-        .map(|o| {
-            o.map(|len| {
-                (&stream[GRPC_HEADER_LEN .. len + GRPC_HEADER_LEN], len + GRPC_HEADER_LEN)
-            })
+    parse_grpc_frame_0(stream).map(|o| {
+        o.map(|len| {
+            (
+                &stream[GRPC_HEADER_LEN..len + GRPC_HEADER_LEN],
+                len + GRPC_HEADER_LEN,
+            )
         })
+    })
 }
 
 pub fn parse_grpc_frame_from_bytes(stream: &mut Bytes) -> result::Result<Option<Bytes>> {
@@ -118,9 +115,9 @@ pub fn parse_grpc_frame_completely(stream: &[u8]) -> result::Result<&[u8]> {
 }
 
 pub fn write_grpc_frame(stream: &mut Vec<u8>, frame: &[u8]) {
-	stream.push(0); // compressed flag
-	stream.extend(&write_u32_be(frame.len() as u32));
-	stream.extend(frame);
+    stream.push(0); // compressed flag
+    stream.extend(&write_u32_be(frame.len() as u32));
+    stream.extend(frame);
 }
 
 pub fn write_grpc_frame_to_vec(frame: &[u8]) -> Vec<u8> {
@@ -128,8 +125,6 @@ pub fn write_grpc_frame_to_vec(frame: &[u8]) -> Vec<u8> {
     write_grpc_frame(&mut r, frame);
     r
 }
-
-
 
 trait RequestOrResponse {
     fn need_trailing_header() -> bool;
@@ -153,7 +148,6 @@ impl GrpcFrameFromHttpFramesStreamRequest {
     }
 }
 
-
 impl Stream for GrpcFrameFromHttpFramesStreamRequest {
     type Item = Bytes;
     type Error = Error;
@@ -164,13 +158,14 @@ impl Stream for GrpcFrameFromHttpFramesStreamRequest {
                 return error.poll();
             }
 
-            self.parsed_frames.extend(match parse_grpc_frames_from_bytes(&mut self.buf) {
-                Ok(r) => r,
-                Err(e) => {
-                    self.error = Some(stream::once(Err(e)));
-                    continue;
-                }
-            });
+            self.parsed_frames
+                .extend(match parse_grpc_frames_from_bytes(&mut self.buf) {
+                    Ok(r) => r,
+                    Err(e) => {
+                        self.error = Some(stream::once(Err(e)));
+                        continue;
+                    }
+                });
 
             if let Some(frame) = self.parsed_frames.pop_front() {
                 return Ok(Async::Ready(Some(frame)));
@@ -188,7 +183,7 @@ impl Stream for GrpcFrameFromHttpFramesStreamRequest {
                         self.error = Some(stream::once(Err(Error::Other("partial frame"))));
                         continue;
                     }
-                },
+                }
                 Some(part) => part,
             };
 
@@ -197,13 +192,11 @@ impl Stream for GrpcFrameFromHttpFramesStreamRequest {
                 DataOrTrailers::Trailers(..) => (),
                 DataOrTrailers::Data(data, ..) => {
                     self.buf.extend_from_slice(&data);
-                },
+                }
             }
         }
     }
 }
-
-
 
 #[cfg(test)]
 mod test {
@@ -216,10 +209,12 @@ mod test {
         assert_eq!(None, parse_grpc_frame(b"14sc").unwrap());
         assert_eq!(
             None,
-            parse_grpc_frame(b"\x00\x00\x00\x00\x07\x0a\x05wo").unwrap());
+            parse_grpc_frame(b"\x00\x00\x00\x00\x07\x0a\x05wo").unwrap()
+        );
         assert_eq!(
             Some((&b"\x0a\x05world"[..], 12)),
-            parse_grpc_frame(b"\x00\x00\x00\x00\x07\x0a\x05world").unwrap());
+            parse_grpc_frame(b"\x00\x00\x00\x00\x07\x0a\x05world").unwrap()
+        );
     }
 
     #[test]
@@ -239,9 +234,15 @@ mod test {
         t(&[], &[], &[]);
         t(&[], &[], &b"1"[..]);
         t(&[], &[], &b"14sc"[..]);
-        t(&[&b"\x0a\x05world"[..]], &b"\x00\x00\x00\x00\x07\x0a\x05world"[..], &[]);
+        t(
+            &[&b"\x0a\x05world"[..]],
+            &b"\x00\x00\x00\x00\x07\x0a\x05world"[..],
+            &[],
+        );
         t(
             &[&b"ab"[..], &b"cde"[..]],
-            &b"\0\x00\x00\x00\x02ab\0\x00\x00\x00\x03cde"[..], &b"\x00"[..]);
+            &b"\0\x00\x00\x00\x02ab\0\x00\x00\x00\x03cde"[..],
+            &b"\x00"[..],
+        );
     }
 }

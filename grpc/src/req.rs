@@ -3,8 +3,8 @@ use futures::stream::Stream;
 
 use metadata::Metadata;
 
-use futures_grpc::GrpcStream;
 use error::Error;
+use futures_grpc::GrpcStream;
 
 #[derive(Debug, Default)]
 pub struct RequestOptions {
@@ -18,14 +18,14 @@ impl RequestOptions {
 }
 
 /// Excluding initial metadata which is passed separately
-pub struct StreamingRequest<T : Send + 'static>(pub GrpcStream<T>);
+pub struct StreamingRequest<T: Send + 'static>(pub GrpcStream<T>);
 
-impl<T : Send + 'static> StreamingRequest<T> {
-
+impl<T: Send + 'static> StreamingRequest<T> {
     // constructors
 
     pub fn new<S>(stream: S) -> StreamingRequest<T>
-        where S : Stream<Item=T, Error=Error> + Send + 'static
+    where
+        S: Stream<Item = T, Error = Error> + Send + 'static,
     {
         StreamingRequest(Box::new(stream))
     }
@@ -35,9 +35,9 @@ impl<T : Send + 'static> StreamingRequest<T> {
     }
 
     pub fn iter<I>(iter: I) -> StreamingRequest<T>
-        where
-            I : IntoIterator<Item=T>,
-            I::IntoIter : Send + 'static,
+    where
+        I: IntoIterator<Item = T>,
+        I::IntoIter: Send + 'static,
     {
         StreamingRequest::new(stream::iter_ok(iter.into_iter()))
     }
