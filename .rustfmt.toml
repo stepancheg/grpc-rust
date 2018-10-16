@@ -1,9 +1,0 @@
-# https://github.com/rust-lang-nursery/rustfmt/pull/1267
-space_before_bound = true
-
-normalize_comments = false
-fn_arg_indent = "Tabbed"
-fn_brace_style = "SameLineWhere"
-fn_args_layout = "Block"
-reorder_imported_names = true
-where_pred_indent = "Tabbed"
