@@ -15,6 +15,9 @@ use std::sync::Arc;
 use grpc_examples::helloworld::*;
 use grpc_examples::helloworld_grpc::*;
 
+use grpc::ClientStub;
+use grpc::ClientStubExt;
+
 use tls_api::TlsConnector;
 use tls_api::TlsConnectorBuilder;
 
@@ -56,7 +59,7 @@ fn main() {
             httpbis::ClientTlsOption::Tls("foobar.com".to_owned(), Arc::new(test_tls_connector()));
         let addr = SocketAddr::new("::1".parse().unwrap(), port);
         let grpc_client =
-            grpc::Client::new_expl(&addr, "foobar.com", tls_option, client_conf).unwrap();
+            Arc::new(grpc::Client::new_expl(&addr, "foobar.com", tls_option, client_conf).unwrap());
         GreeterClient::with_client(grpc_client)
     } else {
         GreeterClient::new_plain("::1", port, client_conf).unwrap()

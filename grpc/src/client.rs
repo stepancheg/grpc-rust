@@ -80,15 +80,6 @@ impl Client {
             }).map_err(Error::from)
     }
 
-    /// Create a clone of this client but refer to same httpbis::Client.
-    pub fn clone(&self) -> Client {
-        Client {
-            client: self.client.clone(),
-            host: self.host.to_owned(),
-            http_scheme: HttpScheme::Http,
-        }
-    }
-
     /// Create a client connected to specified host and port.
     pub fn new_tls<C: tls_api::TlsConnector>(
         host: &str,

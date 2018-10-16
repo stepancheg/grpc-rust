@@ -4,6 +4,7 @@ extern crate futures;
 extern crate grpc;
 extern crate long_tests;
 
+use grpc::ClientStubExt;
 use long_tests::long_tests_pb::*;
 use long_tests::long_tests_pb_grpc::*;
 

@@ -266,7 +266,7 @@ impl<'a> ServiceGen<'a> {
 
     fn write_client(&self, w: &mut CodeWriter) {
         w.pub_struct(&self.client_name(), |w| {
-            w.field_decl("grpc_client", "::grpc::Client");
+            w.field_decl("grpc_client", "::std::sync::Arc<::grpc::Client>");
             for method in &self.methods {
                 w.field_decl(
                     &method.descriptor_field_name(),
@@ -277,42 +277,11 @@ impl<'a> ServiceGen<'a> {
 
         w.write_line("");
 
-        w.impl_self_block(&self.client_name(), |w| {
-
-            let sig = "with_client(grpc_client: ::grpc::Client) -> Self";
-            w.pub_fn(sig, |w| {
+        w.impl_for_block("::grpc::ClientStub", &self.client_name(), |w| {
+            let sig = "with_client(grpc_client: ::std::sync::Arc<::grpc::Client>) -> Self";
+            w.def_fn(sig, |w| {
                 self.write_client_object("grpc_client", w);
             });
-
-            w.write_line("");
-
-            let sig = "new_plain(host: &str, port: u16, conf: ::grpc::ClientConf) -> ::grpc::Result<Self>";
-            w.pub_fn(sig, |w| {
-                w.write_line("::grpc::Client::new_plain(host, port, conf).map(|c| {");
-                w.indented(|w| {
-                    w.write_line(&format!("{}::with_client(c)", self.client_name()));
-                });
-                w.write_line("})");
-            });
-
-            let sig = "new_plain_unix(addr: &str, conf: ::grpc::ClientConf) -> ::grpc::Result<Self>";
-            w.pub_fn(sig, |w| {
-                w.write_line("::grpc::Client::new_plain_unix(addr, conf).map(|c| {");
-                w.indented(|w| {
-                    w.write_line(&format!("{}::with_client(c)", self.client_name()));
-                });
-                w.write_line("})");
-            });
-
-            let sig = "new_tls<C : ::tls_api::TlsConnector>(host: &str, port: u16, conf: ::grpc::ClientConf) -> ::grpc::Result<Self>";
-            w.pub_fn(sig, |w| {
-                w.write_line("::grpc::Client::new_tls::<C>(host, port, conf).map(|c| {");
-                w.indented(|w| {
-                    w.write_line(&format!("{}::with_client(c)", self.client_name()));
-                });
-                w.write_line("})");
-            });
-
         });
 
         w.write_line("");

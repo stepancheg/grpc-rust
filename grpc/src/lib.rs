@@ -19,6 +19,7 @@ mod futures_misc;
 mod misc;
 
 mod client;
+mod client_stub;
 mod server;
 mod server_method;
 
@@ -54,6 +55,9 @@ pub use stream_item::ItemOrMetadata;
 
 pub use client::Client;
 pub use client::ClientConf;
+
+pub use client_stub::ClientStub;
+pub use client_stub::ClientStubExt;
 
 pub use server::Server;
 pub use server::ServerBuilder;

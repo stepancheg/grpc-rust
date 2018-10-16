@@ -3,11 +3,13 @@ extern crate grpc;
 extern crate grpc_examples;
 
 use grpc::Client;
+use grpc::ClientStub;
 
 use grpc_examples::helloworld::*;
 use grpc_examples::helloworld_grpc::*;
 
 use std::env;
+use std::sync::Arc;
 
 fn main() {
     let name = env::args()
@@ -15,7 +17,7 @@ fn main() {
         .map(|s| s.to_owned())
         .unwrap_or_else(|| "world".to_owned());
 
-    let client = Client::new_plain("::1", 50051, Default::default()).unwrap();
+    let client = Arc::new(Client::new_plain("::1", 50051, Default::default()).unwrap());
     let greeter_client = GreeterClient::with_client(client.clone());
     let greeter_client2 = GreeterClient::with_client(client);
 
