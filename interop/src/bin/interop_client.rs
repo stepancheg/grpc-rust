@@ -262,9 +262,9 @@ fn main() {
                 .takes_value(true),
         ).arg(
             Arg::with_name("use_tls") // boolean
-            .long("use_tls")
-            .help("Whether to use a plaintext or encrypted connection")
-            .takes_value(true),
+                .long("use_tls")
+                .help("Whether to use a plaintext or encrypted connection")
+                .takes_value(true),
         ).arg(
             Arg::with_name("use_test_ca")
                 .long("use_test_ca")
