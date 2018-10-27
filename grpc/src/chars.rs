@@ -4,7 +4,7 @@ use std::str;
 
 use bytes::Bytes;
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Clone)]
 pub struct Chars(Bytes);
 
 impl fmt::Debug for Chars {

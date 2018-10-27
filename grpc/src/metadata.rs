@@ -6,7 +6,7 @@ use chars::Chars;
 use httpbis::Header;
 use httpbis::Headers;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MetadataKey {
     pub name: Chars,
 }
@@ -34,7 +34,7 @@ impl MetadataKey {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MetadataEntry {
     pub key: MetadataKey,
     pub value: Bytes,
@@ -84,7 +84,7 @@ impl MetadataEntry {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct Metadata {
     pub entries: Vec<MetadataEntry>,
 }
