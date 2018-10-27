@@ -1,13 +1,13 @@
 extern crate futures;
 
 extern crate grpc;
-extern crate grpc_examples;
+extern crate grpc_examples_greeter;
 extern crate httpbis;
 
 use std::thread;
 
-use grpc_examples::helloworld::*;
-use grpc_examples::helloworld_grpc::*;
+use grpc_examples_greeter::helloworld::*;
+use grpc_examples_greeter::helloworld_grpc::*;
 
 struct GreeterImpl {
     instance: u32,

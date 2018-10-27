@@ -1,15 +1,15 @@
 extern crate futures;
 
 extern crate grpc;
-extern crate grpc_examples;
+extern crate grpc_examples_greeter;
 extern crate tls_api;
 extern crate tls_api_native_tls;
 
 use std::env;
 use std::thread;
 
-use grpc_examples::helloworld::*;
-use grpc_examples::helloworld_grpc::*;
+use grpc_examples_greeter::helloworld::*;
+use grpc_examples_greeter::helloworld_grpc::*;
 
 use tls_api::TlsAcceptorBuilder;
 

@@ -1,6 +1,6 @@
 extern crate futures;
 extern crate grpc;
-extern crate grpc_examples;
+extern crate grpc_examples_greeter;
 extern crate httpbis;
 
 extern crate tls_api;
@@ -12,8 +12,8 @@ use std::env;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use grpc_examples::helloworld::*;
-use grpc_examples::helloworld_grpc::*;
+use grpc_examples_greeter::helloworld::*;
+use grpc_examples_greeter::helloworld_grpc::*;
 
 use grpc::ClientStub;
 use grpc::ClientStubExt;

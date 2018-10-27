@@ -1,12 +1,12 @@
 extern crate futures;
 extern crate grpc;
-extern crate grpc_examples;
+extern crate grpc_examples_greeter;
 
 use grpc::Client;
 use grpc::ClientStub;
 
-use grpc_examples::helloworld::*;
-use grpc_examples::helloworld_grpc::*;
+use grpc_examples_greeter::helloworld::*;
+use grpc_examples_greeter::helloworld_grpc::*;
 
 use std::env;
 use std::sync::Arc;
