@@ -1,7 +1,7 @@
 [workspace]
 members = [
     "grpc",
-    "grpc-examples",
+    "grpc-examples/greeter",
     "grpc-compiler",
     "grpc-compiler/test-protoc-plugin",
     "long-tests/with-rust",
