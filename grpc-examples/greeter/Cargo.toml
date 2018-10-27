@@ -1,5 +1,5 @@
 [package]
-name = "grpc-examples"
+name = "grpc_examples_greeter"
 version = "0.0.0"
 authors = ["Stepan Koltsov <stepan.koltsov@gmail.com>"]
 publish = false
@@ -9,7 +9,7 @@ doctest = false
 test = false
 
 [dependencies.grpc]
-path = "../grpc"
+path = "../../grpc"
 
 [dependencies]
 protobuf        = "2"
@@ -21,7 +21,7 @@ httpbis         = "~0.7"
 env_logger      = "0.4.*"
 
 [build-dependencies]
-protoc-rust-grpc = { path = "../protoc-rust-grpc" }
+protoc-rust-grpc = { path = "../../protoc-rust-grpc" }
 
 [[bin]]
 name = "greeter_client"

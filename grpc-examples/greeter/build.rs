@@ -4,7 +4,7 @@ fn main() {
     protoc_rust_grpc::run(protoc_rust_grpc::Args {
         out_dir: "src",
         includes: &[],
-        input: &["helloworld.proto", "route_guide.proto"],
+        input: &["helloworld.proto"],
         rust_protobuf: true,
         ..Default::default()
     }).expect("protoc-rust-grpc");
