@@ -14,7 +14,6 @@ impl fmt::Debug for Chars {
 }
 
 impl Chars {
-    #[allow(dead_code)]
     pub fn from_static(s: &'static str) -> Chars {
         Chars(Bytes::from_static(s.as_bytes()))
     }
