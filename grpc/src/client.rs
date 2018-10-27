@@ -38,6 +38,7 @@ impl ClientConf {
 
 /// gRPC client implementation.
 /// Used by generated code.
+#[derive(Clone)]
 pub struct Client {
     client: ::std::sync::Arc<httpbis::Client>,
     host: String,
