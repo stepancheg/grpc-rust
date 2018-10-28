@@ -41,6 +41,8 @@ mod marshall;
 mod metadata;
 mod method;
 
+pub mod prelude;
+
 pub mod protobuf;
 pub mod rt;
 

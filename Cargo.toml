@@ -2,6 +2,7 @@
 members = [
     "grpc",
     "grpc-examples/greeter",
+    "grpc-examples/route_guide",
     "grpc-compiler",
     "grpc-compiler/test-protoc-plugin",
     "long-tests/with-rust",

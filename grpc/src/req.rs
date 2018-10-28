@@ -5,6 +5,12 @@ use metadata::Metadata;
 
 use error::Error;
 use futures_grpc::GrpcStream;
+use futures::sync::mpsc;
+use error;
+use futures::Sink;
+use futures::StartSend;
+use futures::Poll;
+use futures::Async;
 
 #[derive(Debug, Default)]
 pub struct RequestOptions {
@@ -42,6 +48,14 @@ impl<T: Send + 'static> StreamingRequest<T> {
         StreamingRequest::new(stream::iter_ok(iter.into_iter()))
     }
 
+    pub fn mpsc() -> (StreamingRequestSender<T>, StreamingRequest<T>) {
+        let (tx, rx) = mpsc::channel(0);
+        let tx = StreamingRequestSender { sender: Some(tx) };
+        // TODO: handle drop of sender
+        let rx = StreamingRequest::new(rx.map_err(|()| error::Error::Other("sender died")));
+        (tx, rx)
+    }
+
     pub fn single(item: T) -> StreamingRequest<T> {
         StreamingRequest::new(stream::once(Ok(item)))
     }
@@ -52,5 +66,47 @@ impl<T: Send + 'static> StreamingRequest<T> {
 
     pub fn err(err: Error) -> StreamingRequest<T> {
         StreamingRequest::new(stream::once(Err(err)))
+    }
+}
+
+pub struct StreamingRequestSender<T: Send + 'static> {
+    sender: Option<mpsc::Sender<T>>,
+}
+
+impl<T: Send + 'static> Sink for StreamingRequestSender<T> {
+    type SinkItem = T;
+    type SinkError = error::Error;
+
+    fn start_send(&mut self, item: T) -> StartSend<T, error::Error> {
+        match self.sender.as_mut() {
+            // TODO: error
+            Some(sender) => {
+                sender.start_send(item).map_err(|_send_error| error::Error::Other("channel closed"))
+            }
+            None => Err(error::Error::Other("sender closed")),
+        }
+    }
+
+    fn poll_complete(&mut self) -> Poll<(), error::Error> {
+        match self.sender.as_mut() {
+            Some(sender) => {
+                sender.poll_complete().map_err(|_send_error| error::Error::Other("channel closed"))
+            }
+            None => {
+                Err(error::Error::Other("sender closed"))
+            }
+        }
+    }
+
+    fn close(&mut self) -> Poll<(), error::Error> {
+        // Close of sender doesn't end receiver stream
+        self.sender.take();
+        Ok(Async::Ready(()))
+    }
+}
+
+impl<T: Send + 'static> Drop for StreamingRequestSender<T> {
+    fn drop(&mut self) {
+        // TODO: cancel
     }
 }
