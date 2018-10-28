@@ -186,7 +186,7 @@ impl TestService for TestServerImpl {
 }
 
 fn main() {
-    env_logger::init().expect("env_logger::init");
+    env_logger::init();
 
     let mut server = ServerBuilder::new_plain();
     server.http.set_port(DEFAULT_PORT);

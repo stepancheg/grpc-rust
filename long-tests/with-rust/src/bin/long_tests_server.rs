@@ -57,7 +57,7 @@ impl LongTests for LongTestsServerImpl {
 }
 
 fn main() {
-    env_logger::init().unwrap();
+    env_logger::init();
 
     let mut server = ServerBuilder::new_plain();
     server

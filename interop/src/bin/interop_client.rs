@@ -232,7 +232,7 @@ fn custom_metadata(client: TestServiceClient) {
 // The flags we use are defined in the gRPC Interopability doc
 // https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md
 fn main() {
-    env_logger::init().expect("env_logger::init");
+    env_logger::init();
 
     let options = App::new("gRPC interopability client")
         .version("0.1")

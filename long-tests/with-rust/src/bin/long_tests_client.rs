@@ -43,7 +43,7 @@ fn run_echo(client: LongTestsClient, cmd_args: &[String]) {
 }
 
 fn main() {
-    env_logger::init().unwrap();
+    env_logger::init();
 
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {

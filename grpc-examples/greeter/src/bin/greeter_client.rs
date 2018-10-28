@@ -37,7 +37,7 @@ fn is_tls() -> bool {
 }
 
 fn main() {
-    env_logger::init().expect("env_logger::init");
+    env_logger::init();
 
     let tls = is_tls();
 
