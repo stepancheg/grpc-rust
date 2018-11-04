@@ -3,14 +3,14 @@ use futures::stream::Stream;
 
 use metadata::Metadata;
 
-use error::Error;
-use futures_grpc::GrpcStream;
-use futures::sync::mpsc;
 use error;
+use error::Error;
+use futures::sync::mpsc;
+use futures::Async;
+use futures::Poll;
 use futures::Sink;
 use futures::StartSend;
-use futures::Poll;
-use futures::Async;
+use futures_grpc::GrpcStream;
 
 #[derive(Debug, Default)]
 pub struct RequestOptions {
@@ -80,21 +80,19 @@ impl<T: Send + 'static> Sink for StreamingRequestSender<T> {
     fn start_send(&mut self, item: T) -> StartSend<T, error::Error> {
         match self.sender.as_mut() {
             // TODO: error
-            Some(sender) => {
-                sender.start_send(item).map_err(|_send_error| error::Error::Other("channel closed"))
-            }
+            Some(sender) => sender
+                .start_send(item)
+                .map_err(|_send_error| error::Error::Other("channel closed")),
             None => Err(error::Error::Other("sender closed")),
         }
     }
 
     fn poll_complete(&mut self) -> Poll<(), error::Error> {
         match self.sender.as_mut() {
-            Some(sender) => {
-                sender.poll_complete().map_err(|_send_error| error::Error::Other("channel closed"))
-            }
-            None => {
-                Err(error::Error::Other("sender closed"))
-            }
+            Some(sender) => sender
+                .poll_complete()
+                .map_err(|_send_error| error::Error::Other("channel closed")),
+            None => Err(error::Error::Other("sender closed")),
         }
     }
 
