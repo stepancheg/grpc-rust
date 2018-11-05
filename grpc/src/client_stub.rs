@@ -37,7 +37,13 @@ impl<C: ClientStub> ClientStubExt for C {
         Client::new_tls::<T>(host, port, conf).map(|c| Self::with_client(Arc::new(c)))
     }
 
+    #[cfg(unix)]
     fn new_plain_unix(addr: &str, conf: ClientConf) -> grpc_Result<Self> {
         Client::new_plain_unix(addr, conf).map(|c| Self::with_client(Arc::new(c)))
+    }
+
+    #[cfg(not(unix))]
+    fn new_plain_unix(addr: &str, conf: ClientConf) -> grpc_Result<Self> {
+        Err(::Error::Other("new_plain_unix unsupported"))
     }
 }
