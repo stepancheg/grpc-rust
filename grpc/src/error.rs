@@ -6,8 +6,8 @@ use futures;
 
 use httpbis;
 
-use protobuf_lib::ProtobufError;
 use proto::metadata;
+use protobuf_lib::ProtobufError;
 
 
 #[derive(Debug)]
@@ -28,6 +28,18 @@ pub enum Error {
     Protobuf(ProtobufError),
     Panic(String),
     Other(&'static str),
+}
+
+impl From<httpbis::SendError> for Error {
+    fn from(e: httpbis::SendError) -> Self {
+        Error::Http(httpbis::Error::from(e))
+    }
+}
+
+impl From<httpbis::StreamDead> for Error {
+    fn from(e: httpbis::StreamDead) -> Self {
+        Error::Http(httpbis::Error::from(e))
+    }
 }
 
 fn _assert_debug<D: ::std::fmt::Debug>(_: &D) {}

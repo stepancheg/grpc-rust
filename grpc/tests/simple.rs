@@ -12,12 +12,12 @@ use std::sync::Arc;
 
 use futures::future::*;
 use futures::stream::Stream;
-use futures::Sink;
 
 use grpc::rt::*;
 use grpc::*;
 
 use test_misc::*;
+use std::thread;
 
 /// Single method server on random port
 fn new_server<H>(service: &str, method: &str, handler: H) -> Server
@@ -42,7 +42,7 @@ where
 /// Single unary method server
 fn new_server_unary<H>(service: &str, method: &str, handler: H) -> Server
 where
-    H: Fn(RequestOptions, String) -> SingleResponse<String> + Sync + Send + 'static,
+    H: Fn(ServerHandlerContext, ServerRequestSingle<String>, ServerResponseUnarySink<String>) -> grpc::Result<()> + Sync + Send + 'static,
 {
     new_server(service, method, MethodHandlerUnary::new(handler))
 }
@@ -50,7 +50,7 @@ where
 /// Single server streaming method server
 fn new_server_server_streaming<H>(service: &str, method: &str, handler: H) -> Server
 where
-    H: Fn(RequestOptions, String) -> StreamingResponse<String> + Sync + Send + 'static,
+    H: Fn(ServerHandlerContext, ServerRequestSingle<String>, ServerResponseSink<String>) -> grpc::Result<()> + Sync + Send + 'static,
 {
     new_server(service, method, MethodHandlerServerStreaming::new(handler))
 }
@@ -58,7 +58,7 @@ where
 /// Single server streaming method server
 fn new_server_client_streaming<H>(service: &str, method: &str, handler: H) -> Server
 where
-    H: Fn(RequestOptions, StreamingRequest<String>) -> SingleResponse<String>
+    H: Fn(ServerHandlerContext, ServerRequest<String>, ServerResponseUnarySink<String>) -> grpc::Result<()>
         + Sync
         + Send
         + 'static,
@@ -76,7 +76,7 @@ struct TesterUnary {
 impl TesterUnary {
     fn new<H>(handler: H) -> TesterUnary
     where
-        H: Fn(RequestOptions, String) -> SingleResponse<String> + Sync + Send + 'static,
+        H: Fn(ServerHandlerContext, ServerRequestSingle<String>, ServerResponseUnarySink<String>) -> grpc::Result<()> + Sync + Send + 'static,
     {
         let server = new_server_unary("/text", "/Unary", handler);
         let port = server.local_addr().port().expect("port");
@@ -131,7 +131,7 @@ struct TesterServerStreaming {
 impl TesterServerStreaming {
     fn new<H>(handler: H) -> Self
     where
-        H: Fn(RequestOptions, String) -> StreamingResponse<String> + Sync + Send + 'static,
+        H: Fn(ServerHandlerContext, ServerRequestSingle<String>, ServerResponseSink<String>) -> grpc::Result<()> + Sync + Send + 'static,
     {
         let server = new_server_server_streaming("/test", "/ServerStreaming", handler);
         let port = server.local_addr().port().expect("port");
@@ -161,7 +161,7 @@ struct TesterClientStreaming {
 impl TesterClientStreaming {
     fn new<H>(handler: H) -> Self
     where
-        H: Fn(RequestOptions, StreamingRequest<String>) -> SingleResponse<String>
+        H: Fn(ServerHandlerContext, ServerRequest<String>, ServerResponseUnarySink<String>) -> grpc::Result<()>
             + Sync
             + Send
             + 'static,
@@ -175,17 +175,13 @@ impl TesterClientStreaming {
         }
     }
 
-    fn call(&self) -> (futures::sync::mpsc::Sender<String>, GrpcFuture<String>) {
-        let (tx, rx) = futures::sync::mpsc::channel(0);
-        (
-            tx,
-            self.client
+    fn call(&self) -> (ClientRequestSink<String>, SingleResponse<String>) {
+        self.client
                 .call_client_streaming(
                     RequestOptions::new(),
-                    StreamingRequest::new(rx.map_err(|()| unreachable!())),
                     string_string_method(&self.name, GrpcStreaming::ClientStreaming),
-                ).drop_metadata(),
-        )
+                )
+                .wait().unwrap()
     }
 }
 
@@ -193,7 +189,7 @@ impl TesterClientStreaming {
 fn unary() {
     init_logger();
 
-    let tester = TesterUnary::new(|_m, s| SingleResponse::completed(s));
+    let tester = TesterUnary::new(|_m, req, resp| resp.finish(req.message));
 
     assert_eq!("aa", tester.call("aa").wait().unwrap());
 }
@@ -202,19 +198,19 @@ fn unary() {
 fn error_in_handler() {
     init_logger();
 
-    let tester = TesterUnary::new(|_m, _| {
-        SingleResponse::no_metadata(Err(Error::Other("my error")).into_future())
+    let tester = TesterUnary::new(|_m, _req, _resp| {
+        Err(grpc::Error::Other("my error"))
     });
 
-    tester.call_expect_grpc_error_contain("aa", "my error");
+    tester.call_expect_grpc_error_contain("aa", "grpc server handler did not close the sender");
 }
 
 // TODO
 //#[test]
-fn panic_in_handler() {
+fn _panic_in_handler() {
     init_logger();
 
-    let tester = TesterUnary::new(|_m, _| panic!("icnap"));
+    let tester = TesterUnary::new(|_m, _req, _resp| panic!("icnap"));
 
     tester.call_expect_grpc_error("aa", |m| {
         m.find("Panic").is_some() && m.find("icnap").is_some()
@@ -228,14 +224,16 @@ fn server_streaming() {
     let test_sync = Arc::new(TestSync::new());
     let test_sync_server = test_sync.clone();
 
-    let tester = TesterServerStreaming::new(move |_m, s| {
+    let tester = TesterServerStreaming::new(move |_m, req, mut resp| {
         let sync = test_sync_server.clone();
-        StreamingResponse::no_metadata(test_misc::stream_thread_spawn_iter(move || {
-            (0..3).map(move |i| {
+        thread::spawn(move || {
+            for i in 0..3 {
                 sync.take(i * 2 + 1);
-                format!("{}{}", s, i)
-            })
-        }))
+                resp.send_data(format!("{}{}", req.message, i)).unwrap();
+            }
+            resp.send_trailers(Metadata::new()).unwrap();
+        });
+        Ok(())
     });
 
     let mut rs = tester.call("x").wait();
@@ -253,18 +251,24 @@ fn server_streaming() {
 fn client_streaming() {
     init_logger();
 
-    let tester = TesterClientStreaming::new(move |_m, s| {
-        SingleResponse::no_metadata(s.0.fold(String::new(), |mut s, message| {
-            s.push_str(&message);
-            futures::finished::<_, Error>(s)
-        }))
+    let tester = TesterClientStreaming::new(move |m, req, resp| {
+        let request_stream = req.into_stream();
+        m.ctx.loop_remote().spawn(move |_handle| {
+            request_stream.fold(String::new(), |mut s, message| {
+                s.push_str(&message);
+                futures::finished::<_, Error>(s)
+            }).map(|r| {
+                resp.finish(r).unwrap();
+            }).map_err(|_| ())
+        });
+        Ok(())
     });
 
-    let (tx, result) = tester.call();
-    let tx = tx.send("aa".to_owned()).wait().ok().expect("aa");
-    let tx = tx.send("bb".to_owned()).wait().ok().expect("bb");
-    let tx = tx.send("cc".to_owned()).wait().ok().expect("cc");
-    drop(tx);
+    let (mut tx, result) = tester.call();
+    tx.send_data("aa".to_owned()).expect("aa");
+    tx.send_data("bb".to_owned()).expect("bb");
+    tx.send_data("cc".to_owned()).expect("cc");
+    tx.finish().expect("finish");
 
-    assert_eq!("aabbcc", result.wait().unwrap());
+    assert_eq!("aabbcc", result.wait().unwrap().1);
 }

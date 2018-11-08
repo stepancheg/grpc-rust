@@ -64,23 +64,20 @@ impl MetadataEntry {
     }
 
     fn from_header(header: Header) -> Result<Option<MetadataEntry>, MetadataDecodeError> {
-        if header.name().starts_with(b":") {
+        if header.name().starts_with(":") {
             return Ok(None);
         }
-        if header.name().starts_with(b"grpc-") {
+        if header.name().starts_with("grpc-") {
             return Ok(None);
         }
         let key = MetadataKey {
-            name: Chars::try_from(header.name).expect("utf-8"),
+            name: Chars::from(header.name()),
         };
         let value = match key.is_bin() {
             true => Bytes::from(base64::decode(&header.value)?),
             false => header.value,
         };
-        Ok(Some(MetadataEntry {
-            key: key,
-            value: value,
-        }))
+        Ok(Some(MetadataEntry { key, value }))
     }
 }
 
@@ -96,8 +93,9 @@ impl Metadata {
 
     pub fn from_headers(headers: Headers) -> Result<Metadata, MetadataDecodeError> {
         let mut r = Metadata::new();
-        for h in headers.0 {
-            if let Some(e) = MetadataEntry::from_header(h)? {
+        for h in headers.iter() {
+            // TODO: clone
+            if let Some(e) = MetadataEntry::from_header(h.clone())? {
                 r.entries.push(e);
             }
         }
@@ -105,7 +103,7 @@ impl Metadata {
     }
 
     pub fn into_headers(self) -> Headers {
-        Headers(
+        Headers::from_vec(
             self.entries
                 .into_iter()
                 .map(MetadataEntry::into_header)

@@ -20,8 +20,8 @@ pub fn string_string_method(
     Arc::new(MethodDescriptor {
         name: name.to_owned(),
         streaming: streaming,
-        req_marshaller: Box::new(MarshallerString),
-        resp_marshaller: Box::new(MarshallerString),
+        req_marshaller: Arc::new(MarshallerString),
+        resp_marshaller: Arc::new(MarshallerString),
     })
 }
 

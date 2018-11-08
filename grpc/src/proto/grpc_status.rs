@@ -1,6 +1,3 @@
-pub static HEADER_GRPC_STATUS: &'static str = "grpc-status";
-pub static HEADER_GRPC_MESSAGE: &'static str = "grpc-message";
-
 // copied from https://github.com/grpc/grpc/blob/master/include/grpc/impl/codegen/status.h
 #[allow(dead_code)]
 #[derive(Copy, Clone, Debug)]

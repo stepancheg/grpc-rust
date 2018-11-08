@@ -44,22 +44,26 @@ fn large_unary(client: TestServiceClient) {
 }
 
 fn client_streaming(client: TestServiceClient) {
-    let mut requests = Vec::new();
+
+    let (mut req, resp) = client
+        .streaming_input_call(
+            grpc::RequestOptions::new(),
+        ).wait().expect("expected response");
+
     for size in [27182, 8, 1828, 45904].iter() {
         let mut request = StreamingInputCallRequest::new();
         let mut payload = Payload::new();
         payload.set_body(vec![0; size.to_owned()]);
         request.set_payload(payload);
-        requests.push(request);
+        req.block_wait().expect("block_wait");
+        req.send_data(request).expect("send_data");
     }
 
-    let response = client
-        .streaming_input_call(
-            grpc::RequestOptions::new(),
-            grpc::StreamingRequest::iter(requests),
-        ).wait_drop_metadata()
-        .expect("expected response");
-    assert!(response.aggregated_payload_size == 74922);
+    req.finish().expect("finish");
+
+    let resp = resp.wait_drop_metadata().expect("wait_drop_metadata");
+
+    assert_eq!(resp.aggregated_payload_size, 74922);
     println!("{} ClientStreaming done", Local::now().to_rfc3339());
 }
 
@@ -106,45 +110,40 @@ fn server_streaming(client: TestServiceClient) {
 // TODO: this test needs to interleave requests with responses and check along the way.
 // Need to find a way to model that with the blocking API.
 fn ping_pong(client: TestServiceClient) {
-    let mut requests = Vec::new();
-    for &size_body_len in [(31415, 27182), (9, 8), (2653, 1828), (58979, 45904)].iter() {
-        let mut req = StreamingOutputCallRequest::new();
-        let mut params = ResponseParameters::new();
-        params.set_size(size_body_len.0);
-        req.set_response_parameters(::protobuf::RepeatedField::from_vec(vec![params]));
-        let mut payload = Payload::new();
-        payload.set_body(vec![0; size_body_len.1]);
-        req.set_payload(payload);
-        requests.push(req);
-    }
-    let response = client
+    let (mut req, resp) = client
         .full_duplex_call(
             grpc::RequestOptions::new(),
-            grpc::StreamingRequest::iter(requests),
-        ).wait_drop_metadata();
-    let mut response_sizes = Vec::new();
-    {
-        // this scope is to satisfy the borrow checker.
-        let bar = response.map(|result| {
-            response_sizes.push(result.unwrap().get_payload().body.len());
-        });
-        assert!(bar.count() == 4);
+        ).wait().expect("start request");
+
+    let mut resp = resp.wait_drop_metadata();
+
+    for &(size, body_len) in [(31415, 27182), (9, 8), (2653, 1828), (58979, 45904)].iter() {
+        let mut req_m = StreamingOutputCallRequest::new();
+        let mut params = ResponseParameters::new();
+        params.set_size(size);
+        req_m.set_response_parameters(::protobuf::RepeatedField::from_vec(vec![params]));
+        let mut payload = Payload::new();
+        payload.set_body(vec![0; body_len]);
+        req_m.set_payload(payload);
+        req.block_wait().expect("block_wait");
+        req.send_data(req_m).expect("send_data");
+
+        let resp_m = resp.next().expect("next").unwrap();
+        assert_eq!(size as usize, resp_m.payload.get_ref().body.len());
     }
 
-    println!("response_sizes.len is {}", response_sizes.len());
-    assert!(response_sizes.len() == 4);
-    assert!(response_sizes[0] == 31415);
-    assert!(response_sizes[1] == 9);
-    assert!(response_sizes[2] == 2653);
-    assert!(response_sizes[3] == 58979);
+    req.finish().expect("finish");
+    assert!(resp.next().is_none());
+
     println!("{} PingPong done", Local::now().to_rfc3339());
 }
 
 fn empty_stream(client: TestServiceClient) {
-    let response = client
-        .full_duplex_call(grpc::RequestOptions::new(), grpc::StreamingRequest::empty())
-        .wait_drop_metadata();
-    assert!(response.count() == 0);
+    let (mut req, resp) = client
+        .full_duplex_call(grpc::RequestOptions::new()).wait().expect("wait");
+    req.finish().expect("finish");
+    let resp: Vec<_> = resp.wait_drop_metadata().collect();
+    assert!(resp.len() == 0);
     println!("{} EmptyStream done", Local::now().to_rfc3339());
 }
 
@@ -219,11 +218,12 @@ fn custom_metadata(client: TestServiceClient) {
             req.set_payload(p);
         }
 
-        let (initial, _res, trailing) = client
-            .full_duplex_call(make_options(), grpc::StreamingRequest::single(req))
-            .collect()
-            .wait()
-            .expect("FullDuplexCall");
+        let (mut req1, resp) = client
+            .full_duplex_call(make_options()).wait().expect("start request");
+        req1.send_data(req).expect("send_data");
+        req1.finish().expect("finish");
+
+        let (initial, _, trailing) = resp.collect().wait().expect("collect");
 
         assert_result_metadata(initial, trailing);
     }

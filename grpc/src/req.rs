@@ -9,7 +9,7 @@ use futures::Poll;
 use futures::Sink;
 use futures::StartSend;
 use futures_grpc::GrpcStream;
-use Metadata;
+use proto::metadata::Metadata;
 
 
 #[derive(Debug, Default)]

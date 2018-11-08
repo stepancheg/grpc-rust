@@ -12,12 +12,12 @@ use grpc::*;
 
 use test_misc::*;
 
-fn echo_fn(_: RequestOptions, req: String) -> SingleResponse<String> {
-    SingleResponse::completed(req)
+fn echo_fn(_: ServerHandlerContext, req: ServerRequestSingle<String>, resp: ServerResponseUnarySink<String>) -> grpc::Result<()> {
+    resp.finish(req.message)
 }
 
-fn reverse_fn(_: RequestOptions, req: String) -> SingleResponse<String> {
-    SingleResponse::completed(req.chars().rev().collect())
+fn reverse_fn(_: ServerHandlerContext, req: ServerRequestSingle<String>, resp: ServerResponseUnarySink<String>) -> grpc::Result<()> {
+    resp.finish(req.message.chars().rev().collect())
 }
 
 #[test]

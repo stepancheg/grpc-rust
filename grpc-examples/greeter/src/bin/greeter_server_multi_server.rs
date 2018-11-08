@@ -8,26 +8,25 @@ use std::thread;
 
 use grpc_examples_greeter::helloworld::*;
 use grpc_examples_greeter::helloworld_grpc::*;
+use grpc::ServerHandlerContext;
+use grpc::ServerRequestSingle;
+use grpc::ServerResponseUnarySink;
 
 struct GreeterImpl {
     instance: u32,
 }
 
 impl Greeter for GreeterImpl {
-    fn say_hello(
-        &self,
-        _m: grpc::RequestOptions,
-        req: HelloRequest,
-    ) -> grpc::SingleResponse<HelloReply> {
+    fn say_hello(&self, _: ServerHandlerContext, req: ServerRequestSingle<HelloRequest>, resp: ServerResponseUnarySink<HelloReply>) -> grpc::Result<()> {
         let mut r = HelloReply::new();
-        let name = if req.get_name().is_empty() {
+        let name = if req.message.get_name().is_empty() {
             "world"
         } else {
-            req.get_name()
+            req.message.get_name()
         };
         println!("instance {}, greeting request from {}", self.instance, name);
         r.set_message(format!("Hello {}", name));
-        grpc::SingleResponse::completed(r)
+        resp.finish(r)
     }
 }
 

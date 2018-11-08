@@ -20,6 +20,7 @@ mod misc;
 
 mod client;
 mod client_stub;
+mod common;
 mod server;
 
 mod proto;
@@ -27,7 +28,6 @@ mod proto;
 mod assert_types;
 
 mod chars;
-mod grpc_http_to_response;
 mod req;
 mod resp;
 mod result;
@@ -52,15 +52,22 @@ pub use result::Result;
 
 pub use stream_item::ItemOrMetadata;
 
+pub use client::req_sink::ClientRequestSink;
 pub use client::Client;
 pub use client::ClientConf;
 
 pub use client_stub::ClientStub;
 pub use client_stub::ClientStubExt;
 
+pub use server::resp_sink::ServerResponseSink;
+pub use server::resp_unary_sink::ServerResponseUnarySink;
 pub use server::Server;
 pub use server::ServerBuilder;
 pub use server::ServerConf;
+pub use server::ctx::ServerHandlerContext;
+pub use server::req_stream::ServerRequestStream;
+pub use server::req_handler::ServerRequest;
+pub use server::req_single::ServerRequestSingle;
 
 pub use resp::SingleResponse;
 pub use resp::StreamingResponse;
@@ -73,3 +80,4 @@ pub use futures_grpc::GrpcStream;
 
 pub use proto::metadata::Metadata;
 pub use proto::metadata::MetadataKey;
+pub use proto::grpc_status::GrpcStatus;

@@ -87,31 +87,60 @@ impl<'a> MethodGen<'a> {
         )
     }
 
-    fn input(&self) -> String {
-        match self.proto.get_client_streaming() {
-            false => self.input_message(),
-            true => format!("::grpc::StreamingRequest<{}>", self.input_message()),
-        }
-    }
-
-    fn output(&self) -> String {
+    fn client_resp_type(&self) -> String {
         match self.proto.get_server_streaming() {
             false => format!("::grpc::SingleResponse<{}>", self.output_message()),
             true => format!("::grpc::StreamingResponse<{}>", self.output_message()),
         }
     }
 
-    fn sig(&self) -> String {
+    fn client_sig(&self) -> String {
+        let req_param = match self.proto.get_client_streaming() {
+            false => format!(", req: {}", self.input_message()),
+            true => format!(""),
+        };
+        let resp_type = self.client_resp_type();
+        let return_type = match self.proto.get_client_streaming() {
+            false => resp_type,
+            true => format!(
+                "impl ::futures::future::Future<Item=(::grpc::ClientRequestSink<{}>, {}), Error=::grpc::Error>",
+                self.input_message(),
+                resp_type
+            ),
+        };
         format!(
-            "{}(&self, o: ::grpc::RequestOptions, p: {}) -> {}",
+            "{}(&self, o: ::grpc::RequestOptions{}) -> {}",
             self.snake_name(),
-            self.input(),
-            self.output()
+            req_param,
+            return_type,
         )
     }
 
-    fn write_intf(&self, w: &mut CodeWriter) {
-        w.fn_def(&self.sig())
+    fn server_req_type(&self) -> String {
+        match self.proto.get_client_streaming() {
+            false => format!("::grpc::ServerRequestSingle<{}>", self.input_message()),
+            true => format!("::grpc::ServerRequest<{}>", self.input_message()),
+        }
+    }
+
+    fn server_resp_type(&self) -> String {
+        match self.proto.get_server_streaming() {
+            false => format!("::grpc::ServerResponseUnarySink<{}>", self.output_message()),
+            true => format!("::grpc::ServerResponseSink<{}>", self.output_message()),
+        }
+    }
+
+    fn server_sig(&self) -> String {
+        format!(
+            "{}(&self, o: ::grpc::ServerHandlerContext, req: {}, resp: {}) -> ::grpc::Result<()>",
+            self.snake_name(),
+            self.server_req_type(),
+            self.server_resp_type(),
+        )
+    }
+
+    fn write_server_intf(&self, w: &mut CodeWriter) {
+        w.fn_def(&self.server_sig())
     }
 
     fn descriptor_field_name(&self) -> String {
@@ -151,10 +180,15 @@ impl<'a> MethodGen<'a> {
     }
 
     fn write_client(&self, w: &mut CodeWriter) {
-        w.def_fn(&self.sig(), |w| {
+        w.pub_fn(&self.client_sig(), |w| {
+            let req = match self.proto.get_client_streaming() {
+                false => ", req",
+                true => "",
+            };
             w.write_line(&format!(
-                "self.grpc_client.call_{}(o, p, self.{}.clone())",
+                "self.grpc_client.call_{}(o{}, self.{}.clone())",
                 self.streaming_lower(),
+                req,
                 self.descriptor_field_name()
             ))
         });
@@ -179,11 +213,11 @@ impl<'a> MethodGen<'a> {
                 );
                 w.field_entry(
                     "req_marshaller",
-                    "Box::new(::grpc::protobuf::MarshallerProtobuf)",
+                    "::std::sync::Arc::new(::grpc::protobuf::MarshallerProtobuf)",
                 );
                 w.field_entry(
                     "resp_marshaller",
-                    "Box::new(::grpc::protobuf::MarshallerProtobuf)",
+                    "::std::sync::Arc::new(::grpc::protobuf::MarshallerProtobuf)",
                 );
             },
         );
@@ -225,28 +259,28 @@ impl<'a> ServiceGen<'a> {
     }
 
     // trait name
-    fn intf_name(&self) -> &str {
+    fn server_intf_name(&self) -> &str {
         self.proto.get_name()
     }
 
     // client struct name
     fn client_name(&self) -> String {
-        format!("{}Client", self.intf_name())
+        format!("{}Client", self.proto.get_name())
     }
 
     // server struct name
     fn server_name(&self) -> String {
-        format!("{}Server", self.intf_name())
+        format!("{}Server", self.proto.get_name())
     }
 
-    fn write_intf(&self, w: &mut CodeWriter) {
-        w.pub_trait(&self.intf_name(), |w| {
+    fn write_server_intf(&self, w: &mut CodeWriter) {
+        w.pub_trait(&self.server_intf_name(), |w| {
             for (i, method) in self.methods.iter().enumerate() {
                 if i != 0 {
                     w.write_line("");
                 }
 
-                method.write_intf(w);
+                method.write_server_intf(w);
             }
         });
     }
@@ -286,7 +320,7 @@ impl<'a> ServiceGen<'a> {
 
         w.write_line("");
 
-        w.impl_for_block(self.intf_name(), &self.client_name(), |w| {
+        w.impl_self_block(&self.client_name(), |w| {
             for (i, method) in self.methods.iter().enumerate() {
                 if i != 0 {
                     w.write_line("");
@@ -315,7 +349,7 @@ impl<'a> ServiceGen<'a> {
                             method.write_descriptor(w, "::std::sync::Arc::new(", "),");
                             w.block("{", "},", |w| {
                                 w.write_line(&format!("let handler_copy = {}.clone();", handler));
-                                w.write_line(&format!("::grpc::rt::MethodHandler{}::new(move |o, p| handler_copy.{}(o, p))",
+                                w.write_line(&format!("::grpc::rt::MethodHandler{}::new(move |ctx, req, resp| handler_copy.{}(ctx, req, resp))",
                                     method.streaming_upper(),
                                     method.snake_name()));
                             });
@@ -333,7 +367,7 @@ impl<'a> ServiceGen<'a> {
         w.write_line("");
 
         w.impl_self_block(&self.server_name(), |w| {
-            w.pub_fn(&format!("new_service_def<H : {} + 'static + Sync + Send + 'static>(handler: H) -> ::grpc::rt::ServerServiceDefinition", self.intf_name()), |w| {
+            w.pub_fn(&format!("new_service_def<H : {} + 'static + Sync + Send + 'static>(handler: H) -> ::grpc::rt::ServerServiceDefinition", self.server_intf_name()), |w| {
                 w.write_line("let handler_arc = ::std::sync::Arc::new(handler);");
 
                 self.write_service_definition("", "", "handler_arc", w);
@@ -342,9 +376,9 @@ impl<'a> ServiceGen<'a> {
     }
 
     fn write(&self, w: &mut CodeWriter) {
-        w.comment("interface");
+        w.comment("server interface");
         w.write_line("");
-        self.write_intf(w);
+        self.write_server_intf(w);
         w.write_line("");
         w.comment("client");
         w.write_line("");

@@ -1,37 +1,34 @@
+pub(crate) mod ctx;
 pub(crate) mod method;
+pub(crate) mod req_handler;
+pub(crate) mod req_handler_unary;
+pub(crate) mod req_stream;
+pub(crate) mod req_single;
+pub(crate) mod resp_sink;
+pub(crate) mod resp_sink_untyped;
+pub(crate) mod resp_unary_sink;
+pub(crate) mod types;
 
 use std::sync::Arc;
 
-use bytes::Bytes;
-
 use httpbis;
-use httpbis::Header;
-use httpbis::Headers;
-
-use stream_item::ItemOrMetadata;
 
 use result::Result;
 
 use tls_api;
 use tls_api_stub;
 
-use futures::stream;
-use futures::stream::Stream;
-use futures::Future;
-
-use error::*;
+use common::sink::SinkCommonUntyped;
 use httpbis::AnySocketAddr;
-use httpbis::DataOrTrailers;
-use httpbis::HttpStreamAfterHeaders;
-use req::*;
-use resp::*;
 use proto::grpc_status::GrpcStatus;
-use proto::grpc_frame::GrpcFrameFromHttpFramesStreamRequest;
-use proto::grpc_status::HEADER_GRPC_MESSAGE;
-use proto::grpc_frame::write_grpc_frame_to_vec;
-use proto::grpc_status::HEADER_GRPC_STATUS;
-use Metadata;
+use proto::headers::grpc_error_message;
+use result;
+use server::ctx::ServerHandlerContext;
 use server::method::ServerMethod;
+use server::req_handler::ServerRequestUntyped;
+use server::resp_sink_untyped::ServerResponseUntypedSink;
+use Metadata;
+
 
 pub struct ServerServiceDefinition {
     pub prefix: String,
@@ -50,20 +47,19 @@ impl ServerServiceDefinition {
         self.methods.iter().filter(|m| m.name == name).next()
     }
 
-    pub fn handle_method(
+    pub(crate) fn handle_method(
         &self,
         name: &str,
-        o: RequestOptions,
-        message: StreamingRequest<Bytes>,
-    ) -> StreamingResponse<Vec<u8>> {
+        ctx: ServerHandlerContext,
+        req: ServerRequestUntyped,
+        mut resp: ServerResponseUntypedSink,
+    ) -> result::Result<()> {
         match self.find_method(name) {
-            Some(method) => method.dispatch.start_request(o, message),
-            None => StreamingResponse::no_metadata(Box::new(stream::once(Err(
-                Error::GrpcMessage(GrpcMessageError {
-                    grpc_status: GrpcStatus::Unimplemented as i32,
-                    grpc_message: String::from("Unimplemented method"),
-                }),
-            )))),
+            Some(method) => method.dispatch.start_request(ctx, req, resp),
+            None => {
+                resp.send_grpc_error(GrpcStatus::Unimplemented, "Unimplemented method".to_owned())?;
+                Ok(())
+            }
         }
     }
 }
@@ -107,7 +103,7 @@ impl<A: tls_api::TlsAcceptor> ServerBuilder<A> {
     pub fn add_service(&mut self, def: ServerServiceDefinition) {
         self.http.service.set_service(
             &def.prefix.clone(),
-            Arc::new(GrpcHttpService {
+            Arc::new(GrpcServerHandler {
                 service_definition: Arc::new(def),
             }),
         );
@@ -142,95 +138,47 @@ impl Server {
 }
 
 /// Implementation of gRPC over http2 HttpService
-struct GrpcHttpService {
+struct GrpcServerHandler {
     service_definition: Arc<ServerServiceDefinition>,
 }
 
-/// Create HTTP response for gRPC error
-fn http_response_500(message: &str) -> httpbis::Response {
-    // TODO: HttpResponse::headers
-    let headers = Headers(vec![
-        Header::new(":status", "500"),
-        Header::new(HEADER_GRPC_MESSAGE, message.to_owned()),
-    ]);
-    httpbis::Response::headers_and_stream(headers, httpbis::HttpStreamAfterHeaders::empty())
-}
+impl httpbis::ServerHandler for GrpcServerHandler {
+    fn start_request(
+        &self,
+        context: httpbis::ServerHandlerContext,
+        req: httpbis::ServerRequest,
+        mut resp: httpbis::ServerResponse,
+    ) -> httpbis::Result<()> {
+        // TODO: clone
+        let path = req.headers.path().to_owned();
 
-impl httpbis::Service for GrpcHttpService {
-    fn start_request(&self, headers: Headers, req: HttpStreamAfterHeaders) -> httpbis::Response {
-        let path = match headers.get_opt(":path") {
-            Some(path) => path.to_owned(),
-            None => return http_response_500("no :path header"),
-        };
-
-        let grpc_request = GrpcFrameFromHttpFramesStreamRequest::new(req);
-
-        let metadata = match Metadata::from_headers(headers) {
+        // TODO: clone
+        let metadata = match Metadata::from_headers(req.headers.clone()) {
             Ok(metadata) => metadata,
-            Err(_) => return http_response_500("decode metadata error"),
+            Err(_) => {
+                resp.send_message(grpc_error_message("decode metadata error"))?;
+                return Ok(());
+            }
         };
 
-        let request_options = RequestOptions { metadata: metadata };
+        let req = ServerRequestUntyped { req };
+
+        resp.set_drop_callback(move |resp| {
+            Ok(resp.send_message(grpc_error_message("grpc server handler did not close the sender"))?)
+        });
+
+        let resp = ServerResponseUntypedSink {
+            common: SinkCommonUntyped { http: resp },
+        };
+
+        let context = ServerHandlerContext {
+            ctx: context,
+            metadata,
+        };
+
         // TODO: catch unwind
-        let grpc_response = self.service_definition.handle_method(
-            &path,
-            request_options,
-            StreamingRequest::new(grpc_request),
-        );
+        self.service_definition.handle_method(&path, context, req, resp)?;
 
-        httpbis::Response::new(grpc_response.0.map_err(httpbis::Error::from).map(
-            |(metadata, grpc_frames)| {
-                let mut init_headers = Headers(vec![
-                    Header::new(":status", "200"),
-                    Header::new("content-type", "application/grpc"),
-                ]);
-
-                init_headers.extend(metadata.into_headers());
-
-                let s2 = grpc_frames
-                    .map_items(|frame| {
-                        DataOrTrailers::intermediate_data(Bytes::from(write_grpc_frame_to_vec(
-                            &frame,
-                        )))
-                    }).then_items(|result| match result {
-                        Ok(part) => Ok(part),
-                        Err(e) => {
-                            let (grpc_status, grpc_message) = match e {
-                                Error::GrpcMessage(GrpcMessageError {
-                                    grpc_status,
-                                    grpc_message,
-                                }) => (grpc_status, grpc_message),
-                                e => (GrpcStatus::Internal as i32, format!("error: {:?}", e)),
-                            };
-                            Ok(DataOrTrailers::Trailers(Headers(vec![
-                                Header::new(HEADER_GRPC_STATUS, format!("{}", grpc_status)),
-                                Header::new(HEADER_GRPC_MESSAGE, grpc_message),
-                            ])))
-                        }
-                    }).0
-                    .map(|item| match item {
-                        ItemOrMetadata::Item(part) => part,
-                        ItemOrMetadata::TrailingMetadata(trailing_metadata) => {
-                            DataOrTrailers::Trailers({
-                                let mut trailing =
-                                    Headers(vec![Header::new(HEADER_GRPC_STATUS, "0")]);
-                                trailing.extend(trailing_metadata.into_headers());
-                                trailing
-                            })
-                        }
-                    }).map_err(httpbis::Error::from);
-
-                // If stream contains trailing metadata, it is converted to grpc status 0,
-                // here we add trailing headers after trailing headers are ignored by HTTP server.
-                let s3 = stream::once(Ok(DataOrTrailers::Trailers(Headers(vec![Header::new(
-                    HEADER_GRPC_STATUS,
-                    "0",
-                )]))));
-
-                let http_parts = HttpStreamAfterHeaders::new(s2.chain(s3));
-
-                (init_headers, http_parts)
-            },
-        ))
+        Ok(())
     }
 }

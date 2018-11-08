@@ -1,4 +1,3 @@
-use std::iter;
 use std::thread;
 
 extern crate env_logger;
@@ -7,52 +6,60 @@ extern crate futures;
 extern crate grpc;
 extern crate long_tests;
 
-use futures::stream::Stream;
-use futures::Future;
-
 use long_tests::long_tests_pb::*;
 use long_tests::long_tests_pb_grpc::*;
 
 use grpc::*;
+use futures::Async;
 
 struct LongTestsServerImpl {}
 
 impl LongTests for LongTestsServerImpl {
-    fn echo(&self, _o: RequestOptions, mut p: EchoRequest) -> grpc::SingleResponse<EchoResponse> {
-        let mut resp = EchoResponse::new();
-        resp.set_payload(p.take_payload());
-        grpc::SingleResponse::completed(resp)
+    fn echo(&self, _: ServerHandlerContext, req: ServerRequestSingle<EchoRequest>, resp: ServerResponseUnarySink<EchoResponse>) -> grpc::Result<()> {
+        let mut m = EchoResponse::new();
+        m.set_payload(req.message.payload);
+        resp.finish(m)
     }
 
-    fn char_count(
-        &self,
-        _o: grpc::RequestOptions,
-        p: grpc::StreamingRequest<CharCountRequest>,
-    ) -> grpc::SingleResponse<CharCountResponse> {
-        let r =
-            p.0.map(|c| c.part.len() as u64)
-                .fold(0, |a, b| futures::finished::<_, grpc::Error>(a + b))
-                .map(|s| {
-                    let mut r = CharCountResponse::new();
-                    r.char_count = s;
-                    r
-                });
-        grpc::SingleResponse::no_metadata(r)
+    fn char_count(&self, _: ServerHandlerContext, req: ServerRequest<CharCountRequest>, resp: ServerResponseUnarySink<CharCountResponse>) -> grpc::Result<()> {
+        let mut resp = Some(resp);
+        let mut char_count = 0;
+        req.register_stream_handler_basic(move |message| {
+            Ok(match message {
+                Some(m) => {
+                    char_count += m.part.len();
+                },
+                None => {
+                    resp.take().unwrap().finish({
+                        let mut r = CharCountResponse::new();
+                        r.char_count = char_count as u64;
+                        r
+                    })?;
+                },
+            })
+        });
+        Ok(())
     }
 
-    fn random_strings(
-        &self,
-        _o: grpc::RequestOptions,
-        p: RandomStringsRequest,
-    ) -> grpc::StreamingResponse<RandomStringsResponse> {
-        let iter = iter::repeat(())
-            .map(|_| {
+    fn random_strings(&self, c: ServerHandlerContext, req: ServerRequestSingle<RandomStringsRequest>, mut resp: ServerResponseSink<RandomStringsResponse>) -> grpc::Result<()> {
+        let mut rem = req.message.count;
+        c.spawn_poll_fn(move || {
+            loop {
+                if let Async::NotReady = resp.poll()? {
+                    return Ok(Async::NotReady);
+                }
+                if rem == 0 {
+                    resp.send_trailers(Metadata::new())?;
+                    return Ok(Async::Ready(()));
+                }
                 let s = "aabb".to_owned();
-                let mut resp = RandomStringsResponse::new();
-                resp.set_s(s);
-                resp
-            }).take(p.count as usize);
-        grpc::StreamingResponse::iter(iter)
+                let mut m = RandomStringsResponse::new();
+                m.set_s(s);
+                resp.send_data(m)?;
+                rem -= 1;
+            }
+        });
+        Ok(())
     }
 }
 

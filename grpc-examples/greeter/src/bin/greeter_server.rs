@@ -12,24 +12,23 @@ use grpc_examples_greeter::helloworld::*;
 use grpc_examples_greeter::helloworld_grpc::*;
 
 use tls_api::TlsAcceptorBuilder;
+use grpc::ServerHandlerContext;
+use grpc::ServerRequestSingle;
+use grpc::ServerResponseUnarySink;
 
 struct GreeterImpl;
 
 impl Greeter for GreeterImpl {
-    fn say_hello(
-        &self,
-        _m: grpc::RequestOptions,
-        req: HelloRequest,
-    ) -> grpc::SingleResponse<HelloReply> {
+    fn say_hello(&self, _: ServerHandlerContext, req: ServerRequestSingle<HelloRequest>, resp: ServerResponseUnarySink<HelloReply>) -> grpc::Result<()> {
         let mut r = HelloReply::new();
-        let name = if req.get_name().is_empty() {
+        let name = if req.message.get_name().is_empty() {
             "world"
         } else {
-            req.get_name()
+            req.message.get_name()
         };
         println!("greeting request from {}", name);
         r.set_message(format!("Hello {}", name));
-        grpc::SingleResponse::completed(r)
+        resp.finish(r)
     }
 }
 
@@ -51,7 +50,7 @@ fn main() {
     let mut server = grpc::ServerBuilder::new();
     server.http.set_port(port);
     server.add_service(GreeterServer::new_service_def(GreeterImpl));
-    server.http.set_cpu_pool_threads(4);
+    //server.http.set_cpu_pool_threads(4);
     if tls {
         server.http.set_tls(test_tls_acceptor());
     }

@@ -1,16 +1,18 @@
+pub(crate) mod http_request_to_grpc_frames_typed;
+pub(crate) mod http_response_to_grpc_frames;
+pub(crate) mod http_response_to_grpc_frames_typed;
+pub(crate) mod req_sink;
+pub(crate) mod types;
+
 use std::net::SocketAddr;
 use std::sync::Arc;
 
 use bytes::Bytes;
 
-use futures::stream::Stream;
-
 use httpbis;
 use httpbis::Header;
 use httpbis::Headers;
 use httpbis::HttpScheme;
-use httpbis::HttpStreamAfterHeaders;
-use httpbis::Service as HttpbisService;
 
 use tls_api;
 
@@ -19,11 +21,16 @@ use method::MethodDescriptor;
 use error::*;
 use result;
 
-use grpc_http_to_response::*;
-
+use client::http_request_to_grpc_frames_typed::http_req_to_grpc_frames_typed;
+use client::http_response_to_grpc_frames_typed::http_response_to_grpc_frames_typed;
+use client::req_sink::ClientRequestSink;
+use error;
+use futures::future;
+use futures::Future;
+use proto::grpc_frame::write_grpc_frame_to_vec;
 use req::*;
 use resp::*;
-use proto::grpc_frame::write_grpc_frame_to_vec;
+
 
 #[derive(Default, Debug, Clone)]
 pub struct ClientConf {
@@ -127,16 +134,19 @@ impl Client {
     fn call_impl<Req, Resp>(
         &self,
         options: RequestOptions,
-        req: StreamingRequest<Req>,
+        req: Option<Req>,
         method: Arc<MethodDescriptor<Req, Resp>>,
-    ) -> StreamingResponse<Resp>
+    ) -> Box<
+        Future<Item = (ClientRequestSink<Req>, StreamingResponse<Resp>), Error = error::Error>
+            + Send,
+    >
     where
         Req: Send + 'static,
         Resp: Send + 'static,
     {
         info!("start call {}", method.name);
 
-        let mut headers = Headers(vec![
+        let mut headers = Headers::from_vec(vec![
             Header::new(Bytes::from_static(b":method"), Bytes::from_static(b"POST")),
             Header::new(Bytes::from_static(b":path"), method.name.clone()),
             Header::new(Bytes::from_static(b":authority"), self.host.clone()),
@@ -153,22 +163,50 @@ impl Client {
 
         headers.extend(options.metadata.into_headers());
 
-        let request_frames = {
-            let method = method.clone();
-            req.0
-                .and_then(move |req| {
-                    let grpc_frame = method.req_marshaller.write(&req)?;
-                    Ok(Bytes::from(write_grpc_frame_to_vec(&grpc_frame)))
-                }).map_err(|_e| httpbis::Error::Other("grpc error")) // TODO: preserve error
+        let req_bytes = match req {
+            Some(req) => match method.req_marshaller.write(&req) {
+                Ok(bytes) => {
+                    // TODO: extra allocation
+                    Some(Bytes::from(write_grpc_frame_to_vec(&bytes)))
+                }
+                Err(e) => return Box::new(future::err(e)),
+            },
+            None => None,
         };
 
-        let http_response_stream = self
+        let end_stream = req_bytes.is_some();
+
+        //        let request_frames = {
+        //            let method = method.clone();
+        //            req.0
+        //                .and_then(move |req| {
+        //                    let grpc_frame = method.req_marshaller.write(&req)?;
+        //                    Ok(Bytes::from(write_grpc_frame_to_vec(&grpc_frame)))
+        //                }).map_err(|_e| httpbis::Error::Other("grpc error")) // TODO: preserve error
+        //        };
+
+        let http_future = self
             .client
-            .start_request(headers, HttpStreamAfterHeaders::bytes(request_frames));
+            .start_request(headers, req_bytes, None, end_stream);
 
-        let grpc_frames = http_response_to_grpc_frames(http_response_stream);
+        let http_future = http_future.map_err(error::Error::from);
 
-        grpc_frames.and_then_items(move |frame| method.resp_marshaller.read(frame))
+        let req_marshaller = method.req_marshaller.clone();
+        let resp_marshaller = method.resp_marshaller.clone();
+
+        Box::new(http_future.map(move |(req, resp)| {
+            let grpc_req = http_req_to_grpc_frames_typed(req, req_marshaller);
+            let grpc_resp = http_response_to_grpc_frames_typed(resp, resp_marshaller);
+            (grpc_req, grpc_resp)
+        }))
+
+        //        Box::new(http_future
+        //            .map(|(req, resp)| {
+        //                let grpc_req = ClientRequestSink {
+        //                    common: SinkCommon {
+        //                        marshaller: method.req_marshaller,
+        //                        sink: req,
+        //                    }
     }
 
     pub fn call_unary<Req, Resp>(
@@ -181,8 +219,10 @@ impl Client {
         Req: Send + 'static,
         Resp: Send + 'static,
     {
-        self.call_impl(o, StreamingRequest::once(req), method)
-            .single()
+        SingleResponse::new(
+            self.call_impl(o, Some(req), method)
+                .and_then(|(_req, resp)| resp.single()),
+        )
     }
 
     pub fn call_server_streaming<Req, Resp>(
@@ -195,33 +235,36 @@ impl Client {
         Req: Send + 'static,
         Resp: Send + 'static,
     {
-        self.call_impl(o, StreamingRequest::once(req), method)
+        StreamingResponse::new(
+            self.call_impl(o, Some(req), method)
+                .map(|(_req, resp)| resp.0)
+                .flatten(),
+        )
     }
 
     pub fn call_client_streaming<Req, Resp>(
         &self,
         o: RequestOptions,
-        req: StreamingRequest<Req>,
         method: Arc<MethodDescriptor<Req, Resp>>,
-    ) -> SingleResponse<Resp>
+    ) -> impl Future<Item = (ClientRequestSink<Req>, SingleResponse<Resp>), Error = error::Error>
     where
         Req: Send + 'static,
         Resp: Send + 'static,
     {
-        self.call_impl(o, req, method).single()
+        self.call_impl(o, None, method)
+            .map(|(req, resp)| (req, resp.single()))
     }
 
     pub fn call_bidi<Req, Resp>(
         &self,
         o: RequestOptions,
-        req: StreamingRequest<Req>,
         method: Arc<MethodDescriptor<Req, Resp>>,
-    ) -> StreamingResponse<Resp>
+    ) -> impl Future<Item = (ClientRequestSink<Req>, StreamingResponse<Resp>), Error = error::Error>
     where
         Req: Send + 'static,
         Resp: Send + 'static,
     {
-        self.call_impl(o, req, method)
+        self.call_impl(o, None, method)
     }
 }
 

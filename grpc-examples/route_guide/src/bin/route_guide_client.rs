@@ -12,13 +12,11 @@ use protobuf::Message;
 use rand::prelude::*;
 
 use futures::future::Future;
-use futures::sink::Sink;
 use futures::stream::Stream;
 use grpc::ClientConf;
 use grpc_examples_route_guide::route_guide::Point;
 use grpc_examples_route_guide::route_guide::Rectangle;
 use grpc_examples_route_guide::route_guide::RouteNote;
-use grpc_examples_route_guide::route_guide_grpc::RouteGuide;
 use grpc_examples_route_guide::route_guide_grpc::RouteGuideClient;
 use grpc_examples_route_guide::*;
 use protobuf::SingularPtrField;
@@ -68,17 +66,15 @@ fn run_record_route(client: &RouteGuideClient) {
 
     println!("Traversing {} points.", point_count);
 
-    // We could use simple `StreamingRequest::iter` here,
-    // but using explicit streaming for demo purposes.
-    let (mut tx, rx) = grpc::StreamingRequest::mpsc();
-    let resp = client.record_route(grpc::RequestOptions::new(), rx);
+    let (mut req, resp) = client.record_route(grpc::RequestOptions::new()).wait().unwrap();
 
     for _ in 0..point_count {
         let point = random_point();
-        tx = tx.send(point).wait().expect("send");
+        req.block_wait().expect("block_wait");
+        req.send_data(point).expect("send_data");
     }
 
-    tx.close().expect("close");
+    req.finish().unwrap();
 
     let reply = resp.drop_metadata().wait().expect("resp");
     println!("Route summary: {:?}", reply);
@@ -105,14 +101,15 @@ fn run_route_chat(client: &RouteGuideClient) {
         new_note(0, 2, "Fifth message"),
         new_note(0, 3, "Sixth message"),
     ];
-    let (mut tx, rx) = grpc::StreamingRequest::mpsc();
-    let resp = client.route_chat(grpc::RequestOptions::new(), rx);
 
-    let sender_thread = thread::spawn(|| {
+    let (mut req, resp) = client.route_chat(grpc::RequestOptions::new()).wait().unwrap();
+
+    let sender_thread = thread::spawn(move || {
         for note in notes {
-            tx = tx.send(note).wait().expect("send");
+            req.block_wait().unwrap();
+            req.send_data(note).expect("send");
         }
-        tx.close().expect("close");
+        req.finish().expect("finish");
     });
 
     let responses = resp.drop_metadata().wait();

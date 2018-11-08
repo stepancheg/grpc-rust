@@ -4,11 +4,13 @@ use futures::stream;
 use futures::stream::Stream;
 
 use error;
+use futures::Poll;
 use futures_grpc::*;
 use iter::*;
 use result;
 use stream_item::*;
 use proto::metadata::Metadata;
+
 
 /// Single message response
 pub struct SingleResponse<T: Send + 'static>(pub GrpcFuture<(Metadata, GrpcFuture<(T, Metadata)>)>);
@@ -123,11 +125,25 @@ impl<T: Send + 'static> SingleResponse<T> {
     }
 }
 
+impl<T: Send + 'static> Future for SingleResponse<T> {
+    type Item = (Metadata, GrpcFuture<(T, Metadata)>);
+    type Error = error::Error;
+
+    fn poll(&mut self) -> Poll<(Metadata, GrpcFuture<(T, Metadata)>), error::Error> {
+        self.0.poll()
+    }
+}
+
 /// Streaming response
 pub struct StreamingResponse<T: Send + 'static>(
     /// Initial metadata, stream of items followed by trailing metadata
     pub GrpcFuture<(Metadata, GrpcStreamWithTrailingMetadata<T>)>,
 );
+
+fn _assert_types() {
+    //    ::assert_types::assert_send::<StreamingResponse<String>>();
+    //    ::assert_types::assert_sync::<StreamingResponse<String>>();
+}
 
 impl<T: Send + 'static> StreamingResponse<T> {
     // constructors
