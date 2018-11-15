@@ -24,6 +24,8 @@ pub struct Args<'a> {
     pub input: &'a [&'a str],
     /// Generate rust-protobuf files along with rust-gprc
     pub rust_protobuf: bool,
+    /// Customize rust-protobuf codegen
+    pub rust_protobuf_customize: protoc_rust::Customize,
 }
 
 pub fn run(args: Args) -> Result<()> {
@@ -38,6 +40,7 @@ pub fn run(args: Args) -> Result<()> {
             out_dir: args.out_dir,
             includes: args.includes,
             input: args.input,
+            customize: args.rust_protobuf_customize,
             ..Default::default()
         })?;
     }
