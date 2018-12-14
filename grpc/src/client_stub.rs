@@ -21,7 +21,7 @@ pub trait ClientStubExt: Sized {
     ) -> grpc_Result<Self>;
 
     /// Create a client connected to specified unix socket.
-    fn new_plain_unix(addr: &str, conf: ClientConf) -> grpc_Result<Self>;
+    fn new_plain_unix(addr: &str, port: u16, conf: ClientConf) -> grpc_Result<Self>;
 }
 
 impl<C: ClientStub> ClientStubExt for C {
@@ -38,12 +38,12 @@ impl<C: ClientStub> ClientStubExt for C {
     }
 
     #[cfg(unix)]
-    fn new_plain_unix(addr: &str, conf: ClientConf) -> grpc_Result<Self> {
-        Client::new_plain_unix(addr, conf).map(|c| Self::with_client(Arc::new(c)))
+    fn new_plain_unix(addr: &str, port: u16, conf: ClientConf) -> grpc_Result<Self> {
+        Client::new_plain_unix(addr, port, conf).map(|c| Self::with_client(Arc::new(c)))
     }
 
     #[cfg(not(unix))]
-    fn new_plain_unix(addr: &str, conf: ClientConf) -> grpc_Result<Self> {
+    fn new_plain_unix(addr: &str, port: u16, conf: ClientConf) -> grpc_Result<Self> {
         Err(::Error::Other("new_plain_unix unsupported"))
     }
 }
