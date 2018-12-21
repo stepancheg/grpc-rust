@@ -42,7 +42,7 @@ pub struct Client {
     client: ::std::sync::Arc<httpbis::Client>,
     host: String,
     http_scheme: HttpScheme,
-    port: u16,
+    port: Option<u16>,
 }
 
 impl Client {
@@ -60,13 +60,13 @@ impl Client {
                 client: ::std::sync::Arc::new(client),
                 host: host.to_owned(),
                 http_scheme: HttpScheme::Http,
-                port: port.to_owned(),
+                port: Some(port.to_owned()),
             }).map_err(Error::from)
     }
 
     /// Create a client connected to specified Unix domain socket.
     #[cfg(unix)]
-    pub fn new_plain_unix(addr: &str, port: u16, conf: ClientConf) -> result::Result<Client> {
+    pub fn new_plain_unix(addr: &str, conf: ClientConf) -> result::Result<Client> {
         let mut conf = conf;
         conf.http.thread_name = Some(
             conf.http
@@ -79,7 +79,7 @@ impl Client {
                 client: ::std::sync::Arc::new(client),
                 host: addr.to_owned(),
                 http_scheme: HttpScheme::Http,
-                port: port.to_owned(),
+                port: None,
             }).map_err(Error::from)
     }
 
@@ -101,7 +101,7 @@ impl Client {
                 client: ::std::sync::Arc::new(client),
                 host: host.to_owned(),
                 http_scheme: HttpScheme::Https,
-                port: port.to_owned(),
+                port: Some(port.to_owned()),
             }).map_err(Error::from)
     }
 
@@ -125,7 +125,7 @@ impl Client {
                 client: ::std::sync::Arc::new(client),
                 host: host.to_owned(),
                 http_scheme: http_scheme,
-                port: addr.port(),
+                port: Some(addr.port()),
             }).map_err(Error::from)
     }
 
@@ -139,7 +139,11 @@ impl Client {
         Req: Send + 'static,
         Resp: Send + 'static,
     {
-        let authority = format!("{}:{}", self.host.clone(), self.port.clone());
+        let mut authority = self.host.clone();
+        if let Some(port_value) = self.port {
+            authority = format!("{}:{}", authority, port_value);
+        }
+
         info!("start call {}/{}", authority, method.name);
 
         let mut headers = Headers(vec![
