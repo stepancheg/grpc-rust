@@ -315,7 +315,7 @@ impl<'a> ServiceGen<'a> {
                             method.write_descriptor(w, "::std::sync::Arc::new(", "),");
                             w.block("{", "},", |w| {
                                 w.write_line(&format!("let handler_copy = {}.clone();", handler));
-                                w.write_line(&format!("::grpc::rt::MethodHandler{}::new(move |o, p| handler_copy.{}(o, p))",
+                                w.write_line(&format!("::grpc::rt::MethodHandler{}::new(move |o, p| (*handler_copy).{}(o, p))",
                                     method.streaming_upper(),
                                     method.snake_name()));
                             });
