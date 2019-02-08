@@ -114,7 +114,10 @@ pub fn parse_grpc_frame_completely(stream: &[u8]) -> result::Result<&[u8]> {
     }
 }
 
+/// Encode data into grpc frame (add frame prefix)
 pub fn write_grpc_frame(stream: &mut Vec<u8>, frame: &[u8]) {
+    assert!(frame.len() <= u32::max_value() as usize);
+    stream.reserve(5 + frame.len());
     stream.push(0); // compressed flag
     stream.extend(&write_u32_be(frame.len() as u32));
     stream.extend(frame);
