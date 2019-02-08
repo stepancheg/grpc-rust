@@ -9,6 +9,10 @@ use grpc::rt::*;
 pub use self::stream_thread_spawn_iter::stream_thread_spawn_iter;
 pub use self::test_sync::TestSync;
 
+use log_ndc_env_logger;
+use std::sync::Once;
+
+
 pub fn string_string_method(
     name: &str,
     streaming: GrpcStreaming,
@@ -23,3 +27,10 @@ pub fn string_string_method(
 
 // Bind on IPv4 because IPv6 is broken on travis
 pub const BIND_HOST: &str = "127.0.0.1";
+
+pub fn init_logger() {
+    static ONCE: Once = Once::new();
+    ONCE.call_once(|| {
+        log_ndc_env_logger::init();
+    });
+}

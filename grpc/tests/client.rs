@@ -1,5 +1,6 @@
 #[macro_use]
 extern crate log;
+extern crate log_ndc_env_logger;
 extern crate futures;
 
 extern crate grpc;
@@ -13,6 +14,8 @@ use test_misc::*;
 
 #[test]
 fn server_is_not_running() {
+    init_logger();
+
     let client = Client::new_plain(BIND_HOST, 2, Default::default()).unwrap();
 
     // TODO: https://github.com/tokio-rs/tokio-core/issues/12
@@ -30,6 +33,8 @@ fn server_is_not_running() {
 #[cfg(unix)]
 #[test]
 fn server_is_not_running_unix() {
+    init_logger();
+
     let client = Client::new_plain_unix("/tmp/grpc_rust_test", Default::default()).unwrap();
 
     // TODO: https://github.com/tokio-rs/tokio-core/issues/12

@@ -4,7 +4,7 @@ extern crate tokio_core;
 extern crate tokio_tls_api;
 #[macro_use]
 extern crate log;
-extern crate env_logger;
+extern crate log_ndc_env_logger;
 
 mod test_misc;
 
@@ -191,6 +191,8 @@ impl TesterClientStreaming {
 
 #[test]
 fn unary() {
+    init_logger();
+
     let tester = TesterUnary::new(|_m, s| SingleResponse::completed(s));
 
     assert_eq!("aa", tester.call("aa").wait().unwrap());
@@ -198,7 +200,7 @@ fn unary() {
 
 #[test]
 fn error_in_handler() {
-    drop(env_logger::try_init());
+    init_logger();
 
     let tester = TesterUnary::new(|_m, _| {
         SingleResponse::no_metadata(Err(Error::Other("my error")).into_future())
@@ -210,6 +212,8 @@ fn error_in_handler() {
 // TODO
 //#[test]
 fn panic_in_handler() {
+    init_logger();
+
     let tester = TesterUnary::new(|_m, _| panic!("icnap"));
 
     tester.call_expect_grpc_error("aa", |m| {
@@ -219,6 +223,8 @@ fn panic_in_handler() {
 
 #[test]
 fn server_streaming() {
+    init_logger();
+
     let test_sync = Arc::new(TestSync::new());
     let test_sync_server = test_sync.clone();
 
@@ -245,6 +251,8 @@ fn server_streaming() {
 
 #[test]
 fn client_streaming() {
+    init_logger();
+
     let tester = TesterClientStreaming::new(move |_m, s| {
         SingleResponse::no_metadata(s.0.fold(String::new(), |mut s, message| {
             s.push_str(&message);

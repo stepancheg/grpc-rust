@@ -24,7 +24,7 @@ bytes           = "0.4"
 base64          = "0.9"
 
 [dev-dependencies]
-env_logger      = "~0.5"
+log-ndc-env-logger = "~0.2"
 
 [lib]
 doctest = false

@@ -1,6 +1,6 @@
 #[macro_use]
 extern crate log;
-extern crate env_logger;
+extern crate log_ndc_env_logger;
 
 extern crate futures;
 extern crate grpc;
@@ -22,7 +22,7 @@ fn reverse_fn(_: RequestOptions, req: String) -> SingleResponse<String> {
 
 #[test]
 fn multiple_services() {
-    drop(env_logger::try_init());
+    init_logger();
 
     let mut server = ServerBuilder::new_plain();
     server.http.set_port(0);
@@ -72,6 +72,8 @@ fn multiple_services() {
 #[cfg(unix)]
 #[test]
 fn single_service_unix() {
+    init_logger();
+
     let test_socket_address = "/tmp/grpc_rust_single_service_unix";
     let mut server = ServerBuilder::new_plain();
     server
