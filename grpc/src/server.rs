@@ -18,8 +18,6 @@ use futures::stream::Stream;
 use futures::Future;
 
 use error::*;
-use grpc::*;
-use grpc_frame::*;
 use httpbis::AnySocketAddr;
 use httpbis::DataOrTrailers;
 use httpbis::HttpStreamAfterHeaders;
@@ -27,6 +25,11 @@ use metadata::Metadata;
 use req::*;
 use resp::*;
 use server_method::*;
+use proto::grpc_status::GrpcStatus;
+use proto::grpc_frame::GrpcFrameFromHttpFramesStreamRequest;
+use proto::grpc_status::HEADER_GRPC_MESSAGE;
+use proto::grpc_frame::write_grpc_frame_to_vec;
+use proto::grpc_status::HEADER_GRPC_STATUS;
 
 pub struct ServerServiceDefinition {
     pub prefix: String,

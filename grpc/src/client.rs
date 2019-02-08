@@ -19,11 +19,11 @@ use method::MethodDescriptor;
 use error::*;
 use result;
 
-use grpc_frame::*;
 use grpc_http_to_response::*;
 
 use req::*;
 use resp::*;
+use proto::grpc_frame::write_grpc_frame_to_vec;
 
 #[derive(Default, Debug, Clone)]
 pub struct ClientConf {

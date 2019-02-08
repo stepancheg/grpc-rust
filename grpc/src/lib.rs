@@ -23,11 +23,11 @@ mod client_stub;
 mod server;
 mod server_method;
 
+mod proto;
+
 mod assert_types;
 
 mod chars;
-mod grpc;
-mod grpc_frame;
 mod grpc_http_to_response;
 mod req;
 mod resp;
@@ -50,7 +50,6 @@ pub mod for_test;
 
 pub use error::Error;
 pub use error::GrpcMessageError;
-pub use grpc::GrpcStatus;
 pub use result::Result;
 
 pub use stream_item::ItemOrMetadata;
