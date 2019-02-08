@@ -4,11 +4,11 @@ use std::io;
 
 use futures;
 
-use metadata;
-
 use httpbis;
 
 use protobuf_lib::ProtobufError;
+use proto::metadata;
+
 
 #[derive(Debug)]
 pub struct GrpcMessageError {

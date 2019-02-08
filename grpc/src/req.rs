@@ -1,8 +1,6 @@
 use futures::stream;
 use futures::stream::Stream;
 
-use metadata::Metadata;
-
 use error;
 use error::Error;
 use futures::sync::mpsc;
@@ -11,6 +9,8 @@ use futures::Poll;
 use futures::Sink;
 use futures::StartSend;
 use futures_grpc::GrpcStream;
+use Metadata;
+
 
 #[derive(Debug, Default)]
 pub struct RequestOptions {

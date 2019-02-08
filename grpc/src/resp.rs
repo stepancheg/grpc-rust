@@ -6,9 +6,9 @@ use futures::stream::Stream;
 use error;
 use futures_grpc::*;
 use iter::*;
-use metadata::*;
 use result;
 use stream_item::*;
+use proto::metadata::Metadata;
 
 /// Single message response
 pub struct SingleResponse<T: Send + 'static>(pub GrpcFuture<(Metadata, GrpcFuture<(T, Metadata)>)>);

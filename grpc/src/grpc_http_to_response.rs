@@ -19,13 +19,13 @@ use error::GrpcMessageError;
 
 use httpbis::DataOrTrailers;
 use httpbis::HttpStreamAfterHeaders;
-use metadata::*;
 use resp::*;
 use stream_item::*;
 use proto::grpc_status::HEADER_GRPC_STATUS;
 use proto::grpc_status::GrpcStatus;
 use proto::grpc_status::HEADER_GRPC_MESSAGE;
 use proto::grpc_frame::parse_grpc_frames_from_bytes;
+use proto::metadata::Metadata;
 
 fn init_headers_to_metadata(headers: Headers) -> result::Result<Metadata> {
     if headers.get_opt(":status") != Some("200") {

@@ -38,7 +38,6 @@ mod error;
 mod futures_grpc;
 mod iter;
 mod marshall;
-mod metadata;
 mod method;
 
 pub mod prelude;
@@ -73,5 +72,5 @@ pub use req::StreamingRequest;
 pub use futures_grpc::GrpcFuture;
 pub use futures_grpc::GrpcStream;
 
-pub use metadata::Metadata;
-pub use metadata::MetadataKey;
+pub use proto::metadata::Metadata;
+pub use proto::metadata::MetadataKey;

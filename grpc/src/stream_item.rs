@@ -8,8 +8,8 @@ use futures_grpc::*;
 use error::Error;
 use iter::GrpcIterator;
 use result;
+use proto::metadata::Metadata;
 
-use metadata::*;
 
 /// Either stream item or trailing metadata.
 pub enum ItemOrMetadata<T: Send + 'static> {
