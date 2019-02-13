@@ -21,7 +21,6 @@ mod misc;
 mod client;
 mod client_stub;
 mod server;
-mod server_method;
 
 mod proto;
 

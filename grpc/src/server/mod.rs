@@ -1,3 +1,5 @@
+pub(crate) mod method;
+
 use std::sync::Arc;
 
 use bytes::Bytes;
@@ -23,13 +25,13 @@ use httpbis::DataOrTrailers;
 use httpbis::HttpStreamAfterHeaders;
 use req::*;
 use resp::*;
-use server_method::*;
 use proto::grpc_status::GrpcStatus;
 use proto::grpc_frame::GrpcFrameFromHttpFramesStreamRequest;
 use proto::grpc_status::HEADER_GRPC_MESSAGE;
 use proto::grpc_frame::write_grpc_frame_to_vec;
 use proto::grpc_status::HEADER_GRPC_STATUS;
 use Metadata;
+use server::method::ServerMethod;
 
 pub struct ServerServiceDefinition {
     pub prefix: String,

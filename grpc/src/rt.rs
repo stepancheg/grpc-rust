@@ -1,11 +1,11 @@
 //! Functions used by generated code, but not exposed in `grpc`.
 
-pub use server_method::MethodHandler;
-pub use server_method::MethodHandlerBidi;
-pub use server_method::MethodHandlerClientStreaming;
-pub use server_method::MethodHandlerServerStreaming;
-pub use server_method::MethodHandlerUnary;
-pub use server_method::ServerMethod;
+pub use server::method::MethodHandler;
+pub use server::method::MethodHandlerBidi;
+pub use server::method::MethodHandlerClientStreaming;
+pub use server::method::MethodHandlerServerStreaming;
+pub use server::method::MethodHandlerUnary;
+pub use server::method::ServerMethod;
 
 pub use method::GrpcStreaming;
 pub use method::GrpcStreamingFlavor;
