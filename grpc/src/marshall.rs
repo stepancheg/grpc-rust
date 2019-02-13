@@ -1,8 +1,8 @@
 use bytes::Bytes;
 
-use result::Result;
+use result;
 
-pub trait Marshaller<M> {
-    fn write(&self, m: &M) -> Result<Vec<u8>>;
-    fn read(&self, bytes: Bytes) -> Result<M>;
+pub trait Marshaller<M>: Send + Sync + 'static {
+    fn write(&self, m: &M) -> result::Result<Vec<u8>>;
+    fn read(&self, bytes: Bytes) -> result::Result<M>;
 }

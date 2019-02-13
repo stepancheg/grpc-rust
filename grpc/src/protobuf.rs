@@ -1,4 +1,5 @@
 //! Implementation of marshaller for protobuf parameter types.
+// TODO: move into a separate crate
 
 use bytes::Bytes;
 
