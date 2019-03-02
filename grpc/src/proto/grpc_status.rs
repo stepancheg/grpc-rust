@@ -3,6 +3,7 @@ pub static HEADER_GRPC_MESSAGE: &'static str = "grpc-message";
 
 // copied from https://github.com/grpc/grpc/blob/master/include/grpc/impl/codegen/status.h
 #[allow(dead_code)]
+#[derive(Copy, Clone, Debug)]
 pub enum GrpcStatus {
     /* Not an error; returned on success */
     Ok = 0,
@@ -111,4 +112,41 @@ pub enum GrpcStatus {
 
     /* Unrecoverable data loss or corruption. */
     DataLoss = 15,
+}
+
+const ALL_STATUSES: &[GrpcStatus] = &[
+    GrpcStatus::Ok,
+    GrpcStatus::Cancelled,
+    GrpcStatus::Unknown,
+    GrpcStatus::Argument,
+    GrpcStatus::DeadlineExceeded,
+    GrpcStatus::NotFound,
+    GrpcStatus::AlreadyExists,
+    GrpcStatus::PermissionDenied,
+    GrpcStatus::Unauthenticated,
+    GrpcStatus::ResourceExhausted,
+    GrpcStatus::FailedPrecondition,
+    GrpcStatus::Aborted,
+    GrpcStatus::OutOfRange,
+    GrpcStatus::Unimplemented,
+    GrpcStatus::Internal,
+    GrpcStatus::Unavailable,
+    GrpcStatus::DataLoss,
+];
+
+impl GrpcStatus {
+    /// GrpcStatus as protocol numeric code
+    pub fn code(&self) -> u32 {
+        *self as u32
+    }
+
+    /// Find GrpcStatus enum variant by code
+    pub fn from_code(code: u32) -> Option<GrpcStatus> {
+        ALL_STATUSES.into_iter().cloned().find(|s| s.code() == code)
+    }
+
+    /// Find GrpcStatus enum variant by code or return default value
+    pub fn from_code_or_unknown(code: u32) -> GrpcStatus {
+        GrpcStatus::from_code(code).unwrap_or(GrpcStatus::Unknown)
+    }
 }
