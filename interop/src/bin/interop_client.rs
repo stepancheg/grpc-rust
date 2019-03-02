@@ -289,7 +289,7 @@ fn main() {
                 ).takes_value(true),
         ).get_matches();
 
-    let hostname = options.value_of("server_host").unwrap_or("localhost");
+    let hostname = options.value_of("server_host").unwrap_or("127.0.0.1");
     let serverport = options
         .value_of("server_port")
         .map(|s| s.parse().unwrap())
