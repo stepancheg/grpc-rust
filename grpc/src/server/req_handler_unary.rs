@@ -23,6 +23,7 @@ where
 {
     fn grpc_message(&mut self, message: M, frame_size: u32) -> result::Result<()> {
         self.increase_in_window.data_frame_processed(frame_size);
+        self.increase_in_window.increase_window_auto()?;
         if let Some(_) = self.message {
             return Err(error::Error::Other("more than one message in a stream"));
         }
@@ -37,11 +38,9 @@ where
         }
     }
 
-    fn in_window_empty(&mut self, _buffered: usize) -> result::Result<()> {
-        if self.increase_in_window.in_window_size() == 0 {
-            // TODO: choose something less random
-            self.increase_in_window.increase_window(10000)?;
-        }
+    fn buffer_processed(&mut self, buffered: usize) -> result::Result<()> {
+        // TODO: overflow check
+        self.increase_in_window.increase_window_auto_above(buffered as u32)?;
         Ok(())
     }
 }

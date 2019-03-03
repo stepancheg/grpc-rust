@@ -11,7 +11,7 @@ pub(crate) enum HandlerToStream<Req : Send + 'static> {
     Message(Req, u32),
     EndStream,
     Error(error::Error),
-    InWindowEmpty(usize),
+    BufferProcessed(usize),
 }
 
 pub struct ServerRequestStream<Req>
@@ -45,8 +45,8 @@ impl<Req: Send + 'static> ServerRequestStreamHandler<Req> for ServerRequestStrea
         self.send(HandlerToStream::Error(error))
     }
 
-    fn in_window_empty(&mut self, buffered: usize) -> result::Result<()> {
-        self.send(HandlerToStream::InWindowEmpty(buffered))
+    fn buffer_processed(&mut self, buffered: usize) -> result::Result<()> {
+        self.send(HandlerToStream::BufferProcessed(buffered))
     }
 }
 
@@ -73,9 +73,9 @@ impl<Req : Send + 'static> Stream for ServerRequestStream<Req> {
                 HandlerToStream::Error(error) => {
                     return Err(error);
                 }
-                HandlerToStream::InWindowEmpty(_buffered) => {
-                    // TODO
-                    self.increase_in_window.increase_window(1000)?;
+                HandlerToStream::BufferProcessed(buffered) => {
+                    // TODO: overflow
+                    self.increase_in_window.increase_window_auto_above(buffered as u32)?;
                     continue;
                 }
                 HandlerToStream::EndStream => {

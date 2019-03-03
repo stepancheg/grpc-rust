@@ -10,6 +10,7 @@ use proto::headers::trailers;
 use result;
 use server::types::ServerTypes;
 use Metadata;
+use httpbis::SenderState;
 
 pub(crate) struct ServerResponseUntypedSink {
     pub common: SinkCommonUntyped<ServerTypes>,
@@ -59,9 +60,10 @@ impl ServerResponseUntypedSink {
         // TODO: if headers sent, then ...
         let headers = headers_500(grpc_status, message.to_owned());
 
-        self.common.http.send_message(SimpleHttpMessage {
-            headers,
-            body: Bytes::new(),
-        })
+        if self.common.http.state() == SenderState::ExpectingHeaders {
+            self.common.http.send_headers_end_of_stream(headers)
+        } else {
+            self.common.http.send_trailers(headers)
+        }
     }
 }

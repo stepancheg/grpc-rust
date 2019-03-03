@@ -4,6 +4,8 @@ extern crate futures;
 extern crate futures_cpupool;
 extern crate grpc;
 extern crate protobuf;
+#[macro_use]
+extern crate log;
 
 extern crate grpc_interop;
 use grpc_interop::*;
@@ -66,9 +68,10 @@ impl TestService for TestServerImpl {
 
     fn unary_call(&self, _ctx: ServerHandlerContext, req: ServerRequestSingle<SimpleRequest>, mut resp: ServerResponseUnarySink<SimpleResponse>) -> grpc::Result<()> {
         if req.message.get_response_status().get_code() != 0 {
+            info!("requested to send grpc error {}", req.message.get_response_status().get_code());
             return resp.send_grpc_error(
-                GrpcStatus::from_code_or_unknown(req.message.response_status.get_ref().get_code() as u32),
-                req.message.response_status.get_ref().message.clone(),
+                GrpcStatus::from_code_or_unknown(req.message.get_response_status().get_code() as u32),
+                req.message.get_response_status().message.clone(),
             );
         }
 
@@ -109,7 +112,7 @@ impl TestService for TestServerImpl {
         req.register_stream_handler_basic(move |message| {
             Ok(match message {
                 Some(m) => {
-                    aggregate_size += m.payload.get_ref().body.len() as i32;
+                    aggregate_size += m.get_payload().body.len() as i32;
                 }
                 None => {
                     let mut response = StreamingInputCallResponse::new();
@@ -123,6 +126,7 @@ impl TestService for TestServerImpl {
 
     fn full_duplex_call(&self, o: ServerHandlerContext, req: ServerRequest<StreamingOutputCallRequest>, mut resp: ServerResponseSink<StreamingOutputCallResponse>) -> grpc::Result<()> {
         let metadata = req.metadata();
+        info!("sending custom metadata");
         resp.send_metadata(echo_custom_metadata(&metadata))?;
         let mut req = req.into_stream();
         o.spawn_poll_fn(move || {
@@ -132,15 +136,17 @@ impl TestService for TestServerImpl {
                 }
                 match req.poll()? {
                     Async::Ready(Some(m)) => {
-                        if m.response_status.get_ref().get_code() != 0 {
+                        if m.get_response_status().get_code() != 0 {
+                            info!("requested to send grpc error {}", m.get_response_status().get_code());
                             resp.send_grpc_error(
-                                GrpcStatus::from_code_or_unknown(m.response_status.get_ref().code as u32),
-                                m.response_status.get_ref().message.clone(),
+                                GrpcStatus::from_code_or_unknown(m.get_response_status().code as u32),
+                                m.get_response_status().message.clone(),
                             )?;
                             return Ok(Async::Ready(()));
                         }
 
                         for p in &m.response_parameters {
+                            info!("requested to send data of size {}", p.size);
                             resp.send_data({
                                 let mut response = StreamingOutputCallResponse::new();
                                 let mut payload = Payload::new();
@@ -151,6 +157,7 @@ impl TestService for TestServerImpl {
                         }
                     }
                     Async::Ready(None) => {
+                        info!("sending custom trailers");
                         resp.send_trailers(echo_custom_trailing(&metadata))?;
                         return Ok(Async::Ready(()));
                     }

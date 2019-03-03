@@ -17,7 +17,7 @@ pub(crate) trait ServerRequestStreamHandlerUntyped: 'static {
     fn grpc_message(&mut self, message: Bytes, frame_size: u32) -> result::Result<()>;
     fn end_stream(&mut self) -> result::Result<()>;
     fn error(&mut self, error: error::Error) -> result::Result<()>;
-    fn in_window_empty(&mut self, buffered: usize) -> result::Result<()>;
+    fn buffer_processed(&mut self, buffered: usize) -> result::Result<()>;
 }
 
 pub trait ServerRequestStreamHandler<M>: 'static {
@@ -26,7 +26,7 @@ pub trait ServerRequestStreamHandler<M>: 'static {
     fn error(&mut self, error: error::Error) -> result::Result<()> {
         Err(error)
     }
-    fn in_window_empty(&mut self, buffered: usize) -> result::Result<()>;
+    fn buffer_processed(&mut self, buffered: usize) -> result::Result<()>;
 }
 
 pub trait ServerRequestUnaryHandler<M>: 'static {
@@ -72,7 +72,6 @@ impl<H: ServerRequestStreamHandlerUntyped> httpbis::ServerStreamHandler
     fn data_frame(
         &mut self,
         data: Bytes,
-        in_window_size: u32,
         end_stream: bool,
     ) -> httpbis::Result<()> {
         if self.buf.is_empty() {
@@ -88,8 +87,9 @@ impl<H: ServerRequestStreamHandlerUntyped> httpbis::ServerStreamHandler
             return Ok(());
         }
 
-        if self.buf.is_empty() && in_window_size == 0 {
-            self.handler.in_window_empty(self.buf.len())?;
+        if self.buf.len() != 0 {
+            trace!("buffer processed, still contains {}, calling handler", self.buf.len());
+            self.handler.buffer_processed(self.buf.len())?;
         }
 
         Ok(())
@@ -134,8 +134,8 @@ impl<M, H: ServerRequestStreamHandler<M>> ServerRequestStreamHandlerUntyped
         self.handler.error(error)
     }
 
-    fn in_window_empty(&mut self, buffered: usize) -> result::Result<()> {
-        self.handler.in_window_empty(buffered)
+    fn buffer_processed(&mut self, buffered: usize) -> result::Result<()> {
+        self.handler.buffer_processed(buffered)
     }
 }
 
@@ -218,8 +218,10 @@ impl<'a, M: Send + 'static> ServerRequest<'a, M> {
                     (self.handler)(None)
                 }
 
-                fn in_window_empty(&mut self, buffered: usize) -> result::Result<()> {
-                    Ok(self.increase_in_window.increase_window((buffered * 2) as u32)?)
+                fn buffer_processed(&mut self, buffered: usize) -> result::Result<()> {
+                    // TODO: overflow check
+                    self.increase_in_window.increase_window_auto_above(buffered as u32)?;
+                    Ok(())
                 }
             }
 
