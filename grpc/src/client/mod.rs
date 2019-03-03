@@ -49,6 +49,7 @@ pub struct Client {
     client: ::std::sync::Arc<httpbis::Client>,
     host: String,
     http_scheme: HttpScheme,
+    port: Option<u16>,
 }
 
 impl Client {
@@ -66,6 +67,7 @@ impl Client {
                 client: ::std::sync::Arc::new(client),
                 host: host.to_owned(),
                 http_scheme: HttpScheme::Http,
+                port: Some(port.to_owned()),
             }).map_err(Error::from)
     }
 
@@ -84,6 +86,7 @@ impl Client {
                 client: ::std::sync::Arc::new(client),
                 host: addr.to_owned(),
                 http_scheme: HttpScheme::Http,
+                port: None,
             }).map_err(Error::from)
     }
 
@@ -105,6 +108,7 @@ impl Client {
                 client: ::std::sync::Arc::new(client),
                 host: host.to_owned(),
                 http_scheme: HttpScheme::Https,
+                port: Some(port.to_owned()),
             }).map_err(Error::from)
     }
 
@@ -128,6 +132,7 @@ impl Client {
                 client: ::std::sync::Arc::new(client),
                 host: host.to_owned(),
                 http_scheme: http_scheme,
+                port: Some(addr.port()),
             }).map_err(Error::from)
     }
 
@@ -144,12 +149,17 @@ impl Client {
         Req: Send + 'static,
         Resp: Send + 'static,
     {
-        info!("start call {}", method.name);
+        let mut authority = self.host.clone();
+        if let Some(port_value) = self.port {
+            authority = format!("{}:{}", authority, port_value);
+        }
+
+        info!("start call {}/{}", authority, method.name);
 
         let mut headers = Headers::from_vec(vec![
             Header::new(Bytes::from_static(b":method"), Bytes::from_static(b"POST")),
             Header::new(Bytes::from_static(b":path"), method.name.clone()),
-            Header::new(Bytes::from_static(b":authority"), self.host.clone()),
+            Header::new(Bytes::from_static(b":authority"), authority),
             Header::new(
                 Bytes::from_static(b":scheme"),
                 Bytes::from_static(self.http_scheme.as_bytes()),
