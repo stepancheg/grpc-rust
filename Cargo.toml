@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "grpc",
+    "grpc-protobuf",
     "grpc-examples/greeter",
     "grpc-examples/route_guide",
     "grpc-compiler",

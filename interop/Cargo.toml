@@ -8,6 +8,8 @@ publish = false
 
 [dependencies.grpc]
 path = "../grpc"
+[dependencies.grpc-protobuf]
+path = "../grpc-protobuf"
 
 [dependencies]
 bytes           = "0.4.*"

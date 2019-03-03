@@ -10,9 +10,6 @@ extern crate tls_api_stub;
 extern crate tokio_core;
 extern crate tokio_tls_api;
 
-// renamed to avoid name conflict with local protobuf library
-extern crate protobuf as protobuf_lib;
-
 extern crate httpbis;
 
 mod futures_misc;
@@ -37,12 +34,11 @@ mod or_static;
 mod error;
 mod futures_grpc;
 mod iter;
-mod marshall;
+pub mod marshall;
 mod method;
 
 pub mod prelude;
 
-pub mod protobuf;
 pub mod rt;
 
 pub mod for_test;

@@ -10,6 +10,8 @@ test = false
 
 [dependencies.grpc]
 path = "../../grpc"
+[dependencies.grpc-protobuf]
+path = "../../grpc-protobuf"
 
 [dependencies]
 protobuf        = "2"

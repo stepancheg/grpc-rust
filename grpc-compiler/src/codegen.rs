@@ -206,11 +206,11 @@ impl<'a> MethodGen<'a> {
                 );
                 w.field_entry(
                     "req_marshaller",
-                    "::grpc::rt::ArcOrStatic::Static(&::grpc::protobuf::MarshallerProtobuf)",
+                    "::grpc::rt::ArcOrStatic::Static(&::grpc_protobuf::MarshallerProtobuf)",
                 );
                 w.field_entry(
                     "resp_marshaller",
-                    "::grpc::rt::ArcOrStatic::Static(&::grpc::protobuf::MarshallerProtobuf)",
+                    "::grpc::rt::ArcOrStatic::Static(&::grpc_protobuf::MarshallerProtobuf)",
                 );
             },
         );

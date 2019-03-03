@@ -11,7 +11,6 @@ keywords = ["grpc"]
 
 [dependencies]
 log             = "0.4"
-protobuf        = { version = "2", features = ["with-bytes"] }
 futures         = "0.1.*"
 futures-cpupool = "0.1.*"
 tokio-core      = "0.1.*"

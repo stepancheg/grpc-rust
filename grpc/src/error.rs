@@ -1,4 +1,4 @@
-use std::error::Error as StdError;
+use std::error::Error as std_Error;
 use std::fmt;
 use std::io;
 
@@ -7,7 +7,6 @@ use futures;
 use httpbis;
 
 use proto::metadata;
-use protobuf_lib::ProtobufError;
 
 
 #[derive(Debug)]
@@ -25,8 +24,8 @@ pub enum Error {
     GrpcMessage(GrpcMessageError),
     Canceled(futures::Canceled),
     MetadataDecode(metadata::MetadataDecodeError),
-    Protobuf(ProtobufError),
     Panic(String),
+    Marshaller(Box<dyn std_Error+Send+Sync>),
     Other(&'static str),
 }
 
@@ -48,19 +47,7 @@ fn _assert_grpc_error_debug(e: &Error) {
     _assert_debug(e);
 }
 
-impl StdError for Error {
-    fn description(&self) -> &str {
-        match self {
-            &Error::Io(ref err) => err.description(),
-            &Error::Http(ref err) => err.description(),
-            &Error::GrpcMessage(ref err) => &err.grpc_message,
-            &Error::MetadataDecode(..) => "metadata decode error",
-            &Error::Protobuf(ref err) => err.description(),
-            &Error::Canceled(..) => "canceled",
-            &Error::Panic(ref message) => &message,
-            &Error::Other(ref message) => message,
-        }
-    }
+impl std_Error for Error {
 }
 
 impl fmt::Display for Error {
@@ -70,10 +57,10 @@ impl fmt::Display for Error {
             &Error::Http(ref err) => write!(f, "http error: {}", err.description()),
             &Error::GrpcMessage(ref err) => write!(f, "grpc message error: {}", err.grpc_message),
             &Error::MetadataDecode(..) => write!(f, "metadata decode error"),
-            &Error::Protobuf(ref err) => write!(f, "protobuf error: {}", err.description()),
             &Error::Canceled(..) => write!(f, "canceled"),
             &Error::Panic(ref message) => write!(f, "panic: {}", message),
             &Error::Other(ref message) => write!(f, "other error: {}", message),
+            &Error::Marshaller(ref e) => write!(f, "marshaller error: {}", e),
         }
     }
 }
@@ -87,12 +74,6 @@ impl From<io::Error> for Error {
 impl From<httpbis::Error> for Error {
     fn from(err: httpbis::Error) -> Self {
         Error::Http(err)
-    }
-}
-
-impl From<ProtobufError> for Error {
-    fn from(err: ProtobufError) -> Self {
-        Error::Protobuf(err)
     }
 }
 
