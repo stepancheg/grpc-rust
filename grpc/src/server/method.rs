@@ -321,7 +321,7 @@ pub(crate) trait MethodHandlerDispatchUntyped {
     ) -> result::Result<()>;
 }
 
-struct MethodHandlerDispatchImpl<Req, Resp> {
+struct MethodHandlerDispatchImpl<Req: 'static, Resp: 'static> {
     desc: Arc<MethodDescriptor<Req, Resp>>,
     method_handler: Box<MethodHandler<Req, Resp> + Sync + Send>,
 }

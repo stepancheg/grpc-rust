@@ -1,6 +1,6 @@
 use marshall::*;
-use std::sync::Arc;
 use string_or_static::StringOrStatic;
+use arc_or_static::ArcOrStatic;
 
 pub enum GrpcStreaming {
     Unary,
@@ -20,9 +20,9 @@ pub struct GrpcStreamingClientStreaming;
 pub struct GrpcStreamingServerStreaming;
 pub struct GrpcStreamingBidi;
 
-pub struct MethodDescriptor<Req, Resp> {
+pub struct MethodDescriptor<Req: 'static, Resp: 'static> {
     pub name: StringOrStatic,
     pub streaming: GrpcStreaming,
-    pub req_marshaller: Arc<Marshaller<Req> + Sync + Send>,
-    pub resp_marshaller: Arc<Marshaller<Resp> + Sync + Send>,
+    pub req_marshaller: ArcOrStatic<Marshaller<Req>>,
+    pub resp_marshaller: ArcOrStatic<Marshaller<Resp>>,
 }

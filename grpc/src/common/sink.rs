@@ -9,7 +9,7 @@ use marshall::Marshaller;
 use proto::grpc_frame::write_grpc_frame_to_vec;
 use result;
 use server::types::ServerTypes;
-use std::sync::Arc;
+use arc_or_static::ArcOrStatic;
 
 
 pub enum SendError {
@@ -42,7 +42,7 @@ impl<T: Types> SinkCommonUntyped<T> {
 }
 
 pub(crate) struct SinkCommon<M: 'static, T: Types> {
-    pub marshaller: Arc<Marshaller<M>>,
+    pub marshaller: ArcOrStatic<Marshaller<M>>,
     pub sink: T::SinkUntyped,
 }
 

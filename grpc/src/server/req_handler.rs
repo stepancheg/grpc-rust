@@ -7,11 +7,11 @@ use proto::grpc_frame::parse_grpc_frame_from_bytes;
 use result;
 use server::req_handler_unary::RequestHandlerUnaryToStream;
 use std::marker;
-use std::sync::Arc;
 use ServerRequestStream;
 use server::req_stream::ServerRequestStreamSenderHandler;
 use futures::sync::mpsc;
 use Metadata;
+use arc_or_static::ArcOrStatic;
 
 pub(crate) trait ServerRequestStreamHandlerUntyped: 'static {
     fn grpc_message(&mut self, message: Bytes, frame_size: u32) -> result::Result<()>;
@@ -115,7 +115,7 @@ impl<H: ServerRequestStreamHandlerUntyped> httpbis::ServerStreamHandler
 
 struct ServerRequestStreamHandlerHandler<M: 'static, H: ServerRequestStreamHandler<M>> {
     handler: H,
-    marshaller: Arc<Marshaller<M>>,
+    marshaller: ArcOrStatic<Marshaller<M>>,
 }
 
 impl<M, H: ServerRequestStreamHandler<M>> ServerRequestStreamHandlerUntyped
@@ -164,7 +164,7 @@ impl<'a> ServerRequestUntyped<'a> {
 
 pub struct ServerRequest<'a, M: 'static> {
     pub(crate) req: ServerRequestUntyped<'a>,
-    pub(crate) marshaller: Arc<Marshaller<M>>,
+    pub(crate) marshaller: ArcOrStatic<Marshaller<M>>,
 }
 
 impl<'a, M: Send + 'static> ServerRequest<'a, M> {

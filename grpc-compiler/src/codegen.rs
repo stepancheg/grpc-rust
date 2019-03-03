@@ -213,11 +213,11 @@ impl<'a> MethodGen<'a> {
                 );
                 w.field_entry(
                     "req_marshaller",
-                    "::std::sync::Arc::new(::grpc::protobuf::MarshallerProtobuf)",
+                    "::grpc::rt::ArcOrStatic::Static(&::grpc::protobuf::MarshallerProtobuf)",
                 );
                 w.field_entry(
                     "resp_marshaller",
-                    "::std::sync::Arc::new(::grpc::protobuf::MarshallerProtobuf)",
+                    "::grpc::rt::ArcOrStatic::Static(&::grpc::protobuf::MarshallerProtobuf)",
                 );
             },
         );

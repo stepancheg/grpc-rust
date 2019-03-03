@@ -2,12 +2,12 @@ use client::req_sink::ClientRequestSinkUntyped;
 use common::sink::SinkCommon;
 use common::sink::SinkCommonUntyped;
 use marshall::Marshaller;
-use std::sync::Arc;
 use ClientRequestSink;
+use arc_or_static::ArcOrStatic;
 
-pub(crate) fn http_req_to_grpc_frames_typed<Req: Send>(
+pub(crate) fn http_req_to_grpc_frames_typed<Req: Send + 'static>(
     http_req: httpbis::ClientRequest,
-    req_marshaller: Arc<Marshaller<Req>>,
+    req_marshaller: ArcOrStatic<Marshaller<Req>>,
 ) -> ClientRequestSink<Req> {
     ClientRequestSink {
         common: SinkCommon {
