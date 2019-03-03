@@ -5,7 +5,6 @@ pub(crate) mod req_sink;
 pub(crate) mod types;
 
 use std::net::SocketAddr;
-use std::sync::Arc;
 
 use bytes::Bytes;
 
@@ -30,6 +29,7 @@ use futures::Future;
 use proto::grpc_frame::write_grpc_frame_to_vec;
 use req::*;
 use resp::*;
+use arc_or_static::ArcOrStatic;
 
 
 #[derive(Default, Debug, Clone)]
@@ -141,7 +141,7 @@ impl Client {
         &self,
         options: RequestOptions,
         req: Option<Req>,
-        method: Arc<MethodDescriptor<Req, Resp>>,
+        method: ArcOrStatic<MethodDescriptor<Req, Resp>>,
     ) -> Box<
         Future<Item = (ClientRequestSink<Req>, StreamingResponse<Resp>), Error = error::Error>
             + Send,
@@ -225,7 +225,7 @@ impl Client {
         &self,
         o: RequestOptions,
         req: Req,
-        method: Arc<MethodDescriptor<Req, Resp>>,
+        method: ArcOrStatic<MethodDescriptor<Req, Resp>>,
     ) -> SingleResponse<Resp>
     where
         Req: Send + 'static,
@@ -241,7 +241,7 @@ impl Client {
         &self,
         o: RequestOptions,
         req: Req,
-        method: Arc<MethodDescriptor<Req, Resp>>,
+        method: ArcOrStatic<MethodDescriptor<Req, Resp>>,
     ) -> StreamingResponse<Resp>
     where
         Req: Send + 'static,
@@ -257,7 +257,7 @@ impl Client {
     pub fn call_client_streaming<Req, Resp>(
         &self,
         o: RequestOptions,
-        method: Arc<MethodDescriptor<Req, Resp>>,
+        method: ArcOrStatic<MethodDescriptor<Req, Resp>>,
     ) -> impl Future<Item = (ClientRequestSink<Req>, SingleResponse<Resp>), Error = error::Error>
     where
         Req: Send + 'static,
@@ -270,7 +270,7 @@ impl Client {
     pub fn call_bidi<Req, Resp>(
         &self,
         o: RequestOptions,
-        method: Arc<MethodDescriptor<Req, Resp>>,
+        method: ArcOrStatic<MethodDescriptor<Req, Resp>>,
     ) -> impl Future<Item = (ClientRequestSink<Req>, StreamingResponse<Resp>), Error = error::Error>
     where
         Req: Send + 'static,

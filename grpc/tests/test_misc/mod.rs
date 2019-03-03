@@ -16,13 +16,13 @@ use std::sync::Once;
 pub fn string_string_method(
     name: &str,
     streaming: GrpcStreaming,
-) -> Arc<MethodDescriptor<String, String>> {
-    Arc::new(MethodDescriptor {
+) -> ArcOrStatic<MethodDescriptor<String, String>> {
+    ArcOrStatic::Arc(Arc::new(MethodDescriptor {
         name: name.into(),
         streaming,
         req_marshaller: ArcOrStatic::Static(&MarshallerString),
         resp_marshaller: ArcOrStatic::Static(&MarshallerString),
-    })
+    }))
 }
 
 // Bind on IPv4 because IPv6 is broken on travis

@@ -143,18 +143,6 @@ impl<'a> MethodGen<'a> {
         w.fn_def(&self.server_sig())
     }
 
-    fn descriptor_field_name(&self) -> String {
-        format!("method_{}", self.proto.get_name())
-    }
-
-    fn descriptor_type(&self) -> String {
-        format!(
-            "::grpc::rt::MethodDescriptor<{}, {}>",
-            self.input_message(),
-            self.output_message()
-        )
-    }
-
     fn streaming_upper(&self) -> &'static str {
         match (
             self.proto.get_client_streaming(),
@@ -181,15 +169,20 @@ impl<'a> MethodGen<'a> {
 
     fn write_client(&self, w: &mut CodeWriter) {
         w.pub_fn(&self.client_sig(), |w| {
+            self.write_descriptor(
+                w,
+                "let descriptor = ::grpc::rt::ArcOrStatic::Static(&",
+                ");",
+            );
+
             let req = match self.proto.get_client_streaming() {
                 false => ", req",
                 true => "",
             };
             w.write_line(&format!(
-                "self.grpc_client.call_{}(o{}, self.{}.clone())",
+                "self.grpc_client.call_{}(o{}, descriptor)",
                 self.streaming_lower(),
                 req,
-                self.descriptor_field_name()
             ))
         });
     }
@@ -288,25 +281,12 @@ impl<'a> ServiceGen<'a> {
     fn write_client_object(&self, grpc_client: &str, w: &mut CodeWriter) {
         w.expr_block(&self.client_name(), |w| {
             w.field_entry("grpc_client", grpc_client);
-            for method in &self.methods {
-                method.write_descriptor(
-                    w,
-                    &format!("{}: ::std::sync::Arc::new(", method.descriptor_field_name()),
-                    "),",
-                );
-            }
         });
     }
 
     fn write_client(&self, w: &mut CodeWriter) {
         w.pub_struct(&self.client_name(), |w| {
             w.field_decl("grpc_client", "::std::sync::Arc<::grpc::Client>");
-            for method in &self.methods {
-                w.field_decl(
-                    &method.descriptor_field_name(),
-                    &format!("::std::sync::Arc<{}>", method.descriptor_type()),
-                );
-            }
         });
 
         w.write_line("");
@@ -346,7 +326,7 @@ impl<'a> ServiceGen<'a> {
                 w.block("vec![", "],", |w| {
                     for method in &self.methods {
                         w.block("::grpc::rt::ServerMethod::new(", "),", |w| {
-                            method.write_descriptor(w, "::std::sync::Arc::new(", "),");
+                            method.write_descriptor(w, "::grpc::rt::ArcOrStatic::Static(&", "),");
                             w.block("{", "},", |w| {
                                 w.write_line(&format!("let handler_copy = {}.clone();", handler));
                                 w.write_line(&format!("::grpc::rt::MethodHandler{}::new(move |ctx, req, resp| (*handler_copy).{}(ctx, req, resp))",

@@ -19,6 +19,7 @@ use std::marker;
 use ServerResponseUnarySink;
 use server::req_single::ServerRequestSingle;
 use string_or_static::StringOrStatic;
+use arc_or_static::ArcOrStatic;
 
 pub trait MethodHandler<Req, Resp>
 where
@@ -322,7 +323,7 @@ pub(crate) trait MethodHandlerDispatchUntyped {
 }
 
 struct MethodHandlerDispatchImpl<Req: 'static, Resp: 'static> {
-    desc: Arc<MethodDescriptor<Req, Resp>>,
+    desc: ArcOrStatic<MethodDescriptor<Req, Resp>>,
     method_handler: Box<MethodHandler<Req, Resp> + Sync + Send>,
 }
 
@@ -373,7 +374,7 @@ pub struct ServerMethod {
 }
 
 impl ServerMethod {
-    pub fn new<Req, Resp, H>(method: Arc<MethodDescriptor<Req, Resp>>, handler: H) -> ServerMethod
+    pub fn new<Req, Resp, H>(method: ArcOrStatic<MethodDescriptor<Req, Resp>>, handler: H) -> ServerMethod
     where
         Req: Send + 'static,
         Resp: Send + 'static,
