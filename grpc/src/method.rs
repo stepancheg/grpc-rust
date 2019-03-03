@@ -1,6 +1,6 @@
 use marshall::*;
-use string_or_static::StringOrStatic;
-use arc_or_static::ArcOrStatic;
+use or_static::string::StringOrStatic;
+use or_static::arc::ArcOrStatic;
 
 pub enum GrpcStreaming {
     Unary,

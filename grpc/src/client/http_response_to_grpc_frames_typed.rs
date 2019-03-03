@@ -1,7 +1,7 @@
 use client::http_response_to_grpc_frames::http_response_to_grpc_frames;
 use marshall::Marshaller;
 use StreamingResponse;
-use arc_or_static::ArcOrStatic;
+use or_static::arc::ArcOrStatic;
 
 pub(crate) fn http_response_to_grpc_frames_typed<Resp: Send>(
     resp: httpbis::Response,

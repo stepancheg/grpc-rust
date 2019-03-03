@@ -18,8 +18,8 @@ use server::resp_sink_untyped::ServerResponseUntypedSink;
 use std::marker;
 use ServerResponseUnarySink;
 use server::req_single::ServerRequestSingle;
-use string_or_static::StringOrStatic;
-use arc_or_static::ArcOrStatic;
+use or_static::arc::ArcOrStatic;
+use or_static::string::StringOrStatic;
 
 pub trait MethodHandler<Req, Resp>
 where

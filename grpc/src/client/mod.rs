@@ -29,7 +29,7 @@ use futures::Future;
 use proto::grpc_frame::write_grpc_frame_to_vec;
 use req::*;
 use resp::*;
-use arc_or_static::ArcOrStatic;
+use or_static::arc::ArcOrStatic;
 
 
 #[derive(Default, Debug, Clone)]

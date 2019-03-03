@@ -32,8 +32,7 @@ mod req;
 mod resp;
 mod result;
 mod stream_item;
-mod arc_or_static;
-mod string_or_static;
+mod or_static;
 
 mod error;
 mod futures_grpc;

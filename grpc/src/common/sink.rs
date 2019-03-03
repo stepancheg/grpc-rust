@@ -9,7 +9,7 @@ use marshall::Marshaller;
 use proto::grpc_frame::write_grpc_frame_to_vec;
 use result;
 use server::types::ServerTypes;
-use arc_or_static::ArcOrStatic;
+use or_static::arc::ArcOrStatic;
 
 
 pub enum SendError {

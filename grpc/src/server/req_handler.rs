@@ -11,7 +11,7 @@ use ServerRequestStream;
 use server::req_stream::ServerRequestStreamSenderHandler;
 use futures::sync::mpsc;
 use Metadata;
-use arc_or_static::ArcOrStatic;
+use or_static::arc::ArcOrStatic;
 
 pub(crate) trait ServerRequestStreamHandlerUntyped: 'static {
     fn grpc_message(&mut self, message: Bytes, frame_size: u32) -> result::Result<()>;

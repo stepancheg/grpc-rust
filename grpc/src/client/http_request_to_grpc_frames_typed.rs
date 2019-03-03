@@ -3,7 +3,7 @@ use common::sink::SinkCommon;
 use common::sink::SinkCommonUntyped;
 use marshall::Marshaller;
 use ClientRequestSink;
-use arc_or_static::ArcOrStatic;
+use or_static::arc::ArcOrStatic;
 
 pub(crate) fn http_req_to_grpc_frames_typed<Req: Send + 'static>(
     http_req: httpbis::ClientRequest,

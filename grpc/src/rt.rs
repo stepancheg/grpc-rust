@@ -12,5 +12,5 @@ pub use method::GrpcStreamingFlavor;
 pub use method::MethodDescriptor;
 
 pub use server::ServerServiceDefinition;
-pub use arc_or_static::ArcOrStatic;
-pub use string_or_static::StringOrStatic;
+pub use or_static::arc::ArcOrStatic;
+pub use or_static::string::StringOrStatic;
