@@ -123,6 +123,7 @@ impl<A: tls_api::TlsAcceptor> ServerBuilder<A> {
     }
 }
 
+#[derive(Debug)]
 pub struct Server {
     server: httpbis::Server,
 }
