@@ -159,7 +159,8 @@ impl Client {
 
         let mut headers = Headers::from_vec(vec![
             Header::new(Bytes::from_static(b":method"), Bytes::from_static(b"POST")),
-            Header::new(Bytes::from_static(b":path"), method.name.clone()),
+            // TODO: do not allocate static
+            Header::new(Bytes::from_static(b":path"), method.name.to_string()),
             Header::new(Bytes::from_static(b":authority"), authority),
             Header::new(
                 Bytes::from_static(b":scheme"),

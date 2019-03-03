@@ -18,8 +18,8 @@ pub fn string_string_method(
     streaming: GrpcStreaming,
 ) -> Arc<MethodDescriptor<String, String>> {
     Arc::new(MethodDescriptor {
-        name: name.to_owned(),
-        streaming: streaming,
+        name: name.into(),
+        streaming,
         req_marshaller: Arc::new(MarshallerString),
         resp_marshaller: Arc::new(MarshallerString),
     })

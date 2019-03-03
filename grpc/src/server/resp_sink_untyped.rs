@@ -2,7 +2,6 @@ use bytes::Bytes;
 use common::sink::SinkCommonUntyped;
 use common::sink::SinkUntyped;
 use futures::Poll;
-use httpbis::SimpleHttpMessage;
 use proto::grpc_status::GrpcStatus;
 use proto::headers::headers_200;
 use proto::headers::headers_500;

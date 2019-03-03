@@ -18,6 +18,7 @@ use server::resp_sink_untyped::ServerResponseUntypedSink;
 use std::marker;
 use ServerResponseUnarySink;
 use server::req_single::ServerRequestSingle;
+use string_or_static::StringOrStatic;
 
 pub trait MethodHandler<Req, Resp>
 where
@@ -367,7 +368,7 @@ where
 }
 
 pub struct ServerMethod {
-    pub(crate) name: String,
+    pub(crate) name: StringOrStatic,
     pub(crate) dispatch: Box<MethodHandlerDispatchUntyped + Sync + Send>,
 }
 

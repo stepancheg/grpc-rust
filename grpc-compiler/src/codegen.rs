@@ -202,7 +202,7 @@ impl<'a> MethodGen<'a> {
                 w.field_entry(
                     "name",
                     &format!(
-                        "\"{}/{}\".to_string()",
+                        "::grpc::rt::StringOrStatic::Static(\"{}/{}\")",
                         self.service_path,
                         self.proto.get_name()
                     ),
@@ -250,10 +250,10 @@ impl<'a> ServiceGen<'a> {
             .collect();
 
         ServiceGen {
-            proto: proto,
+            proto,
             _root_scope: root_scope,
-            methods: methods,
-            service_path: service_path,
+            methods,
+            service_path,
             _package: file.get_package().to_string(),
         }
     }
