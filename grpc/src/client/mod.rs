@@ -157,6 +157,11 @@ impl Client {
 
         info!("start call {}/{}", authority, method.name);
 
+        if options.cachable {
+            // TODO: GET
+            // https://github.com/grpc/grpc/issues/18230
+        }
+
         let mut headers = Headers::from_vec(vec![
             Header::new(Bytes::from_static(b":method"), Bytes::from_static(b"POST")),
             // TODO: do not allocate static

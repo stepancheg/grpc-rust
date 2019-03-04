@@ -62,10 +62,12 @@ fn echo_custom_trailing(req_metadata: &Metadata) -> Metadata {
 struct TestServerImpl {}
 
 impl TestService for TestServerImpl {
+    // One empty request followed by one empty response.
     fn empty_call(&self, _ctx: ServerHandlerContext, _req: ServerRequestSingle<Empty>, resp: ServerResponseUnarySink<Empty>) -> grpc::Result<()> {
         resp.finish(Empty::new())
     }
 
+    // One request followed by one response.
     fn unary_call(&self, _ctx: ServerHandlerContext, req: ServerRequestSingle<SimpleRequest>, mut resp: ServerResponseUnarySink<SimpleResponse>) -> grpc::Result<()> {
         if req.message.get_response_status().get_code() != 0 {
             info!("requested to send grpc error {}", req.message.get_response_status().get_code());
@@ -83,12 +85,16 @@ impl TestService for TestServerImpl {
         resp.finish_with_trailers(response, echo_custom_trailing(&req.metadata))
     }
 
-    // TODO: is this needed? I can't find it implemented in grpc-go/interop/client/client.go
+    // One request followed by one response. Response has cache control
+    // headers set such that a caching HTTP proxy (such as GFE) can
+    // satisfy subsequent requests.
     fn cacheable_unary_call(&self, _ctx: ServerHandlerContext, _req: ServerRequestSingle<SimpleRequest>, resp: ServerResponseUnarySink<SimpleResponse>) -> grpc::Result<()> {
         // TODO: implement fully
         resp.finish(SimpleResponse::new())
     }
 
+    // One request followed by a sequence of responses (streamed download).
+    // The server returns the payload with client desired type and sizes.
     fn streaming_output_call(&self, o: ServerHandlerContext, mut req: ServerRequestSingle<StreamingOutputCallRequest>, resp: ServerResponseSink<StreamingOutputCallResponse>) -> grpc::Result<()> {
         let sizes = req
             .message
@@ -106,6 +112,8 @@ impl TestService for TestServerImpl {
         Ok(())
     }
 
+    // A sequence of requests followed by one response (streamed upload).
+    // The server returns the aggregated size of client payload as the result.
     fn streaming_input_call(&self, _ctx: ServerHandlerContext, req: ServerRequest<StreamingInputCallRequest>, resp: ServerResponseUnarySink<StreamingInputCallResponse>) -> grpc::Result<()> {
         let mut resp = Some(resp);
         let mut aggregate_size = 0;
@@ -124,6 +132,9 @@ impl TestService for TestServerImpl {
         Ok(())
     }
 
+    // A sequence of requests with each request served by the server immediately.
+    // As one request could lead to multiple responses, this interface
+    // demonstrates the idea of full duplexing.
     fn full_duplex_call(&self, o: ServerHandlerContext, req: ServerRequest<StreamingOutputCallRequest>, mut resp: ServerResponseSink<StreamingOutputCallResponse>) -> grpc::Result<()> {
         let metadata = req.metadata();
         info!("sending custom metadata");
@@ -171,6 +182,10 @@ impl TestService for TestServerImpl {
     }
 
     // TODO: implement this if we find an interop client that needs it.
+    // A sequence of requests followed by a sequence of responses.
+    // The server buffers all the client requests and then serves them in order. A
+    // stream of responses are returned to the client when the server starts with
+    // first request.
     fn half_duplex_call(&self, _ctx: ServerHandlerContext, _req: ServerRequest<StreamingOutputCallRequest>, mut resp: ServerResponseSink<StreamingOutputCallResponse>) -> grpc::Result<()> {
         resp.send_trailers(Metadata::new())
     }

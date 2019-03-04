@@ -12,9 +12,11 @@ use futures_grpc::GrpcStream;
 use proto::metadata::Metadata;
 
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct RequestOptions {
     pub metadata: Metadata,
+    // TODO: do not ignore
+    pub cachable: bool,
 }
 
 impl RequestOptions {

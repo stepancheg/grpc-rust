@@ -19,6 +19,7 @@ use grpc::*;
 
 use chrono::*;
 use clap::{App, Arg};
+use std::time::SystemTime;
 
 fn empty_unary(client: TestServiceClient) {
     client
@@ -28,7 +29,25 @@ fn empty_unary(client: TestServiceClient) {
     println!("{} EmptyUnary done", Local::now().to_rfc3339());
 }
 
-// TODO: file a bug on this failure.
+// https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md#cacheable_unary
+fn cacheable_unary(client: TestServiceClient) {
+    let mut request = SimpleRequest::new();
+    request.set_payload({
+        let mut payload = Payload::new();
+        payload.set_body(format!("{}", SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_nanos()).into_bytes());
+        payload
+    });
+    let mut options = RequestOptions::new();
+    options.metadata.add(MetadataKey::from("x-user-ip"), "1.2.3.4".into());
+    options.cachable = true;
+    let (_, r1, _) = client.cacheable_unary_call(options.clone(), request.clone())
+        .wait().expect("call");
+    let (_, r2, _) = client.cacheable_unary_call(options, request)
+        .wait().expect("call");
+    assert_eq!(r1.get_payload(), r2.get_payload());
+}
+
+// https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md#large_unary
 fn large_unary(client: TestServiceClient) {
     let mut payload = Payload::new();
     payload.set_body(vec![0; 271828]);
@@ -39,10 +58,21 @@ fn large_unary(client: TestServiceClient) {
         .unary_call(grpc::RequestOptions::new(), request)
         .wait_drop_metadata()
         .expect("expected full frame");
-    assert!(response.get_payload().body.len() == 314159);
+    assert_eq!(314159, response.get_payload().body.len());
     println!("{} LargeUnary done", Local::now().to_rfc3339());
 }
 
+// https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md#client_compressed_unary
+fn client_compressed_unary(_client: TestServiceClient) {
+    unimplemented!()
+}
+
+// https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md#server_compressed_unary
+fn server_compressed_unary(_client: TestServiceClient) {
+    unimplemented!()
+}
+
+// https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md#client_streaming
 fn client_streaming(client: TestServiceClient) {
 
     let (mut req, resp) = client
@@ -67,6 +97,12 @@ fn client_streaming(client: TestServiceClient) {
     println!("{} ClientStreaming done", Local::now().to_rfc3339());
 }
 
+// https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md#client_streaming
+fn client_compressed_streaming(_client: TestServiceClient) {
+    unimplemented!()
+}
+
+// https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md#server_streaming
 // TODO: test fails with an assertion error, we never see a response from the client.
 // fails with 'expected a response: Other("partial frame")'
 fn server_streaming(client: TestServiceClient) {
@@ -107,6 +143,12 @@ fn server_streaming(client: TestServiceClient) {
     println!("{} ServerStreaming done", Local::now().to_rfc3339());
 }
 
+// https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md#server_streaming
+fn server_compressed_streaming(_client: TestServiceClient) {
+    unimplemented!()
+}
+
+// https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md#ping_pong
 // TODO: this test needs to interleave requests with responses and check along the way.
 // Need to find a way to model that with the blocking API.
 fn ping_pong(client: TestServiceClient) {
@@ -138,6 +180,7 @@ fn ping_pong(client: TestServiceClient) {
     println!("{} PingPong done", Local::now().to_rfc3339());
 }
 
+// https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md#empty_stream
 fn empty_stream(client: TestServiceClient) {
     let (mut req, resp) = client
         .full_duplex_call(grpc::RequestOptions::new()).wait().expect("wait");
@@ -147,6 +190,32 @@ fn empty_stream(client: TestServiceClient) {
     println!("{} EmptyStream done", Local::now().to_rfc3339());
 }
 
+// https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md#compute_engine_creds
+fn compute_engine_creds(_client: TestServiceClient) {
+    unimplemented!()
+}
+
+// https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md#jwt_token_creds
+fn jwt_token_creds(_client: TestServiceClient) {
+    unimplemented!()
+}
+
+// https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md#oauth2_auth_token
+fn oauth2_auth_token(_client: TestServiceClient) {
+    unimplemented!()
+}
+
+// https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md#per_rpc_creds
+fn per_rpc_creds(_client: TestServiceClient) {
+    unimplemented!()
+}
+
+// https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md#google_default_credentials
+fn google_default_credentials(_client: TestServiceClient) {
+    unimplemented!()
+}
+
+// https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md#custom_metadata
 fn custom_metadata(client: TestServiceClient) {
     fn make_options() -> grpc::RequestOptions {
         // The client attaches custom metadata with the following keys and values:
@@ -229,6 +298,41 @@ fn custom_metadata(client: TestServiceClient) {
     }
 }
 
+// https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md#status_code_and_message
+fn status_code_and_message(_client: TestServiceClient) {
+    unimplemented!()
+}
+
+// https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md#special_status_message
+fn special_status_message(_client: TestServiceClient) {
+    unimplemented!()
+}
+
+// https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md#unimplemented_method
+fn unimplemented_method(_client: TestServiceClient) {
+    unimplemented!()
+}
+
+// https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md#unimplemented_service
+fn unimplemented_service(_client: TestServiceClient) {
+    unimplemented!()
+}
+
+// https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md#cancel_after_begin
+fn cancel_after_begin(_client: TestServiceClient) {
+    unimplemented!()
+}
+
+// https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md#cancel_after_first_response
+fn cancel_after_first_response(_client: TestServiceClient) {
+    unimplemented!()
+}
+
+// https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md#timeout_on_sleeping_server
+fn timeout_on_sleeping_server(_client: TestServiceClient) {
+    unimplemented!()
+}
+
 // The flags we use are defined in the gRPC Interopability doc
 // https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md
 fn main() {
@@ -301,27 +405,29 @@ fn main() {
     let testcase = options.value_of("test_case").unwrap_or("");
     match testcase.as_ref() {
         "empty_unary" => empty_unary(client),
-        "cacheable_unary" => panic!("cacheable_unary not done yet"),
+        "cacheable_unary" => cacheable_unary(client),
         "large_unary" => large_unary(client),
-        "client_compressed_unary" => panic!("client_compressed_unary not done yet"),
-        "server_compressed_unary" => panic!("server_compressed_unary not done yet"),
+        "client_compressed_unary" => client_compressed_unary(client),
+        "server_compressed_unary" => server_compressed_unary(client),
         "client_streaming" => client_streaming(client),
-        "client_compressed_streaming" => panic!("client_compressed_streaming not done yet"),
+        "client_compressed_streaming" => client_compressed_streaming(client),
         "server_streaming" => server_streaming(client),
-        "server_compressed_streaming" => panic!("server_compressed_streaming not done yet"),
+        "server_compressed_streaming" => server_compressed_streaming(client),
         "ping_pong" => ping_pong(client),
         "empty_stream" => empty_stream(client),
-        "compute_engine_creds" => panic!("compute_engine_creds not done yet"),
-        "jwt_token_creds" => panic!("jwt_token_creds not done yet"),
-        "oauth2_auth_token" => panic!("oauth2_auth_token not done yet"),
-        "per_rpc_creds" => panic!("per_rpc_creds not done yet"),
+        "compute_engine_creds" => compute_engine_creds(client),
+        "jwt_token_creds" => jwt_token_creds(client),
+        "oauth2_auth_token" => oauth2_auth_token(client),
+        "per_rpc_creds" => per_rpc_creds(client),
+        "google_default_credentials" => google_default_credentials(client),
         "custom_metadata" => custom_metadata(client),
-        "status_code_and_message" => panic!("status_code_and_message not done yet"),
-        "unimplemented_method" => panic!("unimplemented_method not done yet"),
-        "unimplemented_service" => panic!("unimplemented_service not done yet"),
-        "cancel_after_begin" => panic!("cancel_after_begin not done yet"),
-        "cancel_after_first_response" => panic!("cancel_after_first_response not done yet"),
-        "timeout_on_sleeping_server" => panic!("timeout_on_sleeping_server not done yet"),
+        "status_code_and_message" => status_code_and_message(client),
+        "special_status_message" => special_status_message(client),
+        "unimplemented_method" => unimplemented_method(client),
+        "unimplemented_service" => unimplemented_service(client),
+        "cancel_after_begin" => cancel_after_begin(client),
+        "cancel_after_first_response" => cancel_after_first_response(client),
+        "timeout_on_sleeping_server" => timeout_on_sleeping_server(client),
         _ => panic!("no test_case specified"),
     }
 }
