@@ -21,8 +21,6 @@ use grpc::*;
 use futures::Async;
 
 static DICTIONARY: &'static str = "ABCDEFGHIJKLMNOPQRSTUVabcdefghijklmnoqprstuvwxyz0123456789";
-// Note: due to const restrictions, this is calculated by hand.
-static DICTIONARY_SIZE: usize = 58;
 
 /**
  * Returns a Vec<u8> with a given size containing printable u8s.
@@ -32,7 +30,7 @@ fn make_string(size: usize) -> Vec<u8> {
     let mut result = Vec::<u8>::with_capacity(size);
 
     for n in 0..size {
-        result.push(dict[n % DICTIONARY_SIZE]);
+        result.push(dict[n % DICTIONARY.len()]);
     }
 
     return result;
