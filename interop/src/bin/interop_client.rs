@@ -149,8 +149,6 @@ fn server_compressed_streaming(_client: TestServiceClient) {
 }
 
 // https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md#ping_pong
-// TODO: this test needs to interleave requests with responses and check along the way.
-// Need to find a way to model that with the blocking API.
 fn ping_pong(client: TestServiceClient) {
     let (mut req, resp) = client
         .full_duplex_call(
