@@ -20,6 +20,7 @@ tests=(
     custom_metadata
     status_code_and_message
     unimplemented_method
+    cancel_after_first_response
 )
 
 for testname in "${tests[@]}"; do
