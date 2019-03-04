@@ -310,8 +310,14 @@ fn unimplemented_service(_client: TestServiceClient) {
 }
 
 // https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md#cancel_after_begin
-fn cancel_after_begin(_client: TestServiceClient) {
-    unimplemented!()
+fn cancel_after_begin(client: TestServiceClient) {
+    let (req, resp) = client.streaming_input_call(RequestOptions::new()).wait().expect("start");
+    drop(req);
+    // TODO: hangs
+    match resp.wait() {
+        Ok(_) => panic!("expecting err"),
+        Err(_) => unimplemented!(),
+    }
 }
 
 // https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md#cancel_after_first_response
