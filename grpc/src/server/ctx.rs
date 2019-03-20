@@ -6,6 +6,7 @@ use error;
 use futures::Async;
 use futures::stream;
 use ServerResponseSink;
+use ServerResponseUnarySink;
 
 pub struct ServerHandlerContext {
     pub ctx: httpbis::ServerHandlerContext,
@@ -51,6 +52,25 @@ impl ServerHandlerContext {
                     }
                     Async::Ready(None) => {
                         dest.send_trailers(Metadata::new())?;
+                        return Ok(Async::Ready(()));
+                    }
+                }
+            }
+        })
+    }
+
+    pub fn pump_future<Resp, F>(&self, mut future: F, dest: ServerResponseUnarySink<Resp>)
+        where
+            Resp: Send + 'static,
+            F: future::Future<Item=Resp, Error=error::Error> + Send + 'static
+    {
+        let mut dest = Some(dest);
+        self.spawn_poll_fn(move || {
+            loop {
+                match future.poll()? {
+                    Async::NotReady => return Ok(Async::NotReady),
+                    Async::Ready(m) => {
+                        dest.take().unwrap().finish(m)?;
                         return Ok(Async::Ready(()));
                     }
                 }

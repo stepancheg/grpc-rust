@@ -3,6 +3,7 @@ name = "grpc_examples_route_guide"
 version = "0.0.0"
 authors = ["Stepan Koltsov <stepan.koltsov@gmail.com>"]
 publish = false
+edition = "2018"
 
 [lib]
 doctest = false
@@ -21,6 +22,7 @@ tls-api            = "0.1.*"
 tls-api-native-tls = "0.1.*"
 env_logger      = "0.4.*"
 rand            = "0.5.5"
+json            = "0.11.*"
 
 [build-dependencies]
 protoc-rust-grpc = { path = "../../protoc-rust-grpc" }
