@@ -56,10 +56,13 @@ In Cargo.toml:
 
 ```ini
 [dependencies]
-grpc            = "~0.5"
+grpc            = "~0.6"
 protobuf        = "~2"
 futures         = "~0.1"
 futures-cpupool = "~0.1"
+
+[build-dependencies]
+protoc-rust-grpc = "0.6.1"
 ```
 
 In `lib.rs` or `main.rs` (or any other submodule):
