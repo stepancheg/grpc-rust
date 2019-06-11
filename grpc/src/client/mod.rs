@@ -155,7 +155,7 @@ impl Client {
             authority = format!("{}:{}", authority, port_value);
         }
 
-        info!("start call {}/{}", authority, method.name);
+        debug!("start call {}/{}", authority, method.name);
 
         if options.cachable {
             // TODO: GET
