@@ -18,8 +18,8 @@ tokio-io        = "0.1.*"
 tokio-tls-api   = "0.1.*"
 #httpbis         = "~0.7"
 httpbis         = { git = "https://github.com/stepancheg/rust-http2" }
-tls-api         = "0.1"
-tls-api-stub    = "0.1"
+tls-api         = "0.2"
+tls-api-stub    = "0.2"
 bytes           = "0.4"
 base64          = "0.9"
 
