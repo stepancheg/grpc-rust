@@ -7,6 +7,7 @@ pub(crate) mod types;
 use std::net::SocketAddr;
 
 use bytes::Bytes;
+use tokio_core::reactor::Remote;
 
 use httpbis;
 use httpbis::Header;
@@ -54,6 +55,32 @@ pub struct Client {
 }
 
 impl Client {
+    pub fn new_explicit_plain(
+        host: &str,
+        port: u16,
+        conf: ClientConf,
+        event_loop: Option<Remote>,
+    ) -> result::Result<Client> {
+        let mut conf = conf;
+        conf.http.thread_name = Some(
+            conf.http
+                .thread_name
+                .unwrap_or_else(|| "grpc-client-loop".to_owned()),
+        );
+
+        let mut builder = httpbis::ClientBuilder::new_plain();
+        builder.set_addr((host, port))?;
+        builder.event_loop = event_loop;
+        builder.conf = conf.http;
+
+        Ok(Client {
+            client: ::std::sync::Arc::new(builder.build()?),
+            host: host.to_owned(),
+            http_scheme: HttpScheme::Http,
+            port: Some(port),
+        })
+    }
+
     /// Create a client connected to specified host and port.
     pub fn new_plain(host: &str, port: u16, conf: ClientConf) -> result::Result<Client> {
         let mut conf = conf;
@@ -118,6 +145,7 @@ impl Client {
         host: &str,
         tls: httpbis::ClientTlsOption<C>,
         conf: ClientConf,
+        event_loop: Option<Remote>,
     ) -> result::Result<Client> {
         let mut conf = conf;
         conf.http.thread_name = Some(
@@ -127,14 +155,20 @@ impl Client {
         );
 
         let http_scheme = tls.http_scheme();
+        let mut builder = httpbis::ClientBuilder::<C>::new();
+        builder.set_addr(addr)?;
+        if let httpbis::ClientTlsOption::Tls(ref host, _) = tls {
+            builder.set_tls(host)?;
+        }
+        builder.event_loop = event_loop;
+        builder.conf = conf.http;
 
-        httpbis::Client::new_expl(addr, tls, conf.http)
-            .map(|client| Client {
-                client: ::std::sync::Arc::new(client),
-                host: host.to_owned(),
-                http_scheme: http_scheme,
-                port: Some(addr.port()),
-            }).map_err(Error::from)
+        Ok(Client {
+            client: ::std::sync::Arc::new(builder.build()?),
+            host: host.to_owned(),
+            http_scheme,
+            port: Some(addr.port())
+        })
     }
 
     fn call_impl<Req, Resp>(
