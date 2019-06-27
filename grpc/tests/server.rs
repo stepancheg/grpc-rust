@@ -50,7 +50,7 @@ fn multiple_services() {
 
     let port = server.local_addr().port().expect("port");
 
-    let client = Client::new_plain(BIND_HOST, port, ClientConf::new()).expect("client");
+    let client = ClientBuilder::new(BIND_HOST, port).build().expect("client");
 
     assert_eq!(
         "abc".to_owned(),
@@ -102,7 +102,9 @@ fn single_service_unix() {
 
     let _server = server.build().expect("server");
 
-    let client = Client::new_plain_unix(test_socket_address, ClientConf::new()).expect("client");
+    let client = ClientBuilder::new_unix(test_socket_address)
+        .build()
+        .expect("client");
 
     assert_eq!(
         "abc".to_owned(),

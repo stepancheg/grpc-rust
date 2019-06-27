@@ -27,11 +27,11 @@ use client::req_sink::ClientRequestSink;
 use error;
 use futures::future;
 use futures::Future;
+use or_static::arc::ArcOrStatic;
 use proto::grpc_frame::write_grpc_frame_to_vec;
 use req::*;
 use resp::*;
-use or_static::arc::ArcOrStatic;
-
+use std::marker::PhantomData;
 
 #[derive(Default, Debug, Clone)]
 pub struct ClientConf {
@@ -41,6 +41,95 @@ pub struct ClientConf {
 impl ClientConf {
     pub fn new() -> ClientConf {
         Default::default()
+    }
+}
+
+enum ClientBuilderType<'a> {
+    Tcp { port: u16, host: &'a str },
+    Unix { socket: &'a str },
+}
+
+pub struct ClientBuilder<'a, T> {
+    client_type: ClientBuilderType<'a>,
+    http_scheme: HttpScheme,
+    event_loop: Option<Remote>,
+    pub conf: ClientConf,
+    tls: PhantomData<T>,
+}
+
+impl<'a, T: tls_api::TlsConnector> ClientBuilder<'a, T> {
+    pub fn with_event_loop(mut self, event_loop: Remote) -> Self {
+        self.event_loop = Some(event_loop);
+        self
+    }
+
+    pub fn conf(mut self, config: ClientConf) -> Self {
+        self.conf = config;
+        self
+    }
+
+    pub fn build(self) -> result::Result<Client> {
+        let mut builder = httpbis::ClientBuilder::<T>::new();
+        let mut conf = self.conf;
+        conf.http.thread_name = Some(
+            conf.http
+                .thread_name
+                .unwrap_or_else(|| "grpc-client-loop".to_owned()),
+        );
+        let (host, port) = match self.client_type {
+            ClientBuilderType::Tcp { host, port } => {
+                if self.http_scheme == HttpScheme::Https {
+                    builder.set_tls(host)?;
+                }
+                builder.set_addr((host, port))?;
+                (host, Some(port))
+            }
+            ClientBuilderType::Unix { socket } => {
+                builder.set_unix_addr(socket)?;
+                (socket, None)
+            }
+        };
+        builder.event_loop = self.event_loop;
+        builder.conf = conf.http;
+
+        Ok(Client {
+            client: ::std::sync::Arc::new(builder.build()?),
+            host: host.to_owned(),
+            http_scheme: self.http_scheme,
+            port,
+        })
+    }
+}
+
+impl<'a> ClientBuilder<'a, tls_api_stub::TlsConnector> {
+    pub fn new(host: &'a str, port: u16) -> Self {
+        ClientBuilder {
+            client_type: ClientBuilderType::Tcp { port, host },
+            http_scheme: HttpScheme::Http,
+            event_loop: None,
+            conf: Default::default(),
+            tls: PhantomData,
+        }
+    }
+
+    pub fn new_unix(addr: &'a str) -> Self {
+        ClientBuilder {
+            client_type: ClientBuilderType::Unix { socket: addr },
+            http_scheme: HttpScheme::Http,
+            event_loop: None,
+            conf: Default::default(),
+            tls: PhantomData,
+        }
+    }
+
+    pub fn tls<TLS: tls_api::TlsConnector>(self) -> ClientBuilder<'a, TLS> {
+        ClientBuilder {
+            client_type: self.client_type,
+            http_scheme: HttpScheme::Https,
+            event_loop: self.event_loop,
+            conf: self.conf,
+            tls: PhantomData,
+        }
     }
 }
 
@@ -55,122 +144,6 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn new_explicit_plain(
-        host: &str,
-        port: u16,
-        conf: ClientConf,
-        event_loop: Option<Remote>,
-    ) -> result::Result<Client> {
-        let mut conf = conf;
-        conf.http.thread_name = Some(
-            conf.http
-                .thread_name
-                .unwrap_or_else(|| "grpc-client-loop".to_owned()),
-        );
-
-        let mut builder = httpbis::ClientBuilder::new_plain();
-        builder.set_addr((host, port))?;
-        builder.event_loop = event_loop;
-        builder.conf = conf.http;
-
-        Ok(Client {
-            client: ::std::sync::Arc::new(builder.build()?),
-            host: host.to_owned(),
-            http_scheme: HttpScheme::Http,
-            port: Some(port),
-        })
-    }
-
-    /// Create a client connected to specified host and port.
-    pub fn new_plain(host: &str, port: u16, conf: ClientConf) -> result::Result<Client> {
-        let mut conf = conf;
-        conf.http.thread_name = Some(
-            conf.http
-                .thread_name
-                .unwrap_or_else(|| "grpc-client-loop".to_owned()),
-        );
-
-        httpbis::Client::new_plain(host, port, conf.http)
-            .map(|client| Client {
-                client: ::std::sync::Arc::new(client),
-                host: host.to_owned(),
-                http_scheme: HttpScheme::Http,
-                port: Some(port.to_owned()),
-            }).map_err(Error::from)
-    }
-
-    /// Create a client connected to specified Unix domain socket.
-    #[cfg(unix)]
-    pub fn new_plain_unix(addr: &str, conf: ClientConf) -> result::Result<Client> {
-        let mut conf = conf;
-        conf.http.thread_name = Some(
-            conf.http
-                .thread_name
-                .unwrap_or_else(|| "grpc-client-loop".to_owned()),
-        );
-
-        httpbis::Client::new_plain_unix(addr, conf.http)
-            .map(|client| Client {
-                client: ::std::sync::Arc::new(client),
-                host: addr.to_owned(),
-                http_scheme: HttpScheme::Http,
-                port: None,
-            }).map_err(Error::from)
-    }
-
-    /// Create a client connected to specified host and port.
-    pub fn new_tls<C: tls_api::TlsConnector>(
-        host: &str,
-        port: u16,
-        conf: ClientConf,
-    ) -> result::Result<Client> {
-        let mut conf = conf;
-        conf.http.thread_name = Some(
-            conf.http
-                .thread_name
-                .unwrap_or_else(|| "grpc-client-loop".to_owned()),
-        );
-
-        httpbis::Client::new_tls::<C>(host, port, conf.http)
-            .map(|client| Client {
-                client: ::std::sync::Arc::new(client),
-                host: host.to_owned(),
-                http_scheme: HttpScheme::Https,
-                port: Some(port.to_owned()),
-            }).map_err(Error::from)
-    }
-
-    pub fn new_expl<C: tls_api::TlsConnector>(
-        addr: &SocketAddr,
-        host: &str,
-        tls: httpbis::ClientTlsOption<C>,
-        conf: ClientConf,
-        event_loop: Option<Remote>,
-    ) -> result::Result<Client> {
-        let mut conf = conf;
-        conf.http.thread_name = Some(
-            conf.http
-                .thread_name
-                .unwrap_or_else(|| "grpc-client-loop".to_owned()),
-        );
-
-        let http_scheme = tls.http_scheme();
-        let mut builder = httpbis::ClientBuilder::<C>::new();
-        builder.set_addr(addr)?;
-        if let httpbis::ClientTlsOption::Tls(ref host, _) = tls {
-            builder.set_tls(host)?;
-        }
-        builder.event_loop = event_loop;
-        builder.conf = conf.http;
-
-        Ok(Client {
-            client: ::std::sync::Arc::new(builder.build()?),
-            host: host.to_owned(),
-            http_scheme,
-            port: Some(addr.port())
-        })
-    }
-
     fn call_impl<Req, Resp>(
         &self,
         options: RequestOptions,
