@@ -51,6 +51,7 @@ pub use stream_item::ItemOrMetadata;
 
 pub use client::req_sink::ClientRequestSink;
 pub use client::Client;
+pub use client::ClientBuilder;
 pub use client::ClientConf;
 
 pub use client_stub::ClientStub;

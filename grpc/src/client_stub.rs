@@ -1,4 +1,4 @@
-use client::Client;
+use client::{Client, ClientBuilder};
 use std::sync::Arc;
 use ClientConf;
 use Result as grpc_Result;
@@ -26,7 +26,10 @@ pub trait ClientStubExt: Sized {
 
 impl<C: ClientStub> ClientStubExt for C {
     fn new_plain(host: &str, port: u16, conf: ClientConf) -> grpc_Result<Self> {
-        Client::new_plain(host, port, conf).map(|c| Self::with_client(Arc::new(c)))
+        ClientBuilder::new(host, port)
+            .conf(conf)
+            .build()
+            .map(|c| Self::with_client(Arc::new(c)))
     }
 
     fn new_tls<T: ::tls_api::TlsConnector>(
@@ -34,12 +37,19 @@ impl<C: ClientStub> ClientStubExt for C {
         port: u16,
         conf: ClientConf,
     ) -> grpc_Result<Self> {
-        Client::new_tls::<T>(host, port, conf).map(|c| Self::with_client(Arc::new(c)))
+        ClientBuilder::new(host, port)
+            .tls::<T>()
+            .conf(conf)
+            .build()
+            .map(|c| Self::with_client(Arc::new(c)))
     }
 
     #[cfg(unix)]
     fn new_plain_unix(addr: &str, conf: ClientConf) -> grpc_Result<Self> {
-        Client::new_plain_unix(addr, conf).map(|c| Self::with_client(Arc::new(c)))
+        ClientBuilder::new_unix(addr)
+            .conf(conf)
+            .build()
+            .map(|c| Self::with_client(Arc::new(c)))
     }
 
     #[cfg(not(unix))]
