@@ -57,9 +57,12 @@ fn main() {
         // TODO: simplify it
         let mut tls_option =
             httpbis::ClientTlsOption::Tls("foobar.com".to_owned(), Arc::new(test_tls_connector()));
-        let addr = SocketAddr::new("::1".parse().unwrap(), port);
-        let grpc_client =
-            Arc::new(grpc::Client::new_expl(&addr, "foobar.com", tls_option, client_conf).unwrap());
+        let grpc_client = Arc::new(
+            grpc::ClientBuilder::new("::1", port)
+                .explicit_tls(tls_option)
+                .build()
+                .unwrap(),
+        );
         GreeterClient::with_client(grpc_client)
     } else {
         GreeterClient::new_plain("::1", port, client_conf).unwrap()
