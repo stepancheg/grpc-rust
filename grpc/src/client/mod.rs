@@ -4,12 +4,11 @@ pub(crate) mod http_response_to_grpc_frames_typed;
 pub(crate) mod req_sink;
 pub(crate) mod types;
 
-use std::net::SocketAddr;
-
 use bytes::Bytes;
 use tokio_core::reactor::Remote;
 
 use httpbis;
+use httpbis::ClientTlsOption;
 use httpbis::Header;
 use httpbis::Headers;
 use httpbis::HttpScheme;
@@ -18,7 +17,6 @@ use tls_api;
 
 use method::MethodDescriptor;
 
-use error::*;
 use result;
 
 use client::http_request_to_grpc_frames_typed::http_req_to_grpc_frames_typed;
@@ -31,7 +29,6 @@ use or_static::arc::ArcOrStatic;
 use proto::grpc_frame::write_grpc_frame_to_vec;
 use req::*;
 use resp::*;
-use std::marker::PhantomData;
 
 #[derive(Default, Debug, Clone)]
 pub struct ClientConf {
@@ -49,12 +46,18 @@ enum ClientBuilderType<'a> {
     Unix { socket: &'a str },
 }
 
-pub struct ClientBuilder<'a, T> {
+enum Tls<T: tls_api::TlsConnector> {
+    Explict(ClientTlsOption<T>),
+    Implicit,
+    None,
+}
+
+pub struct ClientBuilder<'a, T: tls_api::TlsConnector> {
     client_type: ClientBuilderType<'a>,
     http_scheme: HttpScheme,
     event_loop: Option<Remote>,
     pub conf: ClientConf,
-    tls: PhantomData<T>,
+    tls: Tls<T>,
 }
 
 impl<'a, T: tls_api::TlsConnector> ClientBuilder<'a, T> {
@@ -91,6 +94,12 @@ impl<'a, T: tls_api::TlsConnector> ClientBuilder<'a, T> {
         };
         builder.event_loop = self.event_loop;
         builder.conf = conf.http;
+        match self.tls {
+            Tls::Explict(tls) => {
+                builder.tls = tls;
+            }
+            Tls::Implicit | Tls::None => {}
+        }
 
         Ok(Client {
             client: ::std::sync::Arc::new(builder.build()?),
@@ -108,7 +117,7 @@ impl<'a> ClientBuilder<'a, tls_api_stub::TlsConnector> {
             http_scheme: HttpScheme::Http,
             event_loop: None,
             conf: Default::default(),
-            tls: PhantomData,
+            tls: Tls::None,
         }
     }
 
@@ -118,7 +127,7 @@ impl<'a> ClientBuilder<'a, tls_api_stub::TlsConnector> {
             http_scheme: HttpScheme::Http,
             event_loop: None,
             conf: Default::default(),
-            tls: PhantomData,
+            tls: Tls::None,
         }
     }
 
@@ -128,7 +137,20 @@ impl<'a> ClientBuilder<'a, tls_api_stub::TlsConnector> {
             http_scheme: HttpScheme::Https,
             event_loop: self.event_loop,
             conf: self.conf,
-            tls: PhantomData,
+            tls: Tls::Implicit,
+        }
+    }
+
+    pub fn explicit_tls<TLS: tls_api::TlsConnector>(
+        self,
+        tls: ClientTlsOption<TLS>,
+    ) -> ClientBuilder<'a, TLS> {
+        ClientBuilder {
+            client_type: self.client_type,
+            http_scheme: tls.http_scheme(),
+            event_loop: self.event_loop,
+            conf: self.conf,
+            tls: Tls::Explict(tls),
         }
     }
 }

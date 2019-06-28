@@ -2,7 +2,7 @@ extern crate futures;
 extern crate grpc;
 extern crate grpc_examples_greeter;
 
-use grpc::Client;
+use grpc::ClientBuilder;
 use grpc::ClientStub;
 
 use grpc_examples_greeter::helloworld::*;
@@ -17,7 +17,7 @@ fn main() {
         .map(|s| s.to_owned())
         .unwrap_or_else(|| "world".to_owned());
 
-    let client = Arc::new(Client::new_plain("::1", 50051, Default::default()).unwrap());
+    let client = Arc::new(ClientBuilder::new("::1", 50051).build().unwrap());
     let greeter_client = GreeterClient::with_client(client.clone());
     let greeter_client2 = GreeterClient::with_client(client);
 
