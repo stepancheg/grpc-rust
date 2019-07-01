@@ -5,7 +5,7 @@ authors = ["Stepan Koltsov <stepan.koltsov@gmail.com>"]
 publish = false
 
 [dependencies]
-tls-api         = "0.1.*"
+tls-api         = "0.2.*"
 protobuf        = "2"
 grpc            = { path = "../../grpc" }
 grpc-protobuf   = { path = "../../grpc-protobuf" }

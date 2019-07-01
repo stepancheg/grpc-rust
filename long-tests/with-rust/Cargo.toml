@@ -17,7 +17,7 @@ path = "../../grpc-protobuf"
 log             = "0.4.*"
 env_logger      = "~0.5"
 protobuf        = "2"
-tls-api         = "0.1.*"
+tls-api         = "0.2.*"
 futures         = "0.1.*"
 futures-cpupool = "0.1.*"
 
