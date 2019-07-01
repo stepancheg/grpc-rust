@@ -15,7 +15,7 @@ futures         = "0.1.*"
 futures-cpupool = "0.1.*"
 tokio-core      = "0.1.*"
 tokio-io        = "0.1.*"
-tokio-tls-api   = "0.1.*"
+tokio-tls-api   = "0.2.*"
 #httpbis         = "~0.7"
 httpbis         = { git = "https://github.com/stepancheg/rust-http2" }
 tls-api         = "0.2"
