@@ -4,6 +4,7 @@ version = "0.7.0"
 description = "gRPC compiler for rust-grpc"
 license = "MIT/Apache-2.0"
 authors = ["Stepan Koltsov <stepan.koltsov@gmail.com>"]
+edition = "2018"
 
 [dependencies]
 protobuf = "2"
