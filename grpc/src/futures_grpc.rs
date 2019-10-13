@@ -3,5 +3,5 @@ use futures::Stream;
 
 use error::Error;
 
-pub type GrpcFuture<T> = Box<Future<Item = T, Error = Error> + Send + 'static>;
-pub type GrpcStream<T> = Box<Stream<Item = T, Error = Error> + Send + 'static>;
+pub type GrpcFuture<T> = Box<dyn Future<Item = T, Error = Error> + Send + 'static>;
+pub type GrpcStream<T> = Box<dyn Stream<Item = T, Error = Error> + Send + 'static>;

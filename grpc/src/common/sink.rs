@@ -42,7 +42,7 @@ impl<T: Types> SinkCommonUntyped<T> {
 }
 
 pub(crate) struct SinkCommon<M: 'static, T: Types> {
-    pub marshaller: ArcOrStatic<Marshaller<M>>,
+    pub marshaller: ArcOrStatic<dyn Marshaller<M>>,
     pub sink: T::SinkUntyped,
 }
 

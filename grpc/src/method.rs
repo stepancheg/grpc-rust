@@ -23,6 +23,6 @@ pub struct GrpcStreamingBidi;
 pub struct MethodDescriptor<Req: 'static, Resp: 'static> {
     pub name: StringOrStatic,
     pub streaming: GrpcStreaming,
-    pub req_marshaller: ArcOrStatic<Marshaller<Req>>,
-    pub resp_marshaller: ArcOrStatic<Marshaller<Resp>>,
+    pub req_marshaller: ArcOrStatic<dyn Marshaller<Req>>,
+    pub resp_marshaller: ArcOrStatic<dyn Marshaller<Resp>>,
 }

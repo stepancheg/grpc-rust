@@ -7,7 +7,7 @@ use or_static::arc::ArcOrStatic;
 
 pub(crate) fn http_req_to_grpc_frames_typed<Req: Send + 'static>(
     http_req: httpbis::ClientRequest,
-    req_marshaller: ArcOrStatic<Marshaller<Req>>,
+    req_marshaller: ArcOrStatic<dyn Marshaller<Req>>,
 ) -> ClientRequestSink<Req> {
     ClientRequestSink {
         common: SinkCommon {

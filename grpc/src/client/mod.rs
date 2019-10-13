@@ -172,7 +172,7 @@ impl Client {
         req: Option<Req>,
         method: ArcOrStatic<MethodDescriptor<Req, Resp>>,
     ) -> Box<
-        Future<Item = (ClientRequestSink<Req>, StreamingResponse<Resp>), Error = error::Error>
+        dyn Future<Item = (ClientRequestSink<Req>, StreamingResponse<Resp>), Error = error::Error>
             + Send,
     >
     where

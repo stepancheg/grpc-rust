@@ -115,7 +115,7 @@ impl<H: ServerRequestStreamHandlerUntyped> httpbis::ServerStreamHandler
 
 struct ServerRequestStreamHandlerHandler<M: 'static, H: ServerRequestStreamHandler<M>> {
     handler: H,
-    marshaller: ArcOrStatic<Marshaller<M>>,
+    marshaller: ArcOrStatic<dyn Marshaller<M>>,
 }
 
 impl<M, H: ServerRequestStreamHandler<M>> ServerRequestStreamHandlerUntyped
@@ -164,7 +164,7 @@ impl<'a> ServerRequestUntyped<'a> {
 
 pub struct ServerRequest<'a, M: 'static> {
     pub(crate) req: ServerRequestUntyped<'a>,
-    pub(crate) marshaller: ArcOrStatic<Marshaller<M>>,
+    pub(crate) marshaller: ArcOrStatic<dyn Marshaller<M>>,
 }
 
 impl<'a, M: Send + 'static> ServerRequest<'a, M> {

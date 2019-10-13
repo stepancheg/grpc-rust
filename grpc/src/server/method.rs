@@ -324,7 +324,7 @@ pub(crate) trait MethodHandlerDispatchUntyped {
 
 struct MethodHandlerDispatchImpl<Req: 'static, Resp: 'static> {
     desc: ArcOrStatic<MethodDescriptor<Req, Resp>>,
-    method_handler: Box<MethodHandler<Req, Resp> + Sync + Send>,
+    method_handler: Box<dyn MethodHandler<Req, Resp> + Sync + Send>,
 }
 
 impl<Req, Resp> MethodHandlerDispatchUntyped for MethodHandlerDispatchImpl<Req, Resp>
@@ -370,7 +370,7 @@ where
 
 pub struct ServerMethod {
     pub(crate) name: StringOrStatic,
-    pub(crate) dispatch: Box<MethodHandlerDispatchUntyped + Sync + Send>,
+    pub(crate) dispatch: Box<dyn MethodHandlerDispatchUntyped + Sync + Send>,
 }
 
 impl ServerMethod {
