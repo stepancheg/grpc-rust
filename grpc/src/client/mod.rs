@@ -43,6 +43,7 @@ impl ClientConf {
 
 enum ClientBuilderType<'a> {
     Tcp { port: u16, host: &'a str },
+    #[cfg(unix)]
     Unix { socket: &'a str },
 }
 
@@ -87,6 +88,7 @@ impl<'a, T: tls_api::TlsConnector> ClientBuilder<'a, T> {
                 builder.set_addr((host, port))?;
                 (host, Some(port))
             }
+            #[cfg(unix)]
             ClientBuilderType::Unix { socket } => {
                 builder.set_unix_addr(socket)?;
                 (socket, None)
@@ -121,6 +123,7 @@ impl<'a> ClientBuilder<'a, tls_api_stub::TlsConnector> {
         }
     }
 
+    #[cfg(unix)]
     pub fn new_unix(addr: &'a str) -> Self {
         ClientBuilder {
             client_type: ClientBuilderType::Unix { socket: addr },
