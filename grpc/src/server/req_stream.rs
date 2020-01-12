@@ -1,13 +1,13 @@
-use server::req_handler::ServerRequestStreamHandler;
 use error;
-use result;
 use futures::sync::mpsc;
-use httpbis::ServerIncreaseInWindow;
-use futures::Stream;
-use futures::Poll;
 use futures::Async;
+use futures::Poll;
+use futures::Stream;
+use httpbis::ServerIncreaseInWindow;
+use result;
+use server::req_handler::ServerRequestStreamHandler;
 
-pub(crate) enum HandlerToStream<Req : Send + 'static> {
+pub(crate) enum HandlerToStream<Req: Send + 'static> {
     Message(Req, u32),
     EndStream,
     Error(error::Error),
@@ -15,24 +15,30 @@ pub(crate) enum HandlerToStream<Req : Send + 'static> {
 }
 
 pub struct ServerRequestStream<Req>
-    where Req: Send + 'static
+where
+    Req: Send + 'static,
 {
     pub(crate) req: mpsc::UnboundedReceiver<HandlerToStream<Req>>,
     pub(crate) increase_in_window: ServerIncreaseInWindow,
 }
 
 pub(crate) struct ServerRequestStreamSenderHandler<Req: Send + 'static> {
-    pub(crate) sender: mpsc::UnboundedSender<HandlerToStream<Req>>
+    pub(crate) sender: mpsc::UnboundedSender<HandlerToStream<Req>>,
 }
 
 impl<Req: Send + 'static> ServerRequestStreamSenderHandler<Req> {
     fn send(&mut self, message: HandlerToStream<Req>) -> result::Result<()> {
         // TODO: error
-        Ok(self.sender.unbounded_send(message).map_err(|_| error::Error::Other("xxx"))?)
+        Ok(self
+            .sender
+            .unbounded_send(message)
+            .map_err(|_| error::Error::Other("xxx"))?)
     }
 }
 
-impl<Req: Send + 'static> ServerRequestStreamHandler<Req> for ServerRequestStreamSenderHandler<Req> {
+impl<Req: Send + 'static> ServerRequestStreamHandler<Req>
+    for ServerRequestStreamSenderHandler<Req>
+{
     fn grpc_message(&mut self, message: Req, frame_size: u32) -> result::Result<()> {
         self.send(HandlerToStream::Message(message, frame_size))
     }
@@ -50,7 +56,7 @@ impl<Req: Send + 'static> ServerRequestStreamHandler<Req> for ServerRequestStrea
     }
 }
 
-impl<Req : Send + 'static> Stream for ServerRequestStream<Req> {
+impl<Req: Send + 'static> Stream for ServerRequestStream<Req> {
     type Item = Req;
     type Error = error::Error;
 
@@ -75,7 +81,8 @@ impl<Req : Send + 'static> Stream for ServerRequestStream<Req> {
                 }
                 HandlerToStream::BufferProcessed(buffered) => {
                     // TODO: overflow
-                    self.increase_in_window.increase_window_auto_above(buffered as u32)?;
+                    self.increase_in_window
+                        .increase_window_auto_above(buffered as u32)?;
                     continue;
                 }
                 HandlerToStream::EndStream => {

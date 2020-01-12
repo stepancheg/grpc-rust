@@ -27,7 +27,6 @@ use proto::metadata::Metadata;
 use resp::*;
 use stream_item::*;
 
-
 fn init_headers_to_metadata(headers: Headers) -> result::Result<Metadata> {
     if headers.get_opt(":status") != Some("200") {
         return Err(Error::Other("not 200"));
@@ -134,16 +133,17 @@ impl Stream for GrpcFrameFromHttpFramesStreamResponse {
                                 Metadata::from_headers(headers)?,
                             ))));
                         } else {
-                            self.error = Some(stream::once(Err(if let Some(message) =
-                                headers.get_opt(HEADER_GRPC_MESSAGE)
-                            {
-                                Error::GrpcMessage(GrpcMessageError {
-                                    grpc_status: grpc_status.unwrap_or(GrpcStatus::Unknown as i32),
-                                    grpc_message: message.to_owned(),
-                                })
-                            } else {
-                                Error::Other("not xxx")
-                            })));
+                            self.error = Some(stream::once(Err(
+                                if let Some(message) = headers.get_opt(HEADER_GRPC_MESSAGE) {
+                                    Error::GrpcMessage(GrpcMessageError {
+                                        grpc_status: grpc_status
+                                            .unwrap_or(GrpcStatus::Unknown as i32),
+                                        grpc_message: message.to_owned(),
+                                    })
+                                } else {
+                                    Error::Other("not xxx")
+                                },
+                            )));
                         }
                     }
                     continue;

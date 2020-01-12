@@ -12,7 +12,6 @@ pub use self::test_sync::TestSync;
 use log_ndc_env_logger;
 use std::sync::Once;
 
-
 pub fn string_string_method(
     name: &str,
     streaming: GrpcStreaming,

@@ -1,17 +1,17 @@
 use bytes::Bytes;
 use error;
+use futures::sync::mpsc;
 use httpbis::Headers;
 use httpbis::ServerIncreaseInWindow;
 use marshall::Marshaller;
+use or_static::arc::ArcOrStatic;
 use proto::grpc_frame::parse_grpc_frame_from_bytes;
 use result;
 use server::req_handler_unary::RequestHandlerUnaryToStream;
-use std::marker;
-use ServerRequestStream;
 use server::req_stream::ServerRequestStreamSenderHandler;
-use futures::sync::mpsc;
+use std::marker;
 use Metadata;
-use or_static::arc::ArcOrStatic;
+use ServerRequestStream;
 
 pub(crate) trait ServerRequestStreamHandlerUntyped: 'static {
     fn grpc_message(&mut self, message: Bytes, frame_size: u32) -> result::Result<()>;
@@ -69,11 +69,7 @@ impl<H: ServerRequestStreamHandlerUntyped> ServerStreamStreamHandlerUntypedHandl
 impl<H: ServerRequestStreamHandlerUntyped> httpbis::ServerStreamHandler
     for ServerStreamStreamHandlerUntypedHandler<H>
 {
-    fn data_frame(
-        &mut self,
-        data: Bytes,
-        end_stream: bool,
-    ) -> httpbis::Result<()> {
+    fn data_frame(&mut self, data: Bytes, end_stream: bool) -> httpbis::Result<()> {
         if self.buf.is_empty() {
             self.buf = data;
         } else {
@@ -88,7 +84,10 @@ impl<H: ServerRequestStreamHandlerUntyped> httpbis::ServerStreamHandler
         }
 
         if self.buf.len() != 0 {
-            trace!("buffer processed, still contains {}, calling handler", self.buf.len());
+            trace!(
+                "buffer processed, still contains {}, calling handler",
+                self.buf.len()
+            );
             self.handler.buffer_processed(self.buf.len())?;
         }
 
@@ -193,11 +192,14 @@ impl<'a, M: Send + 'static> ServerRequest<'a, M> {
     }
 
     pub fn register_stream_handler_basic<H>(self, handler: H)
-        where H: FnMut(Option<M>) -> result::Result<()> + Send + 'static
+    where
+        H: FnMut(Option<M>) -> result::Result<()> + Send + 'static,
     {
         self.register_stream_handler(move |increase_in_window| {
             struct Handler<M, F>
-                where M: Send + 'static, F: FnMut(Option<M>) -> result::Result<()> + Send + 'static
+            where
+                M: Send + 'static,
+                F: FnMut(Option<M>) -> result::Result<()> + Send + 'static,
             {
                 increase_in_window: ServerIncreaseInWindow,
                 handler: F,
@@ -205,7 +207,9 @@ impl<'a, M: Send + 'static> ServerRequest<'a, M> {
             }
 
             impl<M, F> ServerRequestStreamHandler<M> for Handler<M, F>
-                where M: Send + 'static, F: FnMut(Option<M>) -> result::Result<()> + Send + 'static
+            where
+                M: Send + 'static,
+                F: FnMut(Option<M>) -> result::Result<()> + Send + 'static,
             {
                 fn grpc_message(&mut self, message: M, frame_size: u32) -> result::Result<()> {
                     (self.handler)(Some(message))?;
@@ -220,16 +224,20 @@ impl<'a, M: Send + 'static> ServerRequest<'a, M> {
 
                 fn buffer_processed(&mut self, buffered: usize) -> result::Result<()> {
                     // TODO: overflow check
-                    self.increase_in_window.increase_window_auto_above(buffered as u32)?;
+                    self.increase_in_window
+                        .increase_window_auto_above(buffered as u32)?;
                     Ok(())
                 }
             }
 
-            (Handler {
-                increase_in_window,
-                handler,
-                _marker: marker::PhantomData,
-            }, ())
+            (
+                Handler {
+                    increase_in_window,
+                    handler,
+                    _marker: marker::PhantomData,
+                },
+                (),
+            )
         })
     }
 

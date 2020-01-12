@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use std::ops;
+use std::sync::Arc;
 
 pub enum ArcOrStatic<A: ?Sized + 'static> {
     Arc(Arc<A>),

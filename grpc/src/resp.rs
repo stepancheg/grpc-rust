@@ -7,10 +7,9 @@ use error;
 use futures::Poll;
 use futures_grpc::*;
 use iter::*;
+use proto::metadata::Metadata;
 use result;
 use stream_item::*;
-use proto::metadata::Metadata;
-
 
 /// Single message response
 pub struct SingleResponse<T: Send + 'static>(pub GrpcFuture<(Metadata, GrpcFuture<(T, Metadata)>)>);
@@ -110,7 +109,8 @@ impl<T: Send + 'static> SingleResponse<T> {
                         ItemOrMetadata::Item(result),
                         ItemOrMetadata::TrailingMetadata(trailing),
                     ])
-                }).flatten_stream();
+                })
+                .flatten_stream();
 
             (metadata, GrpcStreamWithTrailingMetadata::new(stream))
         }))

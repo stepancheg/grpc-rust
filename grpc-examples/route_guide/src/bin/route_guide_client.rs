@@ -66,7 +66,10 @@ fn run_record_route(client: &RouteGuideClient) {
 
     println!("Traversing {} points.", point_count);
 
-    let (mut req, resp) = client.record_route(grpc::RequestOptions::new()).wait().unwrap();
+    let (mut req, resp) = client
+        .record_route(grpc::RequestOptions::new())
+        .wait()
+        .unwrap();
 
     for _ in 0..point_count {
         let point = random_point();
@@ -102,7 +105,10 @@ fn run_route_chat(client: &RouteGuideClient) {
         new_note(0, 3, "Sixth message"),
     ];
 
-    let (mut req, resp) = client.route_chat(grpc::RequestOptions::new()).wait().unwrap();
+    let (mut req, resp) = client
+        .route_chat(grpc::RequestOptions::new())
+        .wait()
+        .unwrap();
 
     let sender_thread = thread::spawn(move || {
         for note in notes {
@@ -150,13 +156,15 @@ fn main() {
         point.latitude = 400000000;
         point.longitude = -750000000;
         point
-    }).into();
+    })
+    .into();
     rect.lo = SingularPtrField::some({
         let mut point = Point::new();
         point.latitude = 420000000;
         point.longitude = -730000000;
         point
-    }).into();
+    })
+    .into();
 
     print_features(&client, rect);
 

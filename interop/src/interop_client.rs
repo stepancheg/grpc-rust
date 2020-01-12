@@ -5,14 +5,14 @@ use bytes::Bytes;
 use grpc::*;
 
 use chrono::*;
-use std::time::SystemTime;
-use test_grpc::TestServiceClient;
 use empty::Empty;
-use messages::SimpleRequest;
 use messages::Payload;
+use messages::ResponseParameters;
+use messages::SimpleRequest;
 use messages::StreamingInputCallRequest;
 use messages::StreamingOutputCallRequest;
-use messages::ResponseParameters;
+use std::time::SystemTime;
+use test_grpc::TestServiceClient;
 
 fn empty_unary(client: TestServiceClient) {
     client
@@ -27,16 +27,31 @@ fn cacheable_unary(client: TestServiceClient) {
     let mut request = SimpleRequest::new();
     request.set_payload({
         let mut payload = Payload::new();
-        payload.set_body(format!("{}", SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_nanos()).into_bytes());
+        payload.set_body(
+            format!(
+                "{}",
+                SystemTime::now()
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos()
+            )
+            .into_bytes(),
+        );
         payload
     });
     let mut options = RequestOptions::new();
-    options.metadata.add(MetadataKey::from("x-user-ip"), "1.2.3.4".into());
+    options
+        .metadata
+        .add(MetadataKey::from("x-user-ip"), "1.2.3.4".into());
     options.cachable = true;
-    let (_, r1, _) = client.cacheable_unary_call(options.clone(), request.clone())
-        .wait().expect("call");
-    let (_, r2, _) = client.cacheable_unary_call(options, request)
-        .wait().expect("call");
+    let (_, r1, _) = client
+        .cacheable_unary_call(options.clone(), request.clone())
+        .wait()
+        .expect("call");
+    let (_, r2, _) = client
+        .cacheable_unary_call(options, request)
+        .wait()
+        .expect("call");
     assert_eq!(r1.get_payload(), r2.get_payload());
 }
 
@@ -67,11 +82,10 @@ fn server_compressed_unary(_client: TestServiceClient) {
 
 // https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md#client_streaming
 fn client_streaming(client: TestServiceClient) {
-
     let (mut req, resp) = client
-        .streaming_input_call(
-            grpc::RequestOptions::new(),
-        ).wait().expect("expected response");
+        .streaming_input_call(grpc::RequestOptions::new())
+        .wait()
+        .expect("expected response");
 
     for size in [27182, 8, 1828, 45904].iter() {
         let mut request = StreamingInputCallRequest::new();
@@ -144,9 +158,9 @@ fn server_compressed_streaming(_client: TestServiceClient) {
 // https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md#ping_pong
 fn ping_pong(client: TestServiceClient) {
     let (mut req, resp) = client
-        .full_duplex_call(
-            grpc::RequestOptions::new(),
-        ).wait().expect("start request");
+        .full_duplex_call(grpc::RequestOptions::new())
+        .wait()
+        .expect("start request");
 
     let mut resp = resp.wait_drop_metadata();
 
@@ -174,7 +188,9 @@ fn ping_pong(client: TestServiceClient) {
 // https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md#empty_stream
 fn empty_stream(client: TestServiceClient) {
     let (mut req, resp) = client
-        .full_duplex_call(grpc::RequestOptions::new()).wait().expect("wait");
+        .full_duplex_call(grpc::RequestOptions::new())
+        .wait()
+        .expect("wait");
     req.finish().expect("finish");
     let resp: Vec<_> = resp.wait_drop_metadata().collect();
     assert!(resp.len() == 0);
@@ -279,7 +295,9 @@ fn custom_metadata(client: TestServiceClient) {
         }
 
         let (mut req1, resp) = client
-            .full_duplex_call(make_options()).wait().expect("start request");
+            .full_duplex_call(make_options())
+            .wait()
+            .expect("start request");
         req1.send_data(req).expect("send_data");
         req1.finish().expect("finish");
 
@@ -311,7 +329,10 @@ fn unimplemented_service(_client: TestServiceClient) {
 
 // https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md#cancel_after_begin
 fn cancel_after_begin(client: TestServiceClient) {
-    let (req, resp) = client.streaming_input_call(RequestOptions::new()).wait().expect("start");
+    let (req, resp) = client
+        .streaming_input_call(RequestOptions::new())
+        .wait()
+        .expect("start");
     drop(req);
     // TODO: hangs
     match resp.wait() {

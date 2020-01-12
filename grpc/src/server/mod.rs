@@ -2,8 +2,8 @@ pub(crate) mod ctx;
 pub(crate) mod method;
 pub(crate) mod req_handler;
 pub(crate) mod req_handler_unary;
-pub(crate) mod req_stream;
 pub(crate) mod req_single;
+pub(crate) mod req_stream;
 pub(crate) mod resp_sink;
 pub(crate) mod resp_sink_untyped;
 pub(crate) mod resp_unary_sink;
@@ -28,7 +28,6 @@ use server::method::ServerMethod;
 use server::req_handler::ServerRequestUntyped;
 use server::resp_sink_untyped::ServerResponseUntypedSink;
 use Metadata;
-
 
 pub struct ServerServiceDefinition {
     pub prefix: String,
@@ -165,7 +164,9 @@ impl httpbis::ServerHandler for GrpcServerHandler {
         let req = ServerRequestUntyped { req };
 
         resp.set_drop_callback(move |resp| {
-            Ok(resp.send_message(grpc_error_message("grpc server handler did not close the sender"))?)
+            Ok(resp.send_message(grpc_error_message(
+                "grpc server handler did not close the sender",
+            ))?)
         });
 
         let resp = ServerResponseUntypedSink {
@@ -178,7 +179,8 @@ impl httpbis::ServerHandler for GrpcServerHandler {
         };
 
         // TODO: catch unwind
-        self.service_definition.handle_method(&path, context, req, resp)?;
+        self.service_definition
+            .handle_method(&path, context, req, resp)?;
 
         Ok(())
     }

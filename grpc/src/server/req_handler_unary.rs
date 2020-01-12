@@ -40,7 +40,8 @@ where
 
     fn buffer_processed(&mut self, buffered: usize) -> result::Result<()> {
         // TODO: overflow check
-        self.increase_in_window.increase_window_auto_above(buffered as u32)?;
+        self.increase_in_window
+            .increase_window_auto_above(buffered as u32)?;
         Ok(())
     }
 }

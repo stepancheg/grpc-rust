@@ -8,7 +8,6 @@ use httpbis;
 
 use proto::metadata;
 
-
 #[derive(Debug)]
 pub struct GrpcMessageError {
     pub grpc_status: i32,
@@ -25,7 +24,7 @@ pub enum Error {
     Canceled(futures::Canceled),
     MetadataDecode(metadata::MetadataDecodeError),
     Panic(String),
-    Marshaller(Box<dyn std_Error+Send+Sync>),
+    Marshaller(Box<dyn std_Error + Send + Sync>),
     Other(&'static str),
 }
 
@@ -47,8 +46,7 @@ fn _assert_grpc_error_debug(e: &Error) {
     _assert_debug(e);
 }
 
-impl std_Error for Error {
-}
+impl std_Error for Error {}
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

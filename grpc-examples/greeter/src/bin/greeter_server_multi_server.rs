@@ -6,18 +6,23 @@ extern crate httpbis;
 
 use std::thread;
 
-use grpc_examples_greeter::helloworld::*;
-use grpc_examples_greeter::helloworld_grpc::*;
 use grpc::ServerHandlerContext;
 use grpc::ServerRequestSingle;
 use grpc::ServerResponseUnarySink;
+use grpc_examples_greeter::helloworld::*;
+use grpc_examples_greeter::helloworld_grpc::*;
 
 struct GreeterImpl {
     instance: u32,
 }
 
 impl Greeter for GreeterImpl {
-    fn say_hello(&self, _: ServerHandlerContext, req: ServerRequestSingle<HelloRequest>, resp: ServerResponseUnarySink<HelloReply>) -> grpc::Result<()> {
+    fn say_hello(
+        &self,
+        _: ServerHandlerContext,
+        req: ServerRequestSingle<HelloRequest>,
+        resp: ServerResponseUnarySink<HelloReply>,
+    ) -> grpc::Result<()> {
         let mut r = HelloReply::new();
         let name = if req.message.get_name().is_empty() {
             "world"

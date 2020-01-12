@@ -17,8 +17,8 @@ use bytes::Bytes;
 use futures::stream;
 use futures::stream::Stream;
 
-use grpc::*;
 use futures::Async;
+use grpc::*;
 
 static DICTIONARY: &'static str = "ABCDEFGHIJKLMNOPQRSTUVabcdefghijklmnoqprstuvwxyz0123456789";
 
@@ -61,16 +61,31 @@ struct TestServerImpl {}
 
 impl TestService for TestServerImpl {
     // One empty request followed by one empty response.
-    fn empty_call(&self, _ctx: ServerHandlerContext, _req: ServerRequestSingle<Empty>, resp: ServerResponseUnarySink<Empty>) -> grpc::Result<()> {
+    fn empty_call(
+        &self,
+        _ctx: ServerHandlerContext,
+        _req: ServerRequestSingle<Empty>,
+        resp: ServerResponseUnarySink<Empty>,
+    ) -> grpc::Result<()> {
         resp.finish(Empty::new())
     }
 
     // One request followed by one response.
-    fn unary_call(&self, _ctx: ServerHandlerContext, req: ServerRequestSingle<SimpleRequest>, mut resp: ServerResponseUnarySink<SimpleResponse>) -> grpc::Result<()> {
+    fn unary_call(
+        &self,
+        _ctx: ServerHandlerContext,
+        req: ServerRequestSingle<SimpleRequest>,
+        mut resp: ServerResponseUnarySink<SimpleResponse>,
+    ) -> grpc::Result<()> {
         if req.message.get_response_status().get_code() != 0 {
-            debug!("requested to send grpc error {}", req.message.get_response_status().get_code());
+            debug!(
+                "requested to send grpc error {}",
+                req.message.get_response_status().get_code()
+            );
             return resp.send_grpc_error(
-                GrpcStatus::from_code_or_unknown(req.message.get_response_status().get_code() as u32),
+                GrpcStatus::from_code_or_unknown(
+                    req.message.get_response_status().get_code() as u32
+                ),
                 req.message.get_response_status().message.clone(),
             );
         }
@@ -86,14 +101,24 @@ impl TestService for TestServerImpl {
     // One request followed by one response. Response has cache control
     // headers set such that a caching HTTP proxy (such as GFE) can
     // satisfy subsequent requests.
-    fn cacheable_unary_call(&self, _ctx: ServerHandlerContext, _req: ServerRequestSingle<SimpleRequest>, resp: ServerResponseUnarySink<SimpleResponse>) -> grpc::Result<()> {
+    fn cacheable_unary_call(
+        &self,
+        _ctx: ServerHandlerContext,
+        _req: ServerRequestSingle<SimpleRequest>,
+        resp: ServerResponseUnarySink<SimpleResponse>,
+    ) -> grpc::Result<()> {
         // TODO: implement fully
         resp.finish(SimpleResponse::new())
     }
 
     // One request followed by a sequence of responses (streamed download).
     // The server returns the payload with client desired type and sizes.
-    fn streaming_output_call(&self, o: ServerHandlerContext, mut req: ServerRequestSingle<StreamingOutputCallRequest>, resp: ServerResponseSink<StreamingOutputCallResponse>) -> grpc::Result<()> {
+    fn streaming_output_call(
+        &self,
+        o: ServerHandlerContext,
+        mut req: ServerRequestSingle<StreamingOutputCallRequest>,
+        resp: ServerResponseSink<StreamingOutputCallResponse>,
+    ) -> grpc::Result<()> {
         let sizes = req
             .message
             .take_response_parameters()
@@ -112,7 +137,12 @@ impl TestService for TestServerImpl {
 
     // A sequence of requests followed by one response (streamed upload).
     // The server returns the aggregated size of client payload as the result.
-    fn streaming_input_call(&self, _ctx: ServerHandlerContext, req: ServerRequest<StreamingInputCallRequest>, resp: ServerResponseUnarySink<StreamingInputCallResponse>) -> grpc::Result<()> {
+    fn streaming_input_call(
+        &self,
+        _ctx: ServerHandlerContext,
+        req: ServerRequest<StreamingInputCallRequest>,
+        resp: ServerResponseUnarySink<StreamingInputCallResponse>,
+    ) -> grpc::Result<()> {
         let mut resp = Some(resp);
         let mut aggregate_size = 0;
         req.register_stream_handler_basic(move |message| {
@@ -133,47 +163,51 @@ impl TestService for TestServerImpl {
     // A sequence of requests with each request served by the server immediately.
     // As one request could lead to multiple responses, this interface
     // demonstrates the idea of full duplexing.
-    fn full_duplex_call(&self, o: ServerHandlerContext, req: ServerRequest<StreamingOutputCallRequest>, mut resp: ServerResponseSink<StreamingOutputCallResponse>) -> grpc::Result<()> {
+    fn full_duplex_call(
+        &self,
+        o: ServerHandlerContext,
+        req: ServerRequest<StreamingOutputCallRequest>,
+        mut resp: ServerResponseSink<StreamingOutputCallResponse>,
+    ) -> grpc::Result<()> {
         let metadata = req.metadata();
         debug!("sending custom metadata");
         resp.send_metadata(echo_custom_metadata(&metadata))?;
         let mut req = req.into_stream();
-        o.spawn_poll_fn(move || {
-            loop {
-                if let Async::NotReady = resp.poll()? {
-                    return Ok(Async::NotReady);
-                }
-                match req.poll()? {
-                    Async::Ready(Some(m)) => {
-                        if m.get_response_status().get_code() != 0 {
-                            debug!("requested to send grpc error {}", m.get_response_status().get_code());
-                            resp.send_grpc_error(
-                                GrpcStatus::from_code_or_unknown(m.get_response_status().code as u32),
-                                m.get_response_status().message.clone(),
-                            )?;
-                            return Ok(Async::Ready(()));
-                        }
-
-                        for p in &m.response_parameters {
-                            debug!("requested to send data of size {}", p.size);
-                            resp.send_data({
-                                let mut response = StreamingOutputCallResponse::new();
-                                let mut payload = Payload::new();
-                                payload.set_body(make_string(p.size as usize));
-                                response.set_payload(payload);
-                                response
-                            })?;
-                        }
-                    }
-                    Async::Ready(None) => {
-                        debug!("sending custom trailers");
-                        resp.send_trailers(echo_custom_trailing(&metadata))?;
+        o.spawn_poll_fn(move || loop {
+            if let Async::NotReady = resp.poll()? {
+                return Ok(Async::NotReady);
+            }
+            match req.poll()? {
+                Async::Ready(Some(m)) => {
+                    if m.get_response_status().get_code() != 0 {
+                        debug!(
+                            "requested to send grpc error {}",
+                            m.get_response_status().get_code()
+                        );
+                        resp.send_grpc_error(
+                            GrpcStatus::from_code_or_unknown(m.get_response_status().code as u32),
+                            m.get_response_status().message.clone(),
+                        )?;
                         return Ok(Async::Ready(()));
                     }
-                    Async::NotReady => {
-                        return Ok(Async::NotReady)
+
+                    for p in &m.response_parameters {
+                        debug!("requested to send data of size {}", p.size);
+                        resp.send_data({
+                            let mut response = StreamingOutputCallResponse::new();
+                            let mut payload = Payload::new();
+                            payload.set_body(make_string(p.size as usize));
+                            response.set_payload(payload);
+                            response
+                        })?;
                     }
                 }
+                Async::Ready(None) => {
+                    debug!("sending custom trailers");
+                    resp.send_trailers(echo_custom_trailing(&metadata))?;
+                    return Ok(Async::Ready(()));
+                }
+                Async::NotReady => return Ok(Async::NotReady),
             }
         });
         Ok(())
@@ -184,7 +218,12 @@ impl TestService for TestServerImpl {
     // The server buffers all the client requests and then serves them in order. A
     // stream of responses are returned to the client when the server starts with
     // first request.
-    fn half_duplex_call(&self, _ctx: ServerHandlerContext, _req: ServerRequest<StreamingOutputCallRequest>, mut resp: ServerResponseSink<StreamingOutputCallResponse>) -> grpc::Result<()> {
+    fn half_duplex_call(
+        &self,
+        _ctx: ServerHandlerContext,
+        _req: ServerRequest<StreamingOutputCallRequest>,
+        mut resp: ServerResponseSink<StreamingOutputCallResponse>,
+    ) -> grpc::Result<()> {
         resp.send_trailers(Metadata::new())
     }
 }

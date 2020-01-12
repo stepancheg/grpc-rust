@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate log;
-extern crate log_ndc_env_logger;
 extern crate futures;
+extern crate log_ndc_env_logger;
 
 extern crate grpc;
 
@@ -25,7 +25,8 @@ fn server_is_not_running() {
                 RequestOptions::new(),
                 "aa".to_owned(),
                 string_string_method("/does/not/matter", GrpcStreaming::Unary),
-            ).wait();
+            )
+            .wait();
         assert!(result.is_err(), result);
     }
 }
@@ -45,7 +46,8 @@ fn server_is_not_running_unix() {
                 RequestOptions::new(),
                 "aa".to_owned(),
                 string_string_method("/does/not/matter", GrpcStreaming::Unary),
-            ).wait();
+            )
+            .wait();
         assert!(result.is_err(), result);
     }
 }

@@ -1,3 +1,4 @@
+extern crate bytes;
 extern crate chrono;
 extern crate env_logger;
 extern crate futures;
@@ -7,7 +8,6 @@ extern crate grpc_protobuf;
 extern crate log;
 extern crate protobuf;
 extern crate tls_api;
-extern crate bytes;
 
 pub mod empty;
 pub mod messages;

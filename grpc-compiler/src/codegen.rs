@@ -20,13 +20,14 @@ impl<'a> CodeWriter<'a> {
         }
     }
 
-    pub fn write_line<S : AsRef<str>>(&mut self, line: S) {
+    pub fn write_line<S: AsRef<str>>(&mut self, line: S) {
         (if line.as_ref().is_empty() {
             self.writer.write_all("\n".as_bytes())
         } else {
             let s: String = [self.indent.as_ref(), line.as_ref(), "\n"].concat();
             self.writer.write_all(s.as_bytes())
-        }).unwrap();
+        })
+        .unwrap();
     }
 
     pub fn write_generated(&mut self) {
@@ -58,8 +59,8 @@ impl<'a> CodeWriter<'a> {
     }
 
     pub fn indented<F>(&mut self, cb: F)
-        where
-            F : Fn(&mut CodeWriter),
+    where
+        F: Fn(&mut CodeWriter),
     {
         cb(&mut CodeWriter {
             writer: self.writer,
@@ -69,8 +70,8 @@ impl<'a> CodeWriter<'a> {
 
     #[allow(dead_code)]
     pub fn commented<F>(&mut self, cb: F)
-        where
-            F : Fn(&mut CodeWriter),
+    where
+        F: Fn(&mut CodeWriter),
     {
         cb(&mut CodeWriter {
             writer: self.writer,
@@ -79,8 +80,8 @@ impl<'a> CodeWriter<'a> {
     }
 
     pub fn block<F>(&mut self, first_line: &str, last_line: &str, cb: F)
-        where
-            F : Fn(&mut CodeWriter),
+    where
+        F: Fn(&mut CodeWriter),
     {
         self.write_line(first_line);
         self.indented(cb);
@@ -88,36 +89,36 @@ impl<'a> CodeWriter<'a> {
     }
 
     pub fn expr_block<F>(&mut self, prefix: &str, cb: F)
-        where
-            F : Fn(&mut CodeWriter),
+    where
+        F: Fn(&mut CodeWriter),
     {
         self.block(&format!("{} {{", prefix), "}", cb);
     }
 
-    pub fn impl_self_block<S : AsRef<str>, F>(&mut self, name: S, cb: F)
-        where
-            F : Fn(&mut CodeWriter),
+    pub fn impl_self_block<S: AsRef<str>, F>(&mut self, name: S, cb: F)
+    where
+        F: Fn(&mut CodeWriter),
     {
         self.expr_block(&format!("impl {}", name.as_ref()), cb);
     }
 
-    pub fn impl_for_block<S1 : AsRef<str>, S2 : AsRef<str>, F>(&mut self, tr: S1, ty: S2, cb: F)
-        where
-            F : Fn(&mut CodeWriter),
+    pub fn impl_for_block<S1: AsRef<str>, S2: AsRef<str>, F>(&mut self, tr: S1, ty: S2, cb: F)
+    where
+        F: Fn(&mut CodeWriter),
     {
         self.expr_block(&format!("impl {} for {}", tr.as_ref(), ty.as_ref()), cb);
     }
 
-    pub fn pub_struct<S : AsRef<str>, F>(&mut self, name: S, cb: F)
-        where
-            F : Fn(&mut CodeWriter),
+    pub fn pub_struct<S: AsRef<str>, F>(&mut self, name: S, cb: F)
+    where
+        F: Fn(&mut CodeWriter),
     {
         self.expr_block(&format!("pub struct {}", name.as_ref()), cb);
     }
 
     pub fn pub_trait<F>(&mut self, name: &str, cb: F)
-        where
-            F : Fn(&mut CodeWriter),
+    where
+        F: Fn(&mut CodeWriter),
     {
         self.expr_block(&format!("pub trait {}", name), cb);
     }
@@ -143,8 +144,8 @@ impl<'a> CodeWriter<'a> {
     }
 
     pub fn fn_block<F>(&mut self, public: bool, sig: &str, cb: F)
-        where
-            F : Fn(&mut CodeWriter),
+    where
+        F: Fn(&mut CodeWriter),
     {
         if public {
             self.expr_block(&format!("pub fn {}", sig), cb);
@@ -154,15 +155,15 @@ impl<'a> CodeWriter<'a> {
     }
 
     pub fn pub_fn<F>(&mut self, sig: &str, cb: F)
-        where
-            F : Fn(&mut CodeWriter),
+    where
+        F: Fn(&mut CodeWriter),
     {
         self.fn_block(true, sig, cb);
     }
 
     pub fn def_fn<F>(&mut self, sig: &str, cb: F)
-        where
-            F : Fn(&mut CodeWriter),
+    where
+        F: Fn(&mut CodeWriter),
     {
         self.fn_block(false, sig, cb);
     }

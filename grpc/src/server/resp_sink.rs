@@ -4,10 +4,10 @@ use futures::future::Future;
 use futures::Poll;
 use httpbis;
 use httpbis::StreamDead;
+use proto::grpc_status::GrpcStatus;
 use proto::metadata::Metadata;
 use result;
 use server::types::ServerTypes;
-use proto::grpc_status::GrpcStatus;
 
 pub struct ServerResponseSink<Resp: Send + 'static> {
     pub(crate) common: SinkCommon<Resp, ServerTypes>,

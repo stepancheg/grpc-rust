@@ -31,7 +31,10 @@ pub(crate) fn grpc_error_message(message: &str) -> httpbis::SimpleHttpMessage {
     let headers = Headers::from_vec(vec![
         Header::new(":status", "200"),
         // TODO: alloc
-        Header::new(HEADER_GRPC_STATUS, format!("{}", GrpcStatus::Internal.code())),
+        Header::new(
+            HEADER_GRPC_STATUS,
+            format!("{}", GrpcStatus::Internal.code()),
+        ),
         Header::new(HEADER_GRPC_MESSAGE, message.to_owned()),
     ]);
     httpbis::SimpleHttpMessage {

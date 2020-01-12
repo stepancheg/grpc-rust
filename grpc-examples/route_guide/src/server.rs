@@ -1,29 +1,28 @@
-use crate::route_guide_grpc::RouteGuide;
-use crate::route_guide::Point;
 use crate::route_guide::Feature;
+use crate::route_guide::Point;
+use crate::route_guide::Rectangle;
 use crate::route_guide::RouteNote;
 use crate::route_guide::RouteSummary;
-use crate::route_guide::Rectangle;
-use grpc::ServerHandlerContext;
-use grpc::ServerRequestSingle;
-use grpc::ServerResponseUnarySink;
-use grpc::ServerResponseSink;
-use grpc::ServerRequest;
-use std::collections::HashMap;
+use crate::route_guide_grpc::RouteGuide;
+use futures::future::Future;
 use futures::stream;
 use futures::stream::Stream;
-use std::time::Instant;
-use futures::future::Future;
-use std::f64;
-use std::sync::Mutex;
 use futures::Async;
-use std::sync::Arc;
 use grpc::Metadata;
-use std::path::Path;
+use grpc::ServerHandlerContext;
+use grpc::ServerRequest;
+use grpc::ServerRequestSingle;
+use grpc::ServerResponseSink;
+use grpc::ServerResponseUnarySink;
+use json::JsonValue;
+use std::collections::HashMap;
+use std::f64;
 use std::fs;
 use std::io::Read;
-use json::JsonValue;
-
+use std::path::Path;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::time::Instant;
 
 // https://github.com/grpc/grpc-go/blob/master/examples/route_guide/server/server.go
 #[derive(Default)]
@@ -42,7 +41,12 @@ impl RouteGuideImpl {
 }
 
 impl RouteGuide for RouteGuideImpl {
-    fn get_feature(&self, _o: ServerHandlerContext, req: ServerRequestSingle<Point>, resp: ServerResponseUnarySink<Feature>) -> grpc::Result<()> {
+    fn get_feature(
+        &self,
+        _o: ServerHandlerContext,
+        req: ServerRequestSingle<Point>,
+        resp: ServerResponseUnarySink<Feature>,
+    ) -> grpc::Result<()> {
         for feature in &*self.saved_features {
             if feature.get_location() == &req.message {
                 return resp.finish(feature.clone());
@@ -55,22 +59,31 @@ impl RouteGuide for RouteGuideImpl {
         })
     }
 
-    fn list_features(&self, o: ServerHandlerContext, mut req: ServerRequestSingle<Rectangle>, resp: ServerResponseSink<Feature>) -> grpc::Result<()> {
+    fn list_features(
+        &self,
+        o: ServerHandlerContext,
+        mut req: ServerRequestSingle<Rectangle>,
+        resp: ServerResponseSink<Feature>,
+    ) -> grpc::Result<()> {
         let req = req.take_message();
         // TODO: do not clone
-        let stream = stream::iter_ok(self.saved_features.clone())
-            .filter_map(move |feature| {
-                if in_range(feature.get_location(), &req) {
-                    return Some(feature);
-                } else {
-                    return None;
-                }
-            });
+        let stream = stream::iter_ok(self.saved_features.clone()).filter_map(move |feature| {
+            if in_range(feature.get_location(), &req) {
+                return Some(feature);
+            } else {
+                return None;
+            }
+        });
         o.pump(stream, resp);
         Ok(())
     }
 
-    fn record_route(&self, o: ServerHandlerContext, req: ServerRequest<Point>, resp: ServerResponseUnarySink<RouteSummary>) -> grpc::Result<()> {
+    fn record_route(
+        &self,
+        o: ServerHandlerContext,
+        req: ServerRequest<Point>,
+        resp: ServerResponseUnarySink<RouteSummary>,
+    ) -> grpc::Result<()> {
         let start_time = Instant::now();
 
         struct State {
@@ -89,7 +102,8 @@ impl RouteGuide for RouteGuideImpl {
 
         let saved_features = self.saved_features.clone();
 
-        let f = req.into_stream()
+        let f = req
+            .into_stream()
             .fold(state, move |mut state, point| {
                 state.point_count += 1;
                 for feature in &saved_features {
@@ -103,20 +117,23 @@ impl RouteGuide for RouteGuideImpl {
                 state.last_point = Some(point);
                 Ok::<_, grpc::Error>(state)
             })
-            .map(move |state| {
-                RouteSummary {
-                    point_count: state.point_count as i32,
-                    feature_count: state.feature_count as i32,
-                    distance: state.distance as i32,
-                    elapsed_time: start_time.elapsed().as_secs() as i32,
-                    ..Default::default()
-                }
+            .map(move |state| RouteSummary {
+                point_count: state.point_count as i32,
+                feature_count: state.feature_count as i32,
+                distance: state.distance as i32,
+                elapsed_time: start_time.elapsed().as_secs() as i32,
+                ..Default::default()
             });
         o.pump_future(f, resp);
         Ok(())
     }
 
-    fn route_chat(&self, o: ServerHandlerContext, req: ServerRequest<RouteNote>, mut resp: ServerResponseSink<RouteNote>) -> grpc::Result<()> {
+    fn route_chat(
+        &self,
+        o: ServerHandlerContext,
+        req: ServerRequest<RouteNote>,
+        mut resp: ServerResponseSink<RouteNote>,
+    ) -> grpc::Result<()> {
         let mut req = req.into_stream();
 
         let route_notes_map = self.route_notes.clone();
@@ -154,15 +171,21 @@ impl RouteGuide for RouteGuideImpl {
 }
 
 fn in_range(point: &Point, rect: &Rectangle) -> bool {
-    let left = f64::min(rect.get_lo().longitude as f64, rect.get_hi().longitude as f64);
-    let right = f64::max(rect.get_lo().longitude as f64, rect.get_hi().longitude as f64);
+    let left = f64::min(
+        rect.get_lo().longitude as f64,
+        rect.get_hi().longitude as f64,
+    );
+    let right = f64::max(
+        rect.get_lo().longitude as f64,
+        rect.get_hi().longitude as f64,
+    );
     let top = f64::max(rect.get_lo().latitude as f64, rect.get_hi().latitude as f64);
     let bottom = f64::min(rect.get_lo().latitude as f64, rect.get_hi().latitude as f64);
 
-    point.longitude as f64 >= left &&
-        point.longitude as f64 <= right &&
-        point.latitude as f64 >= bottom &&
-        point.latitude as f64 <= top
+    point.longitude as f64 >= left
+        && point.longitude as f64 <= right
+        && point.latitude as f64 >= bottom
+        && point.latitude as f64 <= top
 }
 
 fn to_radians(num: f64) -> f64 {
@@ -179,9 +202,8 @@ fn calc_distance(p1: &Point, p2: &Point) -> u32 {
     let dlat = lat2 - lat1;
     let dlng = lng2 - lng1;
 
-    let a = f64::sin(dlat/2.) * f64::sin(dlat/2.) +
-        f64::cos(lat1) * f64::cos(lat2)*
-            f64::sin(dlng / 2.) * f64::sin(dlng / 2.);
+    let a = f64::sin(dlat / 2.) * f64::sin(dlat / 2.)
+        + f64::cos(lat1) * f64::cos(lat2) * f64::sin(dlng / 2.) * f64::sin(dlng / 2.);
     let c = 2. * f64::atan2(f64::sqrt(a), f64::sqrt(1. - a));
 
     let distance = r * c;
@@ -207,27 +229,44 @@ fn load_features(path: &Path) -> Vec<Feature> {
         _ => panic!(),
     };
 
-    array.into_iter().map(|item| {
-        let object = match item {
-            JsonValue::Object(object) => object,
-            _ => panic!(),
-        };
+    array
+        .into_iter()
+        .map(|item| {
+            let object = match item {
+                JsonValue::Object(object) => object,
+                _ => panic!(),
+            };
 
-        let location = match object.get("location").expect("location") {
-            JsonValue::Object(object) => object,
-            _ => panic!(),
-        };
+            let location = match object.get("location").expect("location") {
+                JsonValue::Object(object) => object,
+                _ => panic!(),
+            };
 
-        Feature {
-            name: object.get("name").expect("name").as_str().expect("unwrap").to_owned(),
-            location: Some(Point {
-                latitude: location.get("latitude").expect("latitude").as_i32().unwrap(),
-                longitude: location.get("longitude").expect("longitude").as_i32().unwrap(),
+            Feature {
+                name: object
+                    .get("name")
+                    .expect("name")
+                    .as_str()
+                    .expect("unwrap")
+                    .to_owned(),
+                location: Some(Point {
+                    latitude: location
+                        .get("latitude")
+                        .expect("latitude")
+                        .as_i32()
+                        .unwrap(),
+                    longitude: location
+                        .get("longitude")
+                        .expect("longitude")
+                        .as_i32()
+                        .unwrap(),
+                    ..Default::default()
+                })
+                .into(),
                 ..Default::default()
-            }).into(),
-            ..Default::default()
-        }
-    }).collect()
+            }
+        })
+        .collect()
 }
 
 #[cfg(test)]

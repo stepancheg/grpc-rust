@@ -16,8 +16,8 @@ use futures::stream::Stream;
 use grpc::rt::*;
 use grpc::*;
 
-use test_misc::*;
 use std::thread;
+use test_misc::*;
 
 /// Single method server on random port
 fn new_server<H>(service: &str, method: &str, handler: H) -> Server
@@ -42,7 +42,14 @@ where
 /// Single unary method server
 fn new_server_unary<H>(service: &str, method: &str, handler: H) -> Server
 where
-    H: Fn(ServerHandlerContext, ServerRequestSingle<String>, ServerResponseUnarySink<String>) -> grpc::Result<()> + Sync + Send + 'static,
+    H: Fn(
+            ServerHandlerContext,
+            ServerRequestSingle<String>,
+            ServerResponseUnarySink<String>,
+        ) -> grpc::Result<()>
+        + Sync
+        + Send
+        + 'static,
 {
     new_server(service, method, MethodHandlerUnary::new(handler))
 }
@@ -50,7 +57,14 @@ where
 /// Single server streaming method server
 fn new_server_server_streaming<H>(service: &str, method: &str, handler: H) -> Server
 where
-    H: Fn(ServerHandlerContext, ServerRequestSingle<String>, ServerResponseSink<String>) -> grpc::Result<()> + Sync + Send + 'static,
+    H: Fn(
+            ServerHandlerContext,
+            ServerRequestSingle<String>,
+            ServerResponseSink<String>,
+        ) -> grpc::Result<()>
+        + Sync
+        + Send
+        + 'static,
 {
     new_server(service, method, MethodHandlerServerStreaming::new(handler))
 }
@@ -58,7 +72,11 @@ where
 /// Single server streaming method server
 fn new_server_client_streaming<H>(service: &str, method: &str, handler: H) -> Server
 where
-    H: Fn(ServerHandlerContext, ServerRequest<String>, ServerResponseUnarySink<String>) -> grpc::Result<()>
+    H: Fn(
+            ServerHandlerContext,
+            ServerRequest<String>,
+            ServerResponseUnarySink<String>,
+        ) -> grpc::Result<()>
         + Sync
         + Send
         + 'static,
@@ -76,7 +94,14 @@ struct TesterUnary {
 impl TesterUnary {
     fn new<H>(handler: H) -> TesterUnary
     where
-        H: Fn(ServerHandlerContext, ServerRequestSingle<String>, ServerResponseUnarySink<String>) -> grpc::Result<()> + Sync + Send + 'static,
+        H: Fn(
+                ServerHandlerContext,
+                ServerRequestSingle<String>,
+                ServerResponseUnarySink<String>,
+            ) -> grpc::Result<()>
+            + Sync
+            + Send
+            + 'static,
     {
         let server = new_server_unary("/text", "/Unary", handler);
         let port = server.local_addr().port().expect("port");
@@ -93,7 +118,8 @@ impl TesterUnary {
                 RequestOptions::new(),
                 param.to_owned(),
                 string_string_method(&self.name, GrpcStreaming::Unary),
-            ).drop_metadata()
+            )
+            .drop_metadata()
     }
 
     fn call_expect_error<F: FnOnce(&Error) -> bool>(&self, param: &str, expect: F) {
@@ -107,11 +133,7 @@ impl TesterUnary {
         self.call_expect_error(param, |e| match e {
             &Error::GrpcMessage(GrpcMessageError {
                 ref grpc_message, ..
-            })
-                if expect(&grpc_message) =>
-            {
-                true
-            }
+            }) if expect(&grpc_message) => true,
             _ => false,
         });
     }
@@ -131,7 +153,14 @@ struct TesterServerStreaming {
 impl TesterServerStreaming {
     fn new<H>(handler: H) -> Self
     where
-        H: Fn(ServerHandlerContext, ServerRequestSingle<String>, ServerResponseSink<String>) -> grpc::Result<()> + Sync + Send + 'static,
+        H: Fn(
+                ServerHandlerContext,
+                ServerRequestSingle<String>,
+                ServerResponseSink<String>,
+            ) -> grpc::Result<()>
+            + Sync
+            + Send
+            + 'static,
     {
         let server = new_server_server_streaming("/test", "/ServerStreaming", handler);
         let port = server.local_addr().port().expect("port");
@@ -148,7 +177,8 @@ impl TesterServerStreaming {
                 RequestOptions::new(),
                 param.to_owned(),
                 string_string_method(&self.name, GrpcStreaming::ServerStreaming),
-            ).drop_metadata()
+            )
+            .drop_metadata()
     }
 }
 
@@ -161,7 +191,11 @@ struct TesterClientStreaming {
 impl TesterClientStreaming {
     fn new<H>(handler: H) -> Self
     where
-        H: Fn(ServerHandlerContext, ServerRequest<String>, ServerResponseUnarySink<String>) -> grpc::Result<()>
+        H: Fn(
+                ServerHandlerContext,
+                ServerRequest<String>,
+                ServerResponseUnarySink<String>,
+            ) -> grpc::Result<()>
             + Sync
             + Send
             + 'static,
@@ -177,11 +211,12 @@ impl TesterClientStreaming {
 
     fn call(&self) -> (ClientRequestSink<String>, SingleResponse<String>) {
         self.client
-                .call_client_streaming(
-                    RequestOptions::new(),
-                    string_string_method(&self.name, GrpcStreaming::ClientStreaming),
-                )
-                .wait().unwrap()
+            .call_client_streaming(
+                RequestOptions::new(),
+                string_string_method(&self.name, GrpcStreaming::ClientStreaming),
+            )
+            .wait()
+            .unwrap()
     }
 }
 
@@ -198,9 +233,7 @@ fn unary() {
 fn error_in_handler() {
     init_logger();
 
-    let tester = TesterUnary::new(|_m, _req, _resp| {
-        Err(grpc::Error::Other("my error"))
-    });
+    let tester = TesterUnary::new(|_m, _req, _resp| Err(grpc::Error::Other("my error")));
 
     tester.call_expect_grpc_error_contain("aa", "grpc server handler did not close the sender");
 }
@@ -254,12 +287,15 @@ fn client_streaming() {
     let tester = TesterClientStreaming::new(move |m, req, resp| {
         let request_stream = req.into_stream();
         m.ctx.loop_remote().spawn(move |_handle| {
-            request_stream.fold(String::new(), |mut s, message| {
-                s.push_str(&message);
-                futures::finished::<_, Error>(s)
-            }).map(|r| {
-                resp.finish(r).unwrap();
-            }).map_err(|_| ())
+            request_stream
+                .fold(String::new(), |mut s, message| {
+                    s.push_str(&message);
+                    futures::finished::<_, Error>(s)
+                })
+                .map(|r| {
+                    resp.finish(r).unwrap();
+                })
+                .map_err(|_| ())
         });
         Ok(())
     });

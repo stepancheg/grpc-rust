@@ -7,5 +7,6 @@ fn main() {
         input: &["helloworld.proto"],
         rust_protobuf: true,
         ..Default::default()
-    }).expect("protoc-rust-grpc");
+    })
+    .expect("protoc-rust-grpc");
 }

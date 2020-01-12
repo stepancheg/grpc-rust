@@ -7,9 +7,8 @@ use futures_grpc::*;
 
 use error::Error;
 use iter::GrpcIterator;
-use result;
 use proto::metadata::Metadata;
-
+use result;
 
 /// Either stream item or trailing metadata.
 pub enum ItemOrMetadata<T: Send + 'static> {
@@ -71,7 +70,8 @@ impl<T: Send + 'static> GrpcStreamWithTrailingMetadata<T> {
             vec![
                 ItemOrMetadata::Item(item),
                 ItemOrMetadata::TrailingMetadata(metadata),
-            ].into_iter(),
+            ]
+            .into_iter(),
         ))
     }
 

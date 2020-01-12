@@ -8,18 +8,18 @@ use method::GrpcStreamingFlavor;
 use method::GrpcStreamingServerStreaming;
 use method::GrpcStreamingUnary;
 use method::MethodDescriptor;
+use or_static::arc::ArcOrStatic;
+use or_static::string::StringOrStatic;
 use result;
 use server::ctx::ServerHandlerContext;
 use server::req_handler::ServerRequest;
 use server::req_handler::ServerRequestUnaryHandler;
 use server::req_handler::ServerRequestUntyped;
+use server::req_single::ServerRequestSingle;
 use server::resp_sink::ServerResponseSink;
 use server::resp_sink_untyped::ServerResponseUntypedSink;
 use std::marker;
 use ServerResponseUnarySink;
-use server::req_single::ServerRequestSingle;
-use or_static::arc::ArcOrStatic;
-use or_static::string::StringOrStatic;
 
 pub trait MethodHandler<Req, Resp>
 where
@@ -87,7 +87,11 @@ impl<F> MethodHandlerUnary<F> {
     where
         Req: Send + 'static,
         Resp: Send + 'static,
-        F: Fn(ServerHandlerContext, ServerRequestSingle<Req>, ServerResponseUnarySink<Resp>) -> result::Result<()>
+        F: Fn(
+                ServerHandlerContext,
+                ServerRequestSingle<Req>,
+                ServerResponseUnarySink<Resp>,
+            ) -> result::Result<()>
             + Send
             + 'static,
     {
@@ -100,8 +104,11 @@ impl<F> MethodHandlerClientStreaming<F> {
     where
         Req: Send + 'static,
         Resp: Send + 'static,
-        F: Fn(ServerHandlerContext, ServerRequest<Req>, ServerResponseUnarySink<Resp>)
-                -> result::Result<()>
+        F: Fn(
+                ServerHandlerContext,
+                ServerRequest<Req>,
+                ServerResponseUnarySink<Resp>,
+            ) -> result::Result<()>
             + Send
             + 'static,
     {
@@ -114,7 +121,11 @@ impl<F> MethodHandlerServerStreaming<F> {
     where
         Req: Send + 'static,
         Resp: Send + 'static,
-        F: Fn(ServerHandlerContext, ServerRequestSingle<Req>, ServerResponseSink<Resp>) -> result::Result<()>
+        F: Fn(
+                ServerHandlerContext,
+                ServerRequestSingle<Req>,
+                ServerResponseSink<Resp>,
+            ) -> result::Result<()>
             + Send
             + 'static,
     {
@@ -127,8 +138,11 @@ impl<F> MethodHandlerBidi<F> {
     where
         Req: Send + 'static,
         Resp: Send + 'static,
-        F: Fn(ServerHandlerContext, ServerRequest<Req>, ServerResponseSink<Resp>)
-                -> result::Result<()>
+        F: Fn(
+                ServerHandlerContext,
+                ServerRequest<Req>,
+                ServerResponseSink<Resp>,
+            ) -> result::Result<()>
             + Send
             + 'static,
     {
@@ -140,7 +154,11 @@ impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerUnary<F>
 where
     Req: Send + 'static,
     Resp: Send + 'static,
-    F: Fn(ServerHandlerContext, ServerRequestSingle<Req>, ServerResponseUnarySink<Resp>) -> result::Result<()>
+    F: Fn(
+            ServerHandlerContext,
+            ServerRequestSingle<Req>,
+            ServerResponseUnarySink<Resp>,
+        ) -> result::Result<()>
         + Send
         + Sync
         + 'static,
@@ -155,8 +173,11 @@ where
         where
             Req: Send + 'static,
             Resp: Send + 'static,
-            F: Fn(ServerHandlerContext, ServerRequestSingle<Req>, ServerResponseUnarySink<Resp>)
-                    -> result::Result<()>
+            F: Fn(
+                    ServerHandlerContext,
+                    ServerRequestSingle<Req>,
+                    ServerResponseUnarySink<Resp>,
+                ) -> result::Result<()>
                 + Send
                 + Sync
                 + 'static,
@@ -171,8 +192,11 @@ where
         where
             Req: Send + 'static,
             Resp: Send + 'static,
-            F: Fn(ServerHandlerContext, ServerRequestSingle<Req>, ServerResponseUnarySink<Resp>)
-                    -> result::Result<()>
+            F: Fn(
+                    ServerHandlerContext,
+                    ServerRequestSingle<Req>,
+                    ServerResponseUnarySink<Resp>,
+                ) -> result::Result<()>
                 + Send
                 + Sync
                 + 'static,
@@ -185,10 +209,7 @@ where
                     _marker,
                 } = self.take().unwrap();
                 let metadata = ctx.metadata.clone();
-                let req = ServerRequestSingle {
-                    metadata,
-                    message,
-                };
+                let req = ServerRequestSingle { metadata, message };
                 let resp = ServerResponseUnarySink { sink: resp };
                 f(ctx, req, resp)
             }
@@ -209,8 +230,11 @@ impl<Req: Send + 'static, Resp: Send + 'static, F> MethodHandler<Req, Resp>
     for MethodHandlerClientStreaming<F>
 where
     Resp: Send + 'static,
-    F: Fn(ServerHandlerContext, ServerRequest<Req>, ServerResponseUnarySink<Resp>)
-            -> result::Result<()>
+    F: Fn(
+            ServerHandlerContext,
+            ServerRequest<Req>,
+            ServerResponseUnarySink<Resp>,
+        ) -> result::Result<()>
         + Send
         + Sync
         + 'static,
@@ -230,7 +254,11 @@ impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerServerStreaming<F>
 where
     Req: Send + 'static,
     Resp: Send + 'static,
-    F: Fn(ServerHandlerContext, ServerRequestSingle<Req>, ServerResponseSink<Resp>) -> result::Result<()>
+    F: Fn(
+            ServerHandlerContext,
+            ServerRequestSingle<Req>,
+            ServerResponseSink<Resp>,
+        ) -> result::Result<()>
         + Send
         + Sync
         + 'static,
@@ -245,8 +273,11 @@ where
         where
             Req: Send + 'static,
             Resp: Send + 'static,
-            F: Fn(ServerHandlerContext, ServerRequestSingle<Req>, ServerResponseSink<Resp>)
-                    -> result::Result<()>
+            F: Fn(
+                    ServerHandlerContext,
+                    ServerRequestSingle<Req>,
+                    ServerResponseSink<Resp>,
+                ) -> result::Result<()>
                 + Send
                 + Sync
                 + 'static,
@@ -261,8 +292,11 @@ where
         where
             Req: Send + 'static,
             Resp: Send + 'static,
-            F: Fn(ServerHandlerContext, ServerRequestSingle<Req>, ServerResponseSink<Resp>)
-                    -> result::Result<()>
+            F: Fn(
+                    ServerHandlerContext,
+                    ServerRequestSingle<Req>,
+                    ServerResponseSink<Resp>,
+                ) -> result::Result<()>
                 + Send
                 + Sync
                 + 'static,
@@ -374,7 +408,10 @@ pub struct ServerMethod {
 }
 
 impl ServerMethod {
-    pub fn new<Req, Resp, H>(method: ArcOrStatic<MethodDescriptor<Req, Resp>>, handler: H) -> ServerMethod
+    pub fn new<Req, Resp, H>(
+        method: ArcOrStatic<MethodDescriptor<Req, Resp>>,
+        handler: H,
+    ) -> ServerMethod
     where
         Req: Send + 'static,
         Resp: Send + 'static,

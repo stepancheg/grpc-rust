@@ -2,6 +2,7 @@ use bytes::Bytes;
 use common::sink::SinkCommonUntyped;
 use common::sink::SinkUntyped;
 use futures::Poll;
+use httpbis::SenderState;
 use proto::grpc_status::GrpcStatus;
 use proto::headers::headers_200;
 use proto::headers::headers_500;
@@ -9,7 +10,6 @@ use proto::headers::trailers;
 use result;
 use server::types::ServerTypes;
 use Metadata;
-use httpbis::SenderState;
 
 pub(crate) struct ServerResponseUntypedSink {
     pub common: SinkCommonUntyped<ServerTypes>,

@@ -12,7 +12,6 @@ use httpbis::DataOrTrailers;
 use httpbis::HttpStreamAfterHeaders;
 use result;
 
-
 fn read_u32_be(bytes: &[u8]) -> u32 {
     0 | ((bytes[0] as u32) << 24)
         | ((bytes[1] as u32) << 16)

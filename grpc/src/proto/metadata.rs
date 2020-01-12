@@ -126,9 +126,6 @@ impl Metadata {
     }
 
     pub fn add(&mut self, key: MetadataKey, value: Bytes) {
-        self.entries.push(MetadataEntry {
-            key,
-            value,
-        });
+        self.entries.push(MetadataEntry { key, value });
     }
 }
