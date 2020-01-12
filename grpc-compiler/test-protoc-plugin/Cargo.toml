@@ -14,3 +14,5 @@ futures-cpupool = "0.1.*"
 [lib]
 test = false
 doctest = false
+
+[workspace]
