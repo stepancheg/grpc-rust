@@ -14,8 +14,8 @@ doctest = false
 test = false
 
 [dependencies]
-protoc        = "2"
-protoc-rust   = "2"
-protobuf      = "2"
+protoc        = { version = ">=2.8.0, <2.10.0" }
+protoc-rust   = { version = ">=2.8.0, <2.10.0" }
+protobuf      = { version = ">=2.8.0, <2.10.0" }
 grpc-compiler = { path = "../grpc-compiler", version = "=0.6.1" }
 tempdir       = "0.3"

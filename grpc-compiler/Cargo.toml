@@ -6,8 +6,8 @@ license = "MIT/Apache-2.0"
 authors = ["Stepan Koltsov <stepan.koltsov@gmail.com>"]
 
 [dependencies]
-protobuf = "2"
-protobuf-codegen = "2"
+protobuf         = { version = ">=2.8.0, <2.10.0" }
+protobuf-codegen = { version = ">=2.8.0, <2.10.0" }
 
 [[bin]]
 

@@ -12,7 +12,7 @@ test = false
 path = "../grpc"
 
 [dependencies]
-protobuf        = "2"
+protobuf        = { version = ">=2.8.0, <2.10.0" }
 futures         = "0.1.*"
 futures-cpupool = "0.1.*"
 tls-api            = "0.1.*"
