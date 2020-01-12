@@ -11,7 +11,7 @@ ci/install-protobuf.sh
 cargo test --all --all-targets
 
 (
-    cargo install protobuf-codegen --version '2'
+    cargo install protobuf-codegen --version '2.8.2'
 
     cd grpc-compiler/test-protoc-plugin
 
