@@ -1,7 +1,5 @@
 extern crate futures;
 extern crate grpc;
-extern crate tokio_core;
-extern crate tokio_tls_api;
 #[macro_use]
 extern crate log;
 extern crate log_ndc_env_logger;
@@ -10,12 +8,13 @@ mod test_misc;
 
 use std::sync::Arc;
 
-use futures::future::*;
-use futures::stream::Stream;
+use futures::stream::StreamExt;
 
 use grpc::rt::*;
 use grpc::*;
 
+use futures::executor;
+use futures::{future, TryFutureExt, TryStreamExt};
 use std::thread;
 use test_misc::*;
 
@@ -123,7 +122,7 @@ impl TesterUnary {
     }
 
     fn call_expect_error<F: FnOnce(&Error) -> bool>(&self, param: &str, expect: F) {
-        match self.call(param).wait() {
+        match executor::block_on(self.call(param)) {
             Ok(r) => panic!("expecting error, got: {:?}", r),
             Err(e) => assert!(expect(&e), "wrong error: {:?}", e),
         }
@@ -210,13 +209,11 @@ impl TesterClientStreaming {
     }
 
     fn call(&self) -> (ClientRequestSink<String>, SingleResponse<String>) {
-        self.client
-            .call_client_streaming(
-                RequestOptions::new(),
-                string_string_method(&self.name, GrpcStreaming::ClientStreaming),
-            )
-            .wait()
-            .unwrap()
+        executor::block_on(self.client.call_client_streaming(
+            RequestOptions::new(),
+            string_string_method(&self.name, GrpcStreaming::ClientStreaming),
+        ))
+        .unwrap()
     }
 }
 
@@ -226,7 +223,7 @@ fn unary() {
 
     let tester = TesterUnary::new(|_m, req, resp| resp.finish(req.message));
 
-    assert_eq!("aa", tester.call("aa").wait().unwrap());
+    assert_eq!("aa", executor::block_on(tester.call("aa")).unwrap());
 }
 
 #[test]
@@ -269,15 +266,15 @@ fn server_streaming() {
         Ok(())
     });
 
-    let mut rs = tester.call("x").wait();
+    let mut rs = tester.call("x");
 
     test_sync.take(0);
-    assert_eq!("x0", rs.next().unwrap().unwrap());
+    assert_eq!("x0", executor::block_on(rs.next()).unwrap().unwrap());
     test_sync.take(2);
-    assert_eq!("x1", rs.next().unwrap().unwrap());
+    assert_eq!("x1", executor::block_on(rs.next()).unwrap().unwrap());
     test_sync.take(4);
-    assert_eq!("x2", rs.next().unwrap().unwrap());
-    assert!(rs.next().is_none());
+    assert_eq!("x2", executor::block_on(rs.next()).unwrap().unwrap());
+    assert!(executor::block_on(rs.next()).is_none());
 }
 
 #[test]
@@ -286,17 +283,17 @@ fn client_streaming() {
 
     let tester = TesterClientStreaming::new(move |m, req, resp| {
         let request_stream = req.into_stream();
-        m.ctx.loop_remote().spawn(move |_handle| {
+        m.ctx.loop_remote().spawn(
             request_stream
-                .fold(String::new(), |mut s, message| {
+                .try_fold(String::new(), |mut s, message| {
                     s.push_str(&message);
-                    futures::finished::<_, Error>(s)
+                    future::ok::<_, Error>(s)
                 })
-                .map(|r| {
+                .map_ok(|r| {
                     resp.finish(r).unwrap();
                 })
-                .map_err(|_| ())
-        });
+                .map_err(|_| ()),
+        );
         Ok(())
     });
 
@@ -306,5 +303,8 @@ fn client_streaming() {
     tx.send_data("cc".to_owned()).expect("cc");
     tx.finish().expect("finish");
 
-    assert_eq!("aabbcc", result.wait().unwrap().1);
+    assert_eq!(
+        "aabbcc",
+        executor::block_on(result.drop_metadata()).unwrap()
+    );
 }

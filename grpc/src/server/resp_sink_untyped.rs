@@ -1,23 +1,25 @@
+use crate::common::sink::SinkCommonUntyped;
+use crate::common::sink::SinkUntyped;
 use bytes::Bytes;
-use common::sink::SinkCommonUntyped;
-use common::sink::SinkUntyped;
-use futures::Poll;
+
+use crate::proto::grpc_status::GrpcStatus;
+use crate::proto::headers::headers_200;
+use crate::proto::headers::headers_500;
+use crate::proto::headers::trailers;
+use crate::result;
+use crate::server::types::ServerTypes;
+use crate::Metadata;
+use futures::task::Context;
 use httpbis::SenderState;
-use proto::grpc_status::GrpcStatus;
-use proto::headers::headers_200;
-use proto::headers::headers_500;
-use proto::headers::trailers;
-use result;
-use server::types::ServerTypes;
-use Metadata;
+use std::task::Poll;
 
 pub(crate) struct ServerResponseUntypedSink {
     pub common: SinkCommonUntyped<ServerTypes>,
 }
 
 impl SinkUntyped for ServerResponseUntypedSink {
-    fn poll(&mut self) -> Poll<(), httpbis::StreamDead> {
-        self.common.http.poll()
+    fn poll(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), httpbis::StreamDead>> {
+        self.common.http.poll(cx)
     }
 
     fn send_data(&mut self, message: Bytes) -> result::Result<()> {

@@ -1,5 +1,5 @@
 use std::result;
 
-use error::*;
+use crate::error::*;
 
 pub type Result<T> = result::Result<T, Error>;

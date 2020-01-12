@@ -1,37 +1,44 @@
 use bytes::Bytes;
-use error;
-use futures::sync::mpsc;
+
+use crate::marshall::Marshaller;
+use crate::or_static::arc::ArcOrStatic;
+use crate::proto::grpc_frame::parse_grpc_frame_from_bytes;
+use crate::result;
+use crate::server::req_handler_unary::RequestHandlerUnaryToStream;
+use crate::server::req_stream::ServerRequestStreamSenderHandler;
 use httpbis::Headers;
 use httpbis::ServerIncreaseInWindow;
-use marshall::Marshaller;
-use or_static::arc::ArcOrStatic;
-use proto::grpc_frame::parse_grpc_frame_from_bytes;
-use result;
-use server::req_handler_unary::RequestHandlerUnaryToStream;
-use server::req_stream::ServerRequestStreamSenderHandler;
-use std::marker;
-use Metadata;
-use ServerRequestStream;
 
-pub(crate) trait ServerRequestStreamHandlerUntyped: 'static {
+use std::marker;
+
+use futures::channel::mpsc;
+
+use crate::bytesx::bytes_extend;
+use crate::Metadata;
+use crate::ServerRequestStream;
+
+pub(crate) trait ServerRequestStreamHandlerUntyped: Send + 'static {
     fn grpc_message(&mut self, message: Bytes, frame_size: u32) -> result::Result<()>;
     fn end_stream(&mut self) -> result::Result<()>;
-    fn error(&mut self, error: error::Error) -> result::Result<()>;
+    fn error(&mut self, error: crate::Error) -> result::Result<()>;
     fn buffer_processed(&mut self, buffered: usize) -> result::Result<()>;
 }
 
-pub trait ServerRequestStreamHandler<M>: 'static {
+pub trait ServerRequestStreamHandler<M>: Send + 'static {
     fn grpc_message(&mut self, message: M, frame_size: u32) -> result::Result<()>;
     fn end_stream(&mut self) -> result::Result<()>;
-    fn error(&mut self, error: error::Error) -> result::Result<()> {
+    fn error(&mut self, error: crate::Error) -> result::Result<()> {
         Err(error)
     }
     fn buffer_processed(&mut self, buffered: usize) -> result::Result<()>;
 }
 
-pub trait ServerRequestUnaryHandler<M>: 'static {
+pub trait ServerRequestUnaryHandler<M>: Send + 'static
+where
+    M: Send,
+{
     fn grpc_message(&mut self, message: M) -> result::Result<()>;
-    fn error(&mut self, error: error::Error) -> result::Result<()> {
+    fn error(&mut self, error: crate::Error) -> result::Result<()> {
         Err(error)
     }
 }
@@ -58,7 +65,7 @@ impl<H: ServerRequestStreamHandlerUntyped> ServerStreamStreamHandlerUntypedHandl
 
     fn end_stream(&mut self) -> result::Result<()> {
         if !self.buf.is_empty() {
-            return Err(error::Error::Other("not complete frames").into());
+            return Err(crate::Error::Other("not complete frames").into());
         }
 
         self.handler.end_stream()?;
@@ -73,7 +80,7 @@ impl<H: ServerRequestStreamHandlerUntyped> httpbis::ServerStreamHandler
         if self.buf.is_empty() {
             self.buf = data;
         } else {
-            self.buf.extend_from_slice(&data);
+            bytes_extend(&mut self.buf, data);
         }
 
         self.process_buf()?;
@@ -114,7 +121,7 @@ impl<H: ServerRequestStreamHandlerUntyped> httpbis::ServerStreamHandler
 
 struct ServerRequestStreamHandlerHandler<M: 'static, H: ServerRequestStreamHandler<M>> {
     handler: H,
-    marshaller: ArcOrStatic<Marshaller<M>>,
+    marshaller: ArcOrStatic<dyn Marshaller<M>>,
 }
 
 impl<M, H: ServerRequestStreamHandler<M>> ServerRequestStreamHandlerUntyped
@@ -129,7 +136,7 @@ impl<M, H: ServerRequestStreamHandler<M>> ServerRequestStreamHandlerUntyped
         self.handler.end_stream()
     }
 
-    fn error(&mut self, error: error::Error) -> result::Result<()> {
+    fn error(&mut self, error: crate::Error) -> result::Result<()> {
         self.handler.error(error)
     }
 
@@ -163,7 +170,7 @@ impl<'a> ServerRequestUntyped<'a> {
 
 pub struct ServerRequest<'a, M: 'static> {
     pub(crate) req: ServerRequestUntyped<'a>,
-    pub(crate) marshaller: ArcOrStatic<Marshaller<M>>,
+    pub(crate) marshaller: ArcOrStatic<dyn Marshaller<M>>,
 }
 
 impl<'a, M: Send + 'static> ServerRequest<'a, M> {

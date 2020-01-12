@@ -8,6 +8,7 @@ use grpc::ClientStub;
 use grpc_examples_greeter::helloworld::*;
 use grpc_examples_greeter::helloworld_grpc::*;
 
+use futures::executor;
 use std::env;
 use std::sync::Arc;
 
@@ -28,6 +29,6 @@ fn main() {
     let resp = greeter_client.say_hello(grpc::RequestOptions::new(), req);
     let resp2 = greeter_client2.say_hello(grpc::RequestOptions::new(), req2);
 
-    println!("{:?}", resp.wait());
-    println!("{:?}", resp2.wait());
+    println!("{:?}", executor::block_on(resp.join_metadata_result()));
+    println!("{:?}", executor::block_on(resp2.join_metadata_result()));
 }

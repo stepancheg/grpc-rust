@@ -5,30 +5,31 @@ pub(crate) mod req_sink;
 pub(crate) mod types;
 
 use bytes::Bytes;
-use tokio_core::reactor::Remote;
 
-use httpbis;
 use httpbis::ClientTlsOption;
 use httpbis::Header;
 use httpbis::Headers;
 use httpbis::HttpScheme;
 
-use tls_api;
+use crate::method::MethodDescriptor;
 
-use method::MethodDescriptor;
+use crate::result;
 
-use result;
-
-use client::http_request_to_grpc_frames_typed::http_req_to_grpc_frames_typed;
-use client::http_response_to_grpc_frames_typed::http_response_to_grpc_frames_typed;
-use client::req_sink::ClientRequestSink;
-use error;
+use crate::client::http_request_to_grpc_frames_typed::http_req_to_grpc_frames_typed;
+use crate::client::http_response_to_grpc_frames_typed::http_response_to_grpc_frames_typed;
+use crate::client::req_sink::ClientRequestSink;
+use crate::error;
 use futures::future;
-use futures::Future;
-use or_static::arc::ArcOrStatic;
-use proto::grpc_frame::write_grpc_frame_to_vec;
-use req::*;
-use resp::*;
+
+use futures::future::TryFutureExt;
+
+use crate::or_static::arc::ArcOrStatic;
+use crate::proto::grpc_frame::write_grpc_frame_to_vec;
+use crate::req::*;
+use crate::resp::*;
+use std::future::Future;
+use std::pin::Pin;
+use tokio::runtime::Handle;
 
 #[derive(Default, Debug, Clone)]
 pub struct ClientConf {
@@ -55,13 +56,13 @@ enum Tls<T: tls_api::TlsConnector> {
 pub struct ClientBuilder<'a, T: tls_api::TlsConnector> {
     client_type: ClientBuilderType<'a>,
     http_scheme: HttpScheme,
-    event_loop: Option<Remote>,
+    event_loop: Option<Handle>,
     pub conf: ClientConf,
     tls: Tls<T>,
 }
 
 impl<'a, T: tls_api::TlsConnector> ClientBuilder<'a, T> {
-    pub fn with_event_loop(mut self, event_loop: Remote) -> Self {
+    pub fn with_event_loop(mut self, event_loop: Handle) -> Self {
         self.event_loop = Some(event_loop);
         self
     }
@@ -171,9 +172,11 @@ impl Client {
         options: RequestOptions,
         req: Option<Req>,
         method: ArcOrStatic<MethodDescriptor<Req, Resp>>,
-    ) -> Box<
-        Future<Item = (ClientRequestSink<Req>, StreamingResponse<Resp>), Error = error::Error>
-            + Send,
+    ) -> Pin<
+        Box<
+            dyn Future<Output = crate::Result<(ClientRequestSink<Req>, StreamingResponse<Resp>)>>
+                + Send,
+        >,
     >
     where
         Req: Send + 'static,
@@ -215,7 +218,7 @@ impl Client {
                     // TODO: extra allocation
                     Some(Bytes::from(write_grpc_frame_to_vec(&bytes)))
                 }
-                Err(e) => return Box::new(future::err(e)),
+                Err(e) => return Box::pin(future::err(e)),
             },
             None => None,
         };
@@ -240,7 +243,7 @@ impl Client {
         let req_marshaller = method.req_marshaller.clone();
         let resp_marshaller = method.resp_marshaller.clone();
 
-        Box::new(http_future.map(move |(req, resp)| {
+        Box::pin(http_future.map_ok(move |(req, resp)| {
             let grpc_req = http_req_to_grpc_frames_typed(req, req_marshaller);
             let grpc_resp = http_response_to_grpc_frames_typed(resp, resp_marshaller);
             (grpc_req, grpc_resp)
@@ -281,31 +284,32 @@ impl Client {
         Req: Send + 'static,
         Resp: Send + 'static,
     {
-        StreamingResponse::new(
-            self.call_impl(o, Some(req), method)
-                .map(|(_req, resp)| resp.0)
-                .flatten(),
-        )
+        let f = self.call_impl(o, Some(req), method);
+        StreamingResponse::new(async move {
+            let (_req, resp) = f.await?;
+            resp.0.await
+        })
     }
 
     pub fn call_client_streaming<Req, Resp>(
         &self,
         o: RequestOptions,
         method: ArcOrStatic<MethodDescriptor<Req, Resp>>,
-    ) -> impl Future<Item = (ClientRequestSink<Req>, SingleResponse<Resp>), Error = error::Error>
+    ) -> impl Future<Output = crate::Result<(ClientRequestSink<Req>, SingleResponse<Resp>)>>
     where
         Req: Send + 'static,
         Resp: Send + 'static,
     {
-        self.call_impl(o, None, method)
-            .map(|(req, resp)| (req, resp.single()))
+        TryFutureExt::map_ok(self.call_impl(o, None, method), |(req, resp)| {
+            (req, resp.single())
+        })
     }
 
     pub fn call_bidi<Req, Resp>(
         &self,
         o: RequestOptions,
         method: ArcOrStatic<MethodDescriptor<Req, Resp>>,
-    ) -> impl Future<Item = (ClientRequestSink<Req>, StreamingResponse<Resp>), Error = error::Error>
+    ) -> impl Future<Output = crate::Result<(ClientRequestSink<Req>, StreamingResponse<Resp>)>>
     where
         Req: Send + 'static,
         Resp: Send + 'static,
@@ -315,6 +319,6 @@ impl Client {
 }
 
 fn _assert_types() {
-    ::assert_types::assert_send::<Client>();
-    ::assert_types::assert_sync::<Client>();
+    crate::assert_types::assert_send::<Client>();
+    crate::assert_types::assert_sync::<Client>();
 }

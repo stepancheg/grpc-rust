@@ -1,15 +1,17 @@
+use crate::client::types::ClientTypes;
+use crate::common::http_sink::HttpSink;
+use crate::common::types::Types;
+use crate::error;
 use bytes::Bytes;
-use client::types::ClientTypes;
-use common::http_sink::HttpSink;
-use common::types::Types;
-use error;
-use futures::Poll;
+
+use crate::marshall::Marshaller;
+use crate::or_static::arc::ArcOrStatic;
+use crate::proto::grpc_frame::write_grpc_frame_to_vec;
+use crate::result;
+use crate::server::types::ServerTypes;
+use futures::task::Context;
 use httpbis;
-use marshall::Marshaller;
-use or_static::arc::ArcOrStatic;
-use proto::grpc_frame::write_grpc_frame_to_vec;
-use result;
-use server::types::ServerTypes;
+use std::task::Poll;
 
 pub enum SendError {
     Http(httpbis::SendError),
@@ -23,7 +25,7 @@ impl From<httpbis::SendError> for SendError {
 }
 
 pub(crate) trait SinkUntyped {
-    fn poll(&mut self) -> Poll<(), httpbis::StreamDead>;
+    fn poll(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), httpbis::StreamDead>>;
     fn send_data(&mut self, message: Bytes) -> result::Result<()>;
 }
 
@@ -41,13 +43,13 @@ impl<T: Types> SinkCommonUntyped<T> {
 }
 
 pub(crate) struct SinkCommon<M: 'static, T: Types> {
-    pub marshaller: ArcOrStatic<Marshaller<M>>,
+    pub marshaller: ArcOrStatic<dyn Marshaller<M>>,
     pub sink: T::SinkUntyped,
 }
 
 impl<M: 'static, T: Types> SinkCommon<M, T> {
-    pub fn poll(&mut self) -> Poll<(), httpbis::StreamDead> {
-        self.sink.poll()
+    pub fn poll(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), httpbis::StreamDead>> {
+        self.sink.poll(cx)
     }
 
     pub fn send_data(&mut self, message: M) -> result::Result<()> {
@@ -59,6 +61,6 @@ impl<M: 'static, T: Types> SinkCommon<M, T> {
 }
 
 fn _assert_types() {
-    ::assert_types::assert_send::<SinkCommon<String, ClientTypes>>();
-    ::assert_types::assert_send::<SinkCommon<String, ServerTypes>>();
+    crate::assert_types::assert_send::<SinkCommon<String, ClientTypes>>();
+    crate::assert_types::assert_send::<SinkCommon<String, ServerTypes>>();
 }

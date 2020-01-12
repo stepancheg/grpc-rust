@@ -1,5 +1,5 @@
+use crate::Metadata;
 use std::mem;
-use Metadata;
 
 pub struct ServerRequestSingle<Req> {
     pub metadata: Metadata,

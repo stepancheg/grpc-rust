@@ -11,8 +11,8 @@ use grpc::prelude::*;
 use protobuf::Message;
 use rand::prelude::*;
 
-use futures::future::Future;
-use futures::stream::Stream;
+use futures::executor;
+use futures::stream::StreamExt;
 use grpc::ClientConf;
 use grpc_examples_route_guide::route_guide::Point;
 use grpc_examples_route_guide::route_guide::Rectangle;
@@ -28,11 +28,12 @@ fn print_feature(client: &RouteGuideClient, point: Point) {
         "Getting feature for point ({}, {})",
         point.latitude, point.longitude
     );
-    let feature = client
-        .get_feature(grpc::RequestOptions::new(), point)
-        .drop_metadata() // Drop response metadata
-        .wait()
-        .expect("get_feature");
+    let feature = executor::block_on(
+        client
+            .get_feature(grpc::RequestOptions::new(), point)
+            .drop_metadata(),
+    ) // Drop response metadata
+    .expect("get_feature");
     println!("feature: {:?}", feature);
 }
 
@@ -41,10 +42,8 @@ fn print_features(client: &RouteGuideClient, rect: Rectangle) {
     println!("Looking for features within {:?}", rect);
     let resp = client.list_features(grpc::RequestOptions::new(), rect);
     // Stream of features
-    let stream = resp.drop_metadata();
-    // Convert stream into sync iterator
-    let iter = stream.wait();
-    for feature in iter {
+    let mut stream = resp.drop_metadata();
+    while let Some(feature) = executor::block_on(stream.next()) {
         let feature = feature.expect("feature");
         println!("{:?}", feature);
     }
@@ -66,20 +65,18 @@ fn run_record_route(client: &RouteGuideClient) {
 
     println!("Traversing {} points.", point_count);
 
-    let (mut req, resp) = client
-        .record_route(grpc::RequestOptions::new())
-        .wait()
-        .unwrap();
+    let (mut req, resp) =
+        executor::block_on(client.record_route(grpc::RequestOptions::new())).unwrap();
 
     for _ in 0..point_count {
         let point = random_point();
-        req.block_wait().expect("block_wait");
+        executor::block_on(req.wait()).expect("block_wait");
         req.send_data(point).expect("send_data");
     }
 
     req.finish().unwrap();
 
-    let reply = resp.drop_metadata().wait().expect("resp");
+    let reply = executor::block_on(resp.drop_metadata()).expect("resp");
     println!("Route summary: {:?}", reply);
 }
 
@@ -105,21 +102,19 @@ fn run_route_chat(client: &RouteGuideClient) {
         new_note(0, 3, "Sixth message"),
     ];
 
-    let (mut req, resp) = client
-        .route_chat(grpc::RequestOptions::new())
-        .wait()
-        .unwrap();
+    let (mut req, resp) =
+        executor::block_on(client.route_chat(grpc::RequestOptions::new())).unwrap();
 
     let sender_thread = thread::spawn(move || {
         for note in notes {
-            req.block_wait().unwrap();
+            executor::block_on(req.wait()).unwrap();
             req.send_data(note).expect("send");
         }
         req.finish().expect("finish");
     });
 
-    let responses = resp.drop_metadata().wait();
-    for message in responses {
+    let mut responses = resp.drop_metadata();
+    while let Some(message) = executor::block_on(responses.next()) {
         let message = message.expect("message");
         let location = message
             .location

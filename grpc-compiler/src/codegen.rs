@@ -266,7 +266,7 @@ impl<'a> MethodGen<'a> {
         let return_type = match self.proto.get_client_streaming() {
             false => resp_type,
             true => format!(
-                "impl ::futures::future::Future<Item=(::grpc::ClientRequestSink<{}>, {}), Error=::grpc::Error>",
+                "impl ::std::future::Future<Output=::grpc::Result<(::grpc::ClientRequestSink<{}>, {})>>",
                 self.input_message(),
                 resp_type
             ),

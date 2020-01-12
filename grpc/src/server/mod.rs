@@ -18,16 +18,16 @@ use result::Result;
 use tls_api;
 use tls_api_stub;
 
-use common::sink::SinkCommonUntyped;
+use crate::common::sink::SinkCommonUntyped;
+use crate::proto::grpc_status::GrpcStatus;
+use crate::proto::headers::grpc_error_message;
+use crate::result;
+use crate::server::ctx::ServerHandlerContext;
+use crate::server::method::ServerMethod;
+use crate::server::req_handler::ServerRequestUntyped;
+use crate::server::resp_sink_untyped::ServerResponseUntypedSink;
+use crate::Metadata;
 use httpbis::AnySocketAddr;
-use proto::grpc_status::GrpcStatus;
-use proto::headers::grpc_error_message;
-use result;
-use server::ctx::ServerHandlerContext;
-use server::method::ServerMethod;
-use server::req_handler::ServerRequestUntyped;
-use server::resp_sink_untyped::ServerResponseUntypedSink;
-use Metadata;
 
 pub struct ServerServiceDefinition {
     pub prefix: String,

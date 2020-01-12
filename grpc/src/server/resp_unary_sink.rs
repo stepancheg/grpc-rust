@@ -1,7 +1,7 @@
-use result;
-use server::resp_sink::ServerResponseSink;
-use GrpcStatus;
-use Metadata;
+use crate::result;
+use crate::server::resp_sink::ServerResponseSink;
+use crate::GrpcStatus;
+use crate::Metadata;
 
 pub struct ServerResponseUnarySink<Resp: Send + 'static> {
     pub(crate) sink: ServerResponseSink<Resp>,

@@ -9,8 +9,8 @@ extern crate long_tests;
 use long_tests::long_tests_pb::*;
 use long_tests::long_tests_pb_grpc::*;
 
-use futures::Async;
 use grpc::*;
+use std::task::Poll;
 
 struct LongTestsServerImpl {}
 
@@ -58,13 +58,13 @@ impl LongTests for LongTestsServerImpl {
         mut resp: ServerResponseSink<RandomStringsResponse>,
     ) -> grpc::Result<()> {
         let mut rem = req.message.count;
-        c.spawn_poll_fn(move || loop {
-            if let Async::NotReady = resp.poll()? {
-                return Ok(Async::NotReady);
+        c.spawn_poll_fn(move |cx| loop {
+            if let Poll::Pending = resp.poll(cx)? {
+                return Poll::Pending;
             }
             if rem == 0 {
                 resp.send_trailers(Metadata::new())?;
-                return Ok(Async::Ready(()));
+                return Poll::Ready(Ok(()));
             }
             let s = "aabb".to_owned();
             let mut m = RandomStringsResponse::new();

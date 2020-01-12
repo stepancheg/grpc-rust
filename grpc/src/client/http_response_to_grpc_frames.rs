@@ -1,31 +1,32 @@
 ///! Convert HTTP response stream to gRPC stream
 use std::collections::VecDeque;
 
-use futures::future::Future;
-use futures::stream;
+use futures::future::TryFutureExt;
+use futures::prelude::*;
 use futures::stream::Stream;
-use futures::Async;
-use futures::Poll;
 
-use httpbis;
 use httpbis::Headers;
 
 use bytes::Bytes;
 
-use result;
+use crate::result;
 
-use error::Error;
-use error::GrpcMessageError;
+use crate::error::Error;
+use crate::error::GrpcMessageError;
 
+use crate::bytesx::bytes_extend;
+use crate::proto::grpc_frame::parse_grpc_frames_from_bytes;
+use crate::proto::grpc_status::GrpcStatus;
+use crate::proto::headers::HEADER_GRPC_MESSAGE;
+use crate::proto::headers::HEADER_GRPC_STATUS;
+use crate::proto::metadata::Metadata;
+use crate::resp::*;
+use crate::stream_item::*;
+use futures::task::Context;
 use httpbis::DataOrTrailers;
 use httpbis::HttpStreamAfterHeaders;
-use proto::grpc_frame::parse_grpc_frames_from_bytes;
-use proto::grpc_status::GrpcStatus;
-use proto::headers::HEADER_GRPC_MESSAGE;
-use proto::headers::HEADER_GRPC_STATUS;
-use proto::metadata::Metadata;
-use resp::*;
-use stream_item::*;
+use std::pin::Pin;
+use std::task::Poll;
 
 fn init_headers_to_metadata(headers: Headers) -> result::Result<Metadata> {
     if headers.get_opt(":status") != Some("200") {
@@ -50,26 +51,22 @@ fn init_headers_to_metadata(headers: Headers) -> result::Result<Metadata> {
 }
 
 pub fn http_response_to_grpc_frames(response: httpbis::Response) -> StreamingResponse<Bytes> {
-    StreamingResponse::new(
-        response
-            .0
-            .map_err(|e| Error::from(e))
-            .and_then(|(headers, rem)| {
-                let metadata = init_headers_to_metadata(headers)?;
-                let frames: GrpcStreamWithTrailingMetadata<Bytes> =
-                    GrpcStreamWithTrailingMetadata::new(
-                        GrpcFrameFromHttpFramesStreamResponse::new(rem),
-                    );
-                Ok((metadata, frames))
-            }),
-    )
+    StreamingResponse::new(response.0.map_err(|e| crate::Error::from(e)).and_then(
+        |(headers, rem)| async {
+            let metadata = init_headers_to_metadata(headers)?;
+            let frames: GrpcStreamWithTrailingMetadata<Bytes> = GrpcStreamWithTrailingMetadata::new(
+                GrpcFrameFromHttpFramesStreamResponse::new(rem),
+            );
+            Ok((metadata, frames))
+        },
+    ))
 }
 
 struct GrpcFrameFromHttpFramesStreamResponse {
     http_stream_stream: HttpStreamAfterHeaders,
     buf: Bytes,
     parsed_frames: VecDeque<Bytes>,
-    error: Option<stream::Once<ItemOrMetadata<Bytes>, Error>>,
+    error: Option<stream::Once<future::Ready<crate::Result<ItemOrMetadata<Bytes>>>>>,
 }
 
 impl GrpcFrameFromHttpFramesStreamResponse {
@@ -84,38 +81,38 @@ impl GrpcFrameFromHttpFramesStreamResponse {
 }
 
 impl Stream for GrpcFrameFromHttpFramesStreamResponse {
-    type Item = ItemOrMetadata<Bytes>;
-    type Error = Error;
+    type Item = crate::Result<ItemOrMetadata<Bytes>>;
 
-    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         loop {
             if let Some(ref mut error) = self.error {
-                return error.poll();
+                return unsafe { Pin::new_unchecked(error) }.poll_next(cx);
             }
 
-            self.parsed_frames
-                .extend(match parse_grpc_frames_from_bytes(&mut self.buf) {
-                    Ok(r) => r,
-                    Err(e) => {
-                        self.error = Some(stream::once(Err(e)));
-                        continue;
-                    }
-                });
+            let p_r = parse_grpc_frames_from_bytes(&mut self.buf);
+            self.parsed_frames.extend(match p_r {
+                Ok(r) => r,
+                Err(e) => {
+                    self.error = Some(stream::once(future::err(e)));
+                    continue;
+                }
+            });
 
             if let Some(frame) = self.parsed_frames.pop_front() {
-                return Ok(Async::Ready(Some(ItemOrMetadata::Item(frame))));
+                return Poll::Ready(Some(Ok(ItemOrMetadata::Item(frame))));
             }
 
-            let part_opt = match self.http_stream_stream.poll()? {
-                Async::NotReady => return Ok(Async::NotReady),
-                Async::Ready(part_opt) => part_opt,
-            };
+            let part_opt =
+                match unsafe { Pin::new_unchecked(&mut self.http_stream_stream) }.poll_next(cx)? {
+                    Poll::Pending => return Poll::Pending,
+                    Poll::Ready(part_opt) => part_opt,
+                };
             let part = match part_opt {
                 None => {
                     if self.buf.is_empty() {
-                        return Ok(Async::Ready(None));
+                        return Poll::Ready(None);
                     } else {
-                        self.error = Some(stream::once(Err(Error::Other("partial frame"))));
+                        self.error = Some(stream::once(future::err(Error::Other("partial frame"))));
                         continue;
                     }
                 }
@@ -125,15 +122,15 @@ impl Stream for GrpcFrameFromHttpFramesStreamResponse {
             match part {
                 DataOrTrailers::Trailers(headers) => {
                     if !self.buf.is_empty() {
-                        self.error = Some(stream::once(Err(Error::Other("partial frame"))));
+                        self.error = Some(stream::once(future::err(Error::Other("partial frame"))));
                     } else {
                         let grpc_status = headers.get_opt_parse(HEADER_GRPC_STATUS);
                         if grpc_status == Some(GrpcStatus::Ok as i32) {
-                            return Ok(Async::Ready(Some(ItemOrMetadata::TrailingMetadata(
+                            return Poll::Ready(Some(Ok(ItemOrMetadata::TrailingMetadata(
                                 Metadata::from_headers(headers)?,
                             ))));
                         } else {
-                            self.error = Some(stream::once(Err(
+                            self.error = Some(stream::once(future::err(
                                 if let Some(message) = headers.get_opt(HEADER_GRPC_MESSAGE) {
                                     Error::GrpcMessage(GrpcMessageError {
                                         grpc_status: grpc_status
@@ -149,7 +146,7 @@ impl Stream for GrpcFrameFromHttpFramesStreamResponse {
                     continue;
                 }
                 DataOrTrailers::Data(data, ..) => {
-                    self.buf.extend_from_slice(&data);
+                    bytes_extend(&mut self.buf, data);
                 }
             }
         }

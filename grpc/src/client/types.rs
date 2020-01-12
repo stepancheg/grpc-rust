@@ -1,5 +1,5 @@
-use client::req_sink::ClientRequestSinkUntyped;
-use common::types::Types;
+use crate::client::req_sink::ClientRequestSinkUntyped;
+use crate::common::types::Types;
 
 pub(crate) struct ClientTypes;
 

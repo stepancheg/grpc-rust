@@ -5,11 +5,10 @@ authors = ["Stepan Koltsov <stepan.koltsov@gmail.com>"]
 publish = false
 
 [dependencies]
-tls-api         = "0.2.*"
+tls-api         = "0.3.*"
 protobuf        = "2"
 grpc            = { path = "../../grpc" }
 grpc-protobuf   = { path = "../../grpc-protobuf" }
-futures-cpupool = "0.1.*"
 
 [lib]
 test = false

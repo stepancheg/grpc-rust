@@ -2,11 +2,9 @@ use std::error::Error as std_Error;
 use std::fmt;
 use std::io;
 
-use futures;
-
 use httpbis;
 
-use proto::metadata;
+use crate::proto::metadata;
 
 #[derive(Debug)]
 pub struct GrpcMessageError {
@@ -21,7 +19,6 @@ pub enum Error {
     Io(io::Error),
     Http(httpbis::Error),
     GrpcMessage(GrpcMessageError),
-    Canceled(futures::Canceled),
     MetadataDecode(metadata::MetadataDecodeError),
     Panic(String),
     Marshaller(Box<dyn std_Error + Send + Sync>),
@@ -51,11 +48,10 @@ impl std_Error for Error {}
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            &Error::Io(ref err) => write!(f, "io error: {}", err.description()),
-            &Error::Http(ref err) => write!(f, "http error: {}", err.description()),
+            &Error::Io(ref err) => write!(f, "io error: {}", err),
+            &Error::Http(ref err) => write!(f, "http error: {}", err),
             &Error::GrpcMessage(ref err) => write!(f, "grpc message error: {}", err.grpc_message),
             &Error::MetadataDecode(..) => write!(f, "metadata decode error"),
-            &Error::Canceled(..) => write!(f, "canceled"),
             &Error::Panic(ref message) => write!(f, "panic: {}", message),
             &Error::Other(ref message) => write!(f, "other error: {}", message),
             &Error::Marshaller(ref e) => write!(f, "marshaller error: {}", e),
@@ -72,12 +68,6 @@ impl From<io::Error> for Error {
 impl From<httpbis::Error> for Error {
     fn from(err: httpbis::Error) -> Self {
         Error::Http(err)
-    }
-}
-
-impl From<futures::Canceled> for Error {
-    fn from(err: futures::Canceled) -> Self {
-        Error::Canceled(err)
     }
 }
 

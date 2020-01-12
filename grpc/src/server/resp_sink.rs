@@ -1,25 +1,21 @@
-use common::sink::SinkCommon;
-use futures::future;
-use futures::future::Future;
-use futures::Poll;
+use crate::common::sink::SinkCommon;
+
+use crate::proto::grpc_status::GrpcStatus;
+use crate::proto::metadata::Metadata;
+use crate::result;
+use crate::server::types::ServerTypes;
 use httpbis;
-use httpbis::StreamDead;
-use proto::grpc_status::GrpcStatus;
-use proto::metadata::Metadata;
-use result;
-use server::types::ServerTypes;
+
+use futures::task::Context;
+use std::task::Poll;
 
 pub struct ServerResponseSink<Resp: Send + 'static> {
     pub(crate) common: SinkCommon<Resp, ServerTypes>,
 }
 
 impl<Resp: Send> ServerResponseSink<Resp> {
-    pub fn poll(&mut self) -> Poll<(), httpbis::StreamDead> {
-        self.common.poll()
-    }
-
-    pub fn block_wait(&mut self) -> Result<(), StreamDead> {
-        future::poll_fn(|| self.poll()).wait()
+    pub fn poll(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), httpbis::StreamDead>> {
+        self.common.poll(cx)
     }
 
     pub fn send_metadata(&mut self, metadata: Metadata) -> result::Result<()> {

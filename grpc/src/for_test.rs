@@ -2,9 +2,9 @@
 
 use bytes::Bytes;
 
-use error::Error;
-use marshall::Marshaller;
-use result::Result;
+use crate::error::Error;
+use crate::marshall::Marshaller;
+use crate::result::Result;
 
 pub struct MarshallerString;
 

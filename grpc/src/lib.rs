@@ -1,16 +1,15 @@
 #[macro_use]
 extern crate log;
-#[macro_use]
-extern crate futures;
+
 extern crate base64;
 extern crate bytes;
-extern crate futures_cpupool;
+extern crate futures;
+
 extern crate tls_api;
 extern crate tls_api_stub;
-extern crate tokio_core;
-extern crate tokio_tls_api;
 
 extern crate httpbis;
+extern crate tokio;
 
 mod futures_misc;
 mod misc;
@@ -33,9 +32,11 @@ mod stream_item;
 
 mod error;
 mod futures_grpc;
-mod iter;
+
 pub mod marshall;
 mod method;
+
+mod bytesx;
 
 pub mod prelude;
 

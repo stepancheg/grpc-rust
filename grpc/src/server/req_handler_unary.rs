@@ -1,14 +1,14 @@
-use error;
+use crate::error;
+use crate::result;
+use crate::server::req_handler::ServerRequestStreamHandler;
+use crate::server::req_handler::ServerRequestUnaryHandler;
 use httpbis::ServerIncreaseInWindow;
-use result;
-use server::req_handler::ServerRequestStreamHandler;
-use server::req_handler::ServerRequestUnaryHandler;
 use std::marker;
 
 pub(crate) struct RequestHandlerUnaryToStream<M, H>
 where
     H: ServerRequestUnaryHandler<M>,
-    M: 'static,
+    M: Send + 'static,
 {
     pub(crate) increase_in_window: ServerIncreaseInWindow,
     pub(crate) handler: H,
@@ -19,7 +19,7 @@ where
 impl<M, H> ServerRequestStreamHandler<M> for RequestHandlerUnaryToStream<M, H>
 where
     H: ServerRequestUnaryHandler<M>,
-    M: 'static,
+    M: Send + 'static,
 {
     fn grpc_message(&mut self, message: M, frame_size: u32) -> result::Result<()> {
         self.increase_in_window.data_frame_processed(frame_size);

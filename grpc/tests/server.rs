@@ -10,6 +10,7 @@ mod test_misc;
 use grpc::rt::*;
 use grpc::*;
 
+use futures::executor;
 use test_misc::*;
 
 fn echo_fn(
@@ -62,18 +63,22 @@ fn multiple_services() {
 
     assert_eq!(
         "abc".to_owned(),
-        client
-            .call_unary(RequestOptions::new(), "abc".to_owned(), echo)
-            .wait_drop_metadata()
-            .unwrap()
+        executor::block_on(
+            client
+                .call_unary(RequestOptions::new(), "abc".to_owned(), echo)
+                .drop_metadata()
+        )
+        .unwrap()
     );
 
     assert_eq!(
         "zyx".to_owned(),
-        client
-            .call_unary(RequestOptions::new(), "xyz".to_owned(), reverse)
-            .wait_drop_metadata()
-            .unwrap()
+        executor::block_on(
+            client
+                .call_unary(RequestOptions::new(), "xyz".to_owned(), reverse)
+                .drop_metadata()
+        )
+        .unwrap()
     );
 }
 
@@ -116,17 +121,21 @@ fn single_service_unix() {
 
     assert_eq!(
         "abc".to_owned(),
-        client
-            .call_unary(RequestOptions::new(), "abc".to_owned(), echo)
-            .wait_drop_metadata()
-            .unwrap()
+        executor::block_on(
+            client
+                .call_unary(RequestOptions::new(), "abc".to_owned(), echo)
+                .drop_metadata()
+        )
+        .unwrap()
     );
 
     assert_eq!(
         "zyx".to_owned(),
-        client
-            .call_unary(RequestOptions::new(), "xyz".to_owned(), reverse)
-            .wait_drop_metadata()
-            .unwrap()
+        executor::block_on(
+            client
+                .call_unary(RequestOptions::new(), "xyz".to_owned(), reverse)
+                .drop_metadata()
+        )
+        .unwrap()
     );
 }

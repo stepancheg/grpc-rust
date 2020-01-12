@@ -2,10 +2,12 @@
 
 use std::mem;
 
-use futures::future::Future;
 use futures::stream::Stream;
-use futures::Async;
-use futures::Poll;
+use futures::task::Context;
+
+use std::future::Future;
+use std::pin::Pin;
+use std::task::Poll;
 
 enum State<I> {
     Init,
@@ -28,7 +30,7 @@ where
     S: Stream,
 {
     StreamSingle {
-        stream: stream,
+        stream,
         state: State::Init,
     }
 }
@@ -37,24 +39,27 @@ impl<S> Future for StreamSingle<S>
 where
     S: Stream,
 {
-    type Item = S::Item;
-    type Error = S::Error;
+    type Output = S::Item;
 
-    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let self_mut = unsafe { self.get_unchecked_mut() };
         loop {
-            match try_ready!(self.stream.poll()) {
-                None => {
-                    return match mem::replace(&mut self.state, State::Eof) {
+            match unsafe { Pin::new_unchecked(&mut self_mut.stream) }.poll_next(cx) {
+                Poll::Pending => return Poll::Pending,
+                Poll::Ready(None) => {
+                    return match mem::replace(&mut self_mut.state, State::Eof) {
                         State::Init => panic!("expecting one element, found none"),
                         State::Eof => panic!("Future::poll after EOF"),
-                        State::First(f) => Ok(Async::Ready(f)),
+                        State::First(f) => Poll::Ready(f),
                     };
                 }
-                Some(item) => match mem::replace(&mut self.state, State::First(item)) {
-                    State::Init => {}
-                    State::First(_) => panic!("more than one element"),
-                    State::Eof => panic!("poll after EOF"),
-                },
+                Poll::Ready(Some(item)) => {
+                    match mem::replace(&mut self_mut.state, State::First(item)) {
+                        State::Init => {}
+                        State::First(_) => panic!("more than one element"),
+                        State::Eof => panic!("poll after EOF"),
+                    }
+                }
             }
         }
     }

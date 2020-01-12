@@ -10,6 +10,7 @@ mod test_misc;
 use grpc::rt::GrpcStreaming;
 use grpc::*;
 
+use futures::executor;
 use test_misc::*;
 
 #[test]
@@ -20,13 +21,15 @@ fn server_is_not_running() {
 
     // TODO: https://github.com/tokio-rs/tokio-core/issues/12
     if false {
-        let result = client
-            .call_unary(
-                RequestOptions::new(),
-                "aa".to_owned(),
-                string_string_method("/does/not/matter", GrpcStreaming::Unary),
-            )
-            .wait();
+        let result = executor::block_on(
+            client
+                .call_unary(
+                    RequestOptions::new(),
+                    "aa".to_owned(),
+                    string_string_method("/does/not/matter", GrpcStreaming::Unary),
+                )
+                .join_metadata_result(),
+        );
         assert!(result.is_err(), result);
     }
 }
@@ -41,13 +44,15 @@ fn server_is_not_running_unix() {
 
     // TODO: https://github.com/tokio-rs/tokio-core/issues/12
     if false {
-        let result = client
-            .call_unary(
-                RequestOptions::new(),
-                "aa".to_owned(),
-                string_string_method("/does/not/matter", GrpcStreaming::Unary),
-            )
-            .wait();
+        let result = executor::block_on(
+            client
+                .call_unary(
+                    RequestOptions::new(),
+                    "aa".to_owned(),
+                    string_string_method("/does/not/matter", GrpcStreaming::Unary),
+                )
+                .join_metadata_result(),
+        );
         assert!(result.is_err(), result);
     }
 }

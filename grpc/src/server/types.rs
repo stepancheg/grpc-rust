@@ -1,5 +1,5 @@
-use common::types::Types;
-use server::resp_sink_untyped::ServerResponseUntypedSink;
+use crate::common::types::Types;
+use crate::server::resp_sink_untyped::ServerResponseUntypedSink;
 
 pub(crate) struct ServerTypes;
 

@@ -31,6 +31,10 @@ impl Chars {
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
+
+    pub fn copy_from_str(s: &str) -> Chars {
+        Chars(Bytes::copy_from_slice(s.as_bytes()))
+    }
 }
 
 impl AsRef<str> for Chars {
@@ -47,8 +51,8 @@ impl Deref for Chars {
     }
 }
 
-impl<'a> From<&'a str> for Chars {
-    fn from(s: &'a str) -> Chars {
+impl From<&'static str> for Chars {
+    fn from(s: &'static str) -> Chars {
         Chars(Bytes::from(s))
     }
 }

@@ -1,8 +1,8 @@
+use crate::proto::grpc_status::GrpcStatus;
+use crate::Metadata;
 use bytes::Bytes;
 use httpbis::Header;
 use httpbis::Headers;
-use proto::grpc_status::GrpcStatus;
-use Metadata;
 
 pub(crate) static HEADER_GRPC_STATUS: &'static str = "grpc-status";
 pub(crate) static HEADER_GRPC_MESSAGE: &'static str = "grpc-message";

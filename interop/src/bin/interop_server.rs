@@ -1,7 +1,6 @@
 extern crate bytes;
 extern crate env_logger;
 extern crate futures;
-extern crate futures_cpupool;
 extern crate grpc;
 extern crate protobuf;
 #[macro_use]
@@ -16,9 +15,10 @@ use bytes::Bytes;
 
 use futures::stream;
 use futures::stream::Stream;
+use futures::StreamExt;
 
-use futures::Async;
 use grpc::*;
+use std::task::Poll;
 
 static DICTIONARY: &'static str = "ABCDEFGHIJKLMNOPQRSTUVabcdefghijklmnoqprstuvwxyz0123456789";
 
@@ -40,7 +40,10 @@ fn echo_custom_metadata(req_metadata: &Metadata) -> Metadata {
     static TEST_ECHO_KEY: &'static str = "x-grpc-test-echo-initial";
     let mut metadata = Metadata::new();
     if let Some(value) = req_metadata.get(TEST_ECHO_KEY) {
-        metadata.add(MetadataKey::from(TEST_ECHO_KEY), Bytes::from(value));
+        metadata.add(
+            MetadataKey::from(TEST_ECHO_KEY),
+            Bytes::copy_from_slice(value),
+        );
     }
     metadata
 }
@@ -51,7 +54,7 @@ fn echo_custom_trailing(req_metadata: &Metadata) -> Metadata {
     if let Some(value) = req_metadata.get(TEST_ECHO_TRAILING_KEY) {
         metadata.add(
             MetadataKey::from(TEST_ECHO_TRAILING_KEY),
-            Bytes::from(value),
+            Bytes::copy_from_slice(value),
         );
     }
     metadata
@@ -124,12 +127,12 @@ impl TestService for TestServerImpl {
             .take_response_parameters()
             .into_iter()
             .map(|res| res.get_size() as usize);
-        let output = stream::iter_ok(sizes).map(|size| {
+        let output = stream::iter(sizes).map(|size| {
             let mut response = StreamingOutputCallResponse::new();
             let mut payload = Payload::new();
             payload.set_body(make_string(size));
             response.set_payload(payload);
-            response
+            Ok(response)
         });
         o.pump(output, resp);
         Ok(())
@@ -173,12 +176,12 @@ impl TestService for TestServerImpl {
         debug!("sending custom metadata");
         resp.send_metadata(echo_custom_metadata(&metadata))?;
         let mut req = req.into_stream();
-        o.spawn_poll_fn(move || loop {
-            if let Async::NotReady = resp.poll()? {
-                return Ok(Async::NotReady);
+        o.spawn_poll_fn(move |cx| loop {
+            if let Poll::Pending = resp.poll(cx)? {
+                return Poll::Pending;
             }
-            match req.poll()? {
-                Async::Ready(Some(m)) => {
+            match req.poll_next_unpin(cx)? {
+                Poll::Ready(Some(m)) => {
                     if m.get_response_status().get_code() != 0 {
                         debug!(
                             "requested to send grpc error {}",
@@ -188,7 +191,7 @@ impl TestService for TestServerImpl {
                             GrpcStatus::from_code_or_unknown(m.get_response_status().code as u32),
                             m.get_response_status().message.clone(),
                         )?;
-                        return Ok(Async::Ready(()));
+                        return Poll::Ready(Ok(()));
                     }
 
                     for p in &m.response_parameters {
@@ -202,12 +205,12 @@ impl TestService for TestServerImpl {
                         })?;
                     }
                 }
-                Async::Ready(None) => {
+                Poll::Ready(None) => {
                     debug!("sending custom trailers");
                     resp.send_trailers(echo_custom_trailing(&metadata))?;
-                    return Ok(Async::Ready(()));
+                    return Poll::Ready(Ok(()));
                 }
-                Async::NotReady => return Ok(Async::NotReady),
+                Poll::Pending => return Poll::Pending,
             }
         });
         Ok(())

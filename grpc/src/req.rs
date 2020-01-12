@@ -1,15 +1,14 @@
+use futures::future;
 use futures::stream;
-use futures::stream::Stream;
 
-use error;
-use error::Error;
-use futures::sync::mpsc;
-use futures::Async;
-use futures::Poll;
-use futures::Sink;
-use futures::StartSend;
-use futures_grpc::GrpcStream;
-use proto::metadata::Metadata;
+use futures::stream::Stream;
+use futures::stream::StreamExt;
+
+use crate::error::Error;
+use futures::channel::mpsc;
+
+use crate::futures_grpc::GrpcStream;
+use crate::proto::metadata::Metadata;
 
 #[derive(Debug, Default, Clone)]
 pub struct RequestOptions {
@@ -32,13 +31,13 @@ impl<T: Send + 'static> StreamingRequest<T> {
 
     pub fn new<S>(stream: S) -> StreamingRequest<T>
     where
-        S: Stream<Item = T, Error = Error> + Send + 'static,
+        S: Stream<Item = crate::Result<T>> + Send + 'static,
     {
-        StreamingRequest(Box::new(stream))
+        StreamingRequest(Box::pin(stream))
     }
 
     pub fn once(item: T) -> StreamingRequest<T> {
-        StreamingRequest::new(stream::once(Ok(item)))
+        StreamingRequest::new(stream::once(future::ok(item)))
     }
 
     pub fn iter<I>(iter: I) -> StreamingRequest<T>
@@ -46,19 +45,20 @@ impl<T: Send + 'static> StreamingRequest<T> {
         I: IntoIterator<Item = T>,
         I::IntoIter: Send + 'static,
     {
-        StreamingRequest::new(stream::iter_ok(iter.into_iter()))
+        StreamingRequest::new(stream::iter(iter.into_iter()).map(Ok))
     }
 
     pub fn mpsc() -> (StreamingRequestSender<T>, StreamingRequest<T>) {
         let (tx, rx) = mpsc::channel(0);
         let tx = StreamingRequestSender { sender: Some(tx) };
         // TODO: handle drop of sender
-        let rx = StreamingRequest::new(rx.map_err(|()| error::Error::Other("sender died")));
+        //let rx = StreamingRequest::new(rx.map_err(|_: mpsc::TryRecvError| error::Error::Other("sender died")));
+        let rx = StreamingRequest::new(rx.map(Ok));
         (tx, rx)
     }
 
     pub fn single(item: T) -> StreamingRequest<T> {
-        StreamingRequest::new(stream::once(Ok(item)))
+        StreamingRequest::new(stream::once(future::ok(item)))
     }
 
     pub fn empty() -> StreamingRequest<T> {
@@ -66,7 +66,7 @@ impl<T: Send + 'static> StreamingRequest<T> {
     }
 
     pub fn err(err: Error) -> StreamingRequest<T> {
-        StreamingRequest::new(stream::once(Err(err)))
+        StreamingRequest::new(stream::once(future::err(err)))
     }
 }
 
@@ -74,9 +74,9 @@ pub struct StreamingRequestSender<T: Send + 'static> {
     sender: Option<mpsc::Sender<T>>,
 }
 
-impl<T: Send + 'static> Sink for StreamingRequestSender<T> {
-    type SinkItem = T;
-    type SinkError = error::Error;
+/*
+impl<T: Send + 'static> Sink<T> for StreamingRequestSender<T> {
+    type Error = crate::Error;
 
     fn start_send(&mut self, item: T) -> StartSend<T, error::Error> {
         match self.sender.as_mut() {
@@ -100,9 +100,10 @@ impl<T: Send + 'static> Sink for StreamingRequestSender<T> {
     fn close(&mut self) -> Poll<(), error::Error> {
         // Close of sender doesn't end receiver stream
         self.sender.take();
-        Ok(Async::Ready(()))
+        Poll::Ready(Ok(()))
     }
 }
+*/
 
 impl<T: Send + 'static> Drop for StreamingRequestSender<T> {
     fn drop(&mut self) {

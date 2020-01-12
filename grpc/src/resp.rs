@@ -1,15 +1,21 @@
 use futures::future;
-use futures::future::Future;
+use futures::future::FutureExt;
+use futures::future::TryFutureExt;
 use futures::stream;
 use futures::stream::Stream;
+use futures::stream::StreamExt;
 
-use error;
-use futures::Poll;
-use futures_grpc::*;
-use iter::*;
-use proto::metadata::Metadata;
-use result;
-use stream_item::*;
+use crate::error;
+
+use crate::futures_grpc::*;
+
+use crate::proto::metadata::Metadata;
+use crate::result;
+use crate::stream_item::*;
+use futures::task::Context;
+use std::future::Future;
+use std::pin::Pin;
+use std::task::Poll;
 
 /// Single message response
 pub struct SingleResponse<T: Send + 'static>(pub GrpcFuture<(Metadata, GrpcFuture<(T, Metadata)>)>);
@@ -19,16 +25,14 @@ impl<T: Send + 'static> SingleResponse<T> {
 
     pub fn new<F>(f: F) -> SingleResponse<T>
     where
-        F: Future<Item = (Metadata, GrpcFuture<(T, Metadata)>), Error = error::Error>
-            + Send
-            + 'static,
+        F: Future<Output = crate::Result<(Metadata, GrpcFuture<(T, Metadata)>)>> + Send + 'static,
     {
-        SingleResponse(Box::new(f))
+        SingleResponse(Box::pin(f))
     }
 
     pub fn metadata_and_future<F>(metadata: Metadata, result: F) -> SingleResponse<T>
     where
-        F: Future<Item = T, Error = error::Error> + Send + 'static,
+        F: Future<Output = crate::Result<T>> + Send + 'static,
     {
         SingleResponse::metadata_and_future_and_trailing_metadata(
             metadata,
@@ -43,11 +47,11 @@ impl<T: Send + 'static> SingleResponse<T> {
         trailing: M,
     ) -> SingleResponse<T>
     where
-        F: Future<Item = T, Error = error::Error> + Send + 'static,
-        M: Future<Item = Metadata, Error = error::Error> + Send + 'static,
+        F: Future<Output = crate::Result<T>> + Send + 'static,
+        M: Future<Output = crate::Result<Metadata>> + Send + 'static,
     {
-        let future: GrpcFuture<(T, Metadata)> = Box::new(result.join(trailing));
-        SingleResponse::new(future::finished((metadata, future)))
+        let future: GrpcFuture<(T, Metadata)> = Box::pin(future::try_join(result, trailing));
+        SingleResponse::new(future::ok((metadata, future)))
     }
 
     pub fn completed_with_metadata_and_trailing_metadata(
@@ -76,7 +80,7 @@ impl<T: Send + 'static> SingleResponse<T> {
 
     pub fn no_metadata<F>(r: F) -> SingleResponse<T>
     where
-        F: Future<Item = T, Error = error::Error> + Send + 'static,
+        F: Future<Output = crate::Result<T>> + Send + 'static,
     {
         SingleResponse::metadata_and_future(Metadata::new(), r)
     }
@@ -88,49 +92,44 @@ impl<T: Send + 'static> SingleResponse<T> {
     // getters
 
     pub fn join_metadata_result(self) -> GrpcFuture<(Metadata, T, Metadata)> {
-        Box::new(self.0.and_then(|(initial, result)| {
-            result.map(|(result, trailing)| (initial, result, trailing))
+        Box::pin(self.0.and_then(|(initial, result)| {
+            result.map_ok(|(result, trailing)| (initial, result, trailing))
         }))
     }
 
     pub fn drop_metadata(self) -> GrpcFuture<T> {
-        Box::new(
+        Box::pin(
             self.0
-                .and_then(|(_initial, result)| result.map(|(result, _trailing)| result)),
+                .and_then(|(_initial, result)| result.map_ok(|(result, _trailing)| result)),
         )
     }
 
     /// Convert self into single element stream.
     pub fn into_stream(self) -> StreamingResponse<T> {
-        StreamingResponse::new(self.0.map(|(metadata, future)| {
+        StreamingResponse::new(self.0.map_ok(|(metadata, future)| {
             let stream = future
-                .map(|(result, trailing)| {
-                    stream::iter_ok(vec![
+                .map_ok(|(result, trailing)| {
+                    stream::iter(vec![
                         ItemOrMetadata::Item(result),
                         ItemOrMetadata::TrailingMetadata(trailing),
                     ])
+                    .map(Ok)
                 })
-                .flatten_stream();
+                .try_flatten_stream();
 
             (metadata, GrpcStreamWithTrailingMetadata::new(stream))
         }))
     }
-
-    pub fn wait(self) -> result::Result<(Metadata, T, Metadata)> {
-        self.join_metadata_result().wait()
-    }
-
-    pub fn wait_drop_metadata(self) -> result::Result<T> {
-        self.wait().map(|(_initial, r, _trailing)| r)
-    }
 }
 
 impl<T: Send + 'static> Future for SingleResponse<T> {
-    type Item = (Metadata, GrpcFuture<(T, Metadata)>);
-    type Error = error::Error;
+    type Output = crate::Result<(Metadata, GrpcFuture<(T, Metadata)>)>;
 
-    fn poll(&mut self) -> Poll<(Metadata, GrpcFuture<(T, Metadata)>), error::Error> {
-        self.0.poll()
+    fn poll(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<crate::Result<(Metadata, GrpcFuture<(T, Metadata)>)>> {
+        self.0.poll_unpin(cx)
     }
 }
 
@@ -150,11 +149,11 @@ impl<T: Send + 'static> StreamingResponse<T> {
 
     pub fn new<F>(f: F) -> StreamingResponse<T>
     where
-        F: Future<Item = (Metadata, GrpcStreamWithTrailingMetadata<T>), Error = error::Error>
+        F: Future<Output = crate::Result<(Metadata, GrpcStreamWithTrailingMetadata<T>)>>
             + Send
             + 'static,
     {
-        StreamingResponse(Box::new(f))
+        StreamingResponse(Box::pin(f))
     }
 
     pub fn metadata_and_stream_and_trailing_metadata<S, M>(
@@ -163,8 +162,8 @@ impl<T: Send + 'static> StreamingResponse<T> {
         trailing: M,
     ) -> StreamingResponse<T>
     where
-        S: Stream<Item = T, Error = error::Error> + Send + 'static,
-        M: Future<Item = Metadata, Error = error::Error> + Send + 'static,
+        S: Stream<Item = crate::Result<T>> + Send + 'static,
+        M: Future<Output = crate::Result<Metadata>> + Send + 'static,
     {
         let boxed = GrpcStreamWithTrailingMetadata::stream_with_trailing_metadata(result, trailing);
         StreamingResponse::new(future::ok((metadata, boxed)))
@@ -172,7 +171,7 @@ impl<T: Send + 'static> StreamingResponse<T> {
 
     pub fn metadata_and_stream<S>(metadata: Metadata, result: S) -> StreamingResponse<T>
     where
-        S: Stream<Item = T, Error = error::Error> + Send + 'static,
+        S: Stream<Item = crate::Result<T>> + Send + 'static,
     {
         let boxed = GrpcStreamWithTrailingMetadata::stream(result);
         StreamingResponse::new(future::ok((metadata, boxed)))
@@ -180,7 +179,7 @@ impl<T: Send + 'static> StreamingResponse<T> {
 
     pub fn no_metadata<S>(s: S) -> StreamingResponse<T>
     where
-        S: Stream<Item = T, Error = error::Error> + Send + 'static,
+        S: Stream<Item = crate::Result<T>> + Send + 'static,
     {
         StreamingResponse::metadata_and_stream_and_trailing_metadata(
             Metadata::new(),
@@ -216,11 +215,11 @@ impl<T: Send + 'static> StreamingResponse<T> {
     ) -> StreamingResponse<T>
     where
         I: Iterator<Item = T> + Send + 'static,
-        M: Future<Item = Metadata, Error = error::Error> + Send + 'static,
+        M: Future<Output = crate::Result<Metadata>> + Send + 'static,
     {
         StreamingResponse::metadata_and_stream_and_trailing_metadata(
             metadata,
-            stream::iter_ok(iter),
+            stream::iter(iter).map(Ok),
             trailing,
         )
     }
@@ -273,7 +272,10 @@ impl<T: Send + 'static> StreamingResponse<T> {
             + Send
             + 'static,
     {
-        StreamingResponse::new(self.0.map(move |(metadata, stream)| (metadata, f(stream))))
+        StreamingResponse::new(
+            self.0
+                .map_ok(move |(metadata, stream)| (metadata, f(stream))),
+        )
     }
 
     pub fn map_items<U, F>(self, f: F) -> StreamingResponse<U>
@@ -293,15 +295,15 @@ impl<T: Send + 'static> StreamingResponse<T> {
     }
 
     pub fn drop_metadata(self) -> GrpcStream<T> {
-        Box::new(
+        Box::pin(
             self.0
-                .map(|(_metadata, stream)| stream.drop_metadata())
-                .flatten_stream(),
+                .map_ok(|(_metadata, stream)| stream.drop_metadata())
+                .try_flatten_stream(),
         )
     }
 
     pub fn into_future(self) -> SingleResponse<Vec<T>> {
-        SingleResponse::new(self.0.map(|(initial, stream)| {
+        SingleResponse::new(self.0.map_ok(|(initial, stream)| {
             let future: GrpcFuture<(Vec<T>, Metadata)> = stream.collect_with_metadata();
             (initial, future)
         }))
@@ -309,19 +311,9 @@ impl<T: Send + 'static> StreamingResponse<T> {
 
     /// Take single element from stream
     pub fn single(self) -> SingleResponse<T> {
-        SingleResponse(Box::new(
-            self.0
-                .map(|(metadata, stream)| (metadata, stream.single_with_metadata())),
-        ))
-    }
-
-    pub fn wait(self) -> result::Result<(Metadata, GrpcIterator<T>)> {
-        let (metadata, stream) = self.0.wait()?;
-        Ok((metadata, Box::new(stream.wait())))
-    }
-
-    pub fn wait_drop_metadata(self) -> GrpcIterator<T> {
-        Box::new(self.drop_metadata().wait())
+        SingleResponse(Box::pin(self.0.map_ok(|(metadata, stream)| {
+            (metadata, stream.single_with_metadata())
+        })))
     }
 
     pub fn collect(self) -> GrpcFuture<(Metadata, Vec<T>, Metadata)> {

@@ -1,24 +1,27 @@
-use futures::future::Future;
-
 use bytes::Bytes;
 
 use grpc::*;
 
+use crate::empty::Empty;
+use crate::messages::Payload;
+use crate::messages::ResponseParameters;
+use crate::messages::SimpleRequest;
+use crate::messages::StreamingInputCallRequest;
+use crate::messages::StreamingOutputCallRequest;
+use crate::test_grpc::TestServiceClient;
 use chrono::*;
-use empty::Empty;
-use messages::Payload;
-use messages::ResponseParameters;
-use messages::SimpleRequest;
-use messages::StreamingInputCallRequest;
-use messages::StreamingOutputCallRequest;
+use futures::executor;
+use futures::future;
+use futures::stream::StreamExt;
 use std::time::SystemTime;
-use test_grpc::TestServiceClient;
 
 fn empty_unary(client: TestServiceClient) {
-    client
-        .empty_call(grpc::RequestOptions::new(), Empty::new())
-        .wait_drop_metadata()
-        .expect("failed to get EmptyUnary result");
+    executor::block_on(
+        client
+            .empty_call(grpc::RequestOptions::new(), Empty::new())
+            .drop_metadata(),
+    )
+    .expect("failed to get EmptyUnary result");
     println!("{} EmptyUnary done", Local::now().to_rfc3339());
 }
 
@@ -44,14 +47,18 @@ fn cacheable_unary(client: TestServiceClient) {
         .metadata
         .add(MetadataKey::from("x-user-ip"), "1.2.3.4".into());
     options.cachable = true;
-    let (_, r1, _) = client
-        .cacheable_unary_call(options.clone(), request.clone())
-        .wait()
-        .expect("call");
-    let (_, r2, _) = client
-        .cacheable_unary_call(options, request)
-        .wait()
-        .expect("call");
+    let r1 = executor::block_on(
+        client
+            .cacheable_unary_call(options.clone(), request.clone())
+            .drop_metadata(),
+    )
+    .expect("call");
+    let r2 = executor::block_on(
+        client
+            .cacheable_unary_call(options, request)
+            .drop_metadata(),
+    )
+    .expect("call");
     assert_eq!(r1.get_payload(), r2.get_payload());
 }
 
@@ -62,10 +69,12 @@ fn large_unary(client: TestServiceClient) {
     let mut request = SimpleRequest::new();
     request.set_payload(payload);
     request.set_response_size(314159);
-    let response = client
-        .unary_call(grpc::RequestOptions::new(), request)
-        .wait_drop_metadata()
-        .expect("expected full frame");
+    let response = executor::block_on(
+        client
+            .unary_call(grpc::RequestOptions::new(), request)
+            .drop_metadata(),
+    )
+    .expect("expected full frame");
     assert_eq!(314159, response.get_payload().body.len());
     println!("{} LargeUnary done", Local::now().to_rfc3339());
 }
@@ -82,23 +91,22 @@ fn server_compressed_unary(_client: TestServiceClient) {
 
 // https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md#client_streaming
 fn client_streaming(client: TestServiceClient) {
-    let (mut req, resp) = client
-        .streaming_input_call(grpc::RequestOptions::new())
-        .wait()
-        .expect("expected response");
+    let (mut req, resp) =
+        executor::block_on(client.streaming_input_call(grpc::RequestOptions::new()))
+            .expect("expected response");
 
     for size in [27182, 8, 1828, 45904].iter() {
         let mut request = StreamingInputCallRequest::new();
         let mut payload = Payload::new();
         payload.set_body(vec![0; size.to_owned()]);
         request.set_payload(payload);
-        req.block_wait().expect("block_wait");
+        executor::block_on(future::poll_fn(|cx| req.poll(cx))).expect("block_wait");
         req.send_data(request).expect("send_data");
     }
 
     req.finish().expect("finish");
 
-    let resp = resp.wait_drop_metadata().expect("wait_drop_metadata");
+    let resp = executor::block_on(resp.drop_metadata()).expect("wait_drop_metadata");
 
     assert_eq!(resp.aggregated_payload_size, 74922);
     println!("{} ClientStreaming done", Local::now().to_rfc3339());
@@ -122,24 +130,27 @@ fn server_streaming(client: TestServiceClient) {
     }
     req.set_response_parameters(::protobuf::RepeatedField::from_vec(params));
 
-    let response_stream = client
+    let mut response_stream = client
         .streaming_output_call(grpc::RequestOptions::new(), req)
-        .wait_drop_metadata();
+        .drop_metadata();
 
     let mut response_sizes = Vec::new();
 
     {
-        // this scope is to satisfy the borrow checker.
-        let bar = response_stream.map(|response| {
-            response_sizes.push(
-                response
-                    .expect("expected a response")
-                    .get_payload()
-                    .body
-                    .len(),
-            );
+        let bar = executor::block_on(async {
+            let mut count = 0;
+            while let Some(response) = response_stream
+                .next()
+                .await
+                .transpose()
+                .expect("expected as response")
+            {
+                response_sizes.push(response.get_payload().body.len());
+                count += 1;
+            }
+            count
         });
-        assert!(bar.count() == 4);
+        assert!(bar == 4);
     }
 
     assert!(response_sizes.len() == 4);
@@ -157,12 +168,10 @@ fn server_compressed_streaming(_client: TestServiceClient) {
 
 // https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md#ping_pong
 fn ping_pong(client: TestServiceClient) {
-    let (mut req, resp) = client
-        .full_duplex_call(grpc::RequestOptions::new())
-        .wait()
+    let (mut req, resp) = executor::block_on(client.full_duplex_call(grpc::RequestOptions::new()))
         .expect("start request");
 
-    let mut resp = resp.wait_drop_metadata();
+    let mut resp = resp.drop_metadata();
 
     for &(size, body_len) in [(31415, 27182), (9, 8), (2653, 1828), (58979, 45904)].iter() {
         let mut req_m = StreamingOutputCallRequest::new();
@@ -172,27 +181,25 @@ fn ping_pong(client: TestServiceClient) {
         let mut payload = Payload::new();
         payload.set_body(vec![0; body_len]);
         req_m.set_payload(payload);
-        req.block_wait().expect("block_wait");
+        executor::block_on(req.wait()).expect("block_wait");
         req.send_data(req_m).expect("send_data");
 
-        let resp_m = resp.next().expect("next").unwrap();
+        let resp_m = executor::block_on(resp.next()).expect("next").unwrap();
         assert_eq!(size as usize, resp_m.payload.get_ref().body.len());
     }
 
     req.finish().expect("finish");
-    assert!(resp.next().is_none());
+    assert!(executor::block_on(resp.next()).is_none());
 
     println!("{} PingPong done", Local::now().to_rfc3339());
 }
 
 // https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md#empty_stream
 fn empty_stream(client: TestServiceClient) {
-    let (mut req, resp) = client
-        .full_duplex_call(grpc::RequestOptions::new())
-        .wait()
-        .expect("wait");
+    let (mut req, resp) =
+        executor::block_on(client.full_duplex_call(grpc::RequestOptions::new())).expect("wait");
     req.finish().expect("finish");
-    let resp: Vec<_> = resp.wait_drop_metadata().collect();
+    let resp: Vec<_> = executor::block_on(resp.drop_metadata().collect());
     assert!(resp.len() == 0);
     println!("{} EmptyStream done", Local::now().to_rfc3339());
 }
@@ -264,10 +271,12 @@ fn custom_metadata(client: TestServiceClient) {
         let mut payload = Payload::new();
         payload.set_body(vec![0; 271828]);
         req.set_payload(payload);
-        let (initial, _result, trailing) = client
-            .unary_call(make_options(), req)
-            .wait()
-            .expect("UnaryCall");
+        let (initial, _result, trailing) = executor::block_on(
+            client
+                .unary_call(make_options(), req)
+                .join_metadata_result(),
+        )
+        .expect("UnaryCall");
 
         assert_result_metadata(initial, trailing);
     }
@@ -294,14 +303,12 @@ fn custom_metadata(client: TestServiceClient) {
             req.set_payload(p);
         }
 
-        let (mut req1, resp) = client
-            .full_duplex_call(make_options())
-            .wait()
-            .expect("start request");
+        let (mut req1, resp) =
+            executor::block_on(client.full_duplex_call(make_options())).expect("start request");
         req1.send_data(req).expect("send_data");
         req1.finish().expect("finish");
 
-        let (initial, _, trailing) = resp.collect().wait().expect("collect");
+        let (initial, _, trailing) = executor::block_on(resp.collect()).expect("collect");
 
         assert_result_metadata(initial, trailing);
     }
@@ -329,13 +336,11 @@ fn unimplemented_service(_client: TestServiceClient) {
 
 // https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md#cancel_after_begin
 fn cancel_after_begin(client: TestServiceClient) {
-    let (req, resp) = client
-        .streaming_input_call(RequestOptions::new())
-        .wait()
-        .expect("start");
+    let (req, resp) =
+        executor::block_on(client.streaming_input_call(RequestOptions::new())).expect("start");
     drop(req);
     // TODO: hangs
-    match resp.wait() {
+    match executor::block_on(resp) {
         Ok(_) => panic!("expecting err"),
         Err(_) => unimplemented!(),
     }

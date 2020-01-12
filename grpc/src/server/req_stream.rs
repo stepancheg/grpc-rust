@@ -1,16 +1,20 @@
-use error;
-use futures::sync::mpsc;
-use futures::Async;
-use futures::Poll;
-use futures::Stream;
+use futures::channel::mpsc;
+use futures::stream::Stream;
+use futures::stream::StreamExt;
+
 use httpbis::ServerIncreaseInWindow;
-use result;
-use server::req_handler::ServerRequestStreamHandler;
+
+use crate::result;
+
+use crate::server::req_handler::ServerRequestStreamHandler;
+use futures::task::Context;
+use std::pin::Pin;
+use std::task::Poll;
 
 pub(crate) enum HandlerToStream<Req: Send + 'static> {
     Message(Req, u32),
     EndStream,
-    Error(error::Error),
+    Error(crate::Error),
     BufferProcessed(usize),
 }
 
@@ -32,7 +36,7 @@ impl<Req: Send + 'static> ServerRequestStreamSenderHandler<Req> {
         Ok(self
             .sender
             .unbounded_send(message)
-            .map_err(|_| error::Error::Other("xxx"))?)
+            .map_err(|_| crate::Error::Other("xxx"))?)
     }
 }
 
@@ -47,7 +51,7 @@ impl<Req: Send + 'static> ServerRequestStreamHandler<Req>
         self.send(HandlerToStream::EndStream)
     }
 
-    fn error(&mut self, error: error::Error) -> result::Result<()> {
+    fn error(&mut self, error: crate::Error) -> result::Result<()> {
         self.send(HandlerToStream::Error(error))
     }
 
@@ -57,16 +61,20 @@ impl<Req: Send + 'static> ServerRequestStreamHandler<Req>
 }
 
 impl<Req: Send + 'static> Stream for ServerRequestStream<Req> {
-    type Item = Req;
-    type Error = error::Error;
+    type Item = crate::Result<Req>;
 
-    fn poll(&mut self) -> Poll<Option<Req>, error::Error> {
+    fn poll_next(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<crate::Result<Req>>> {
         loop {
             // TODO: error
-            let item = match self.req.poll().map_err(|_| error::Error::Other("xxx"))? {
-                Async::Ready(Some(r)) => r,
-                Async::Ready(None) => return Err(error::Error::Other("unexpected EOF")),
-                Async::NotReady => return Ok(Async::NotReady),
+            let item = match self.req.poll_next_unpin(cx) {
+                Poll::Ready(Some(r)) => r,
+                Poll::Ready(None) => {
+                    return Poll::Ready(Some(Err(crate::Error::Other("unexpected EOF"))))
+                }
+                Poll::Pending => return Poll::Pending,
             };
 
             match item {
@@ -74,10 +82,10 @@ impl<Req: Send + 'static> Stream for ServerRequestStream<Req> {
                     // TODO: increase on next poll
                     self.increase_in_window.data_frame_processed(frame_size);
                     self.increase_in_window.increase_window_auto()?;
-                    return Ok(Async::Ready(Some(req)));
+                    return Poll::Ready(Some(Ok(req)));
                 }
                 HandlerToStream::Error(error) => {
-                    return Err(error);
+                    return Poll::Ready(Some(Err(error)));
                 }
                 HandlerToStream::BufferProcessed(buffered) => {
                     // TODO: overflow
@@ -86,7 +94,7 @@ impl<Req: Send + 'static> Stream for ServerRequestStream<Req> {
                     continue;
                 }
                 HandlerToStream::EndStream => {
-                    return Ok(Async::Ready(None));
+                    return Poll::Ready(None);
                 }
             }
         }

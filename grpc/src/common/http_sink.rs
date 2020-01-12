@@ -1,5 +1,5 @@
+use crate::result;
 use bytes::Bytes;
-use result;
 
 pub(crate) trait HttpSink {
     fn state(&self) -> httpbis::SenderState;

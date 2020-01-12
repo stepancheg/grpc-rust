@@ -4,10 +4,15 @@ use crate::route_guide::Rectangle;
 use crate::route_guide::RouteNote;
 use crate::route_guide::RouteSummary;
 use crate::route_guide_grpc::RouteGuide;
-use futures::future::Future;
+
+use futures::future;
+
 use futures::stream;
-use futures::stream::Stream;
-use futures::Async;
+use futures::TryFutureExt;
+use futures::TryStreamExt;
+
+use futures::stream::StreamExt;
+
 use grpc::Metadata;
 use grpc::ServerHandlerContext;
 use grpc::ServerRequest;
@@ -22,6 +27,7 @@ use std::io::Read;
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::task::Poll;
 use std::time::Instant;
 
 // https://github.com/grpc/grpc-go/blob/master/examples/route_guide/server/server.go
@@ -67,13 +73,17 @@ impl RouteGuide for RouteGuideImpl {
     ) -> grpc::Result<()> {
         let req = req.take_message();
         // TODO: do not clone
-        let stream = stream::iter_ok(self.saved_features.clone()).filter_map(move |feature| {
-            if in_range(feature.get_location(), &req) {
-                return Some(feature);
-            } else {
-                return None;
-            }
-        });
+        let stream = stream::iter(self.saved_features.clone())
+            .filter_map(move |feature| {
+                future::ready({
+                    if in_range(feature.get_location(), &req) {
+                        Some(feature)
+                    } else {
+                        None
+                    }
+                })
+            })
+            .map(Ok);
         o.pump(stream, resp);
         Ok(())
     }
@@ -104,7 +114,7 @@ impl RouteGuide for RouteGuideImpl {
 
         let f = req
             .into_stream()
-            .fold(state, move |mut state, point| {
+            .try_fold(state, move |mut state, point| {
                 state.point_count += 1;
                 for feature in &saved_features {
                     if feature.get_location() == &point {
@@ -115,9 +125,9 @@ impl RouteGuide for RouteGuideImpl {
                     state.distance += calc_distance(last_point, &point);
                 }
                 state.last_point = Some(point);
-                Ok::<_, grpc::Error>(state)
+                future::ok::<_, grpc::Error>(state)
             })
-            .map(move |state| RouteSummary {
+            .map_ok(move |state| RouteSummary {
                 point_count: state.point_count as i32,
                 feature_count: state.feature_count as i32,
                 distance: state.distance as i32,
@@ -138,16 +148,16 @@ impl RouteGuide for RouteGuideImpl {
 
         let route_notes_map = self.route_notes.clone();
 
-        o.spawn_poll_fn(move || {
+        o.spawn_poll_fn(move |cx| {
             loop {
                 // Wait until resp is writable
-                if let Async::NotReady = resp.poll()? {
-                    return Ok(Async::NotReady);
+                if let Poll::Pending = resp.poll(cx)? {
+                    return Poll::Pending;
                 }
 
-                match req.poll()? {
-                    Async::NotReady => return Ok(Async::NotReady),
-                    Async::Ready(Some(note)) => {
+                match req.poll_next_unpin(cx)? {
+                    Poll::Pending => return Poll::Pending,
+                    Poll::Ready(Some(note)) => {
                         let key = serialize(note.get_location());
 
                         let mut route_notes_map = route_notes_map.lock().unwrap();
@@ -159,9 +169,9 @@ impl RouteGuide for RouteGuideImpl {
                             resp.send_data(note.clone())?;
                         }
                     }
-                    Async::Ready(None) => {
+                    Poll::Ready(None) => {
                         resp.send_trailers(Metadata::new())?;
-                        return Ok(Async::Ready(()));
+                        return Poll::Ready(Ok(()));
                     }
                 }
             }

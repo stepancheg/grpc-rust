@@ -18,6 +18,7 @@ use grpc_examples_greeter::helloworld_grpc::*;
 use grpc::ClientStub;
 use grpc::ClientStubExt;
 
+use futures::executor;
 use tls_api::TlsConnector;
 use tls_api::TlsConnectorBuilder;
 
@@ -71,7 +72,9 @@ fn main() {
     let mut req = HelloRequest::new();
     req.set_name(name);
 
-    let resp = client.say_hello(grpc::RequestOptions::new(), req);
+    let resp = client
+        .say_hello(grpc::RequestOptions::new(), req)
+        .join_metadata_result();
 
-    println!("{:?}", resp.wait());
+    println!("{:?}", executor::block_on(resp));
 }

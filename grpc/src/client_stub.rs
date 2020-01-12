@@ -1,7 +1,8 @@
-use client::{Client, ClientBuilder};
+use crate::client::Client;
+use crate::client::ClientBuilder;
+use crate::ClientConf;
+use crate::Result as grpc_Result;
 use std::sync::Arc;
-use ClientConf;
-use Result as grpc_Result;
 
 /// Trait implemented by `XxxClient` structs for `Xxx` trait.
 pub trait ClientStub: Sized {

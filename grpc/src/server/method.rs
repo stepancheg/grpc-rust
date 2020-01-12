@@ -1,25 +1,25 @@
 use std::sync::Arc;
 
-use common::sink::SinkCommon;
-use method::GrpcStreaming;
-use method::GrpcStreamingBidi;
-use method::GrpcStreamingClientStreaming;
-use method::GrpcStreamingFlavor;
-use method::GrpcStreamingServerStreaming;
-use method::GrpcStreamingUnary;
-use method::MethodDescriptor;
-use or_static::arc::ArcOrStatic;
-use or_static::string::StringOrStatic;
-use result;
-use server::ctx::ServerHandlerContext;
-use server::req_handler::ServerRequest;
-use server::req_handler::ServerRequestUnaryHandler;
-use server::req_handler::ServerRequestUntyped;
-use server::req_single::ServerRequestSingle;
-use server::resp_sink::ServerResponseSink;
-use server::resp_sink_untyped::ServerResponseUntypedSink;
+use crate::common::sink::SinkCommon;
+
+use crate::method::GrpcStreamingClientStreaming;
+use crate::method::GrpcStreamingFlavor;
+use crate::method::GrpcStreamingServerStreaming;
+use crate::method::GrpcStreamingUnary;
+use crate::method::MethodDescriptor;
+use crate::method::{GrpcStreaming, GrpcStreamingBidi};
+use crate::or_static::arc::ArcOrStatic;
+use crate::or_static::string::StringOrStatic;
+use crate::result;
+use crate::server::ctx::ServerHandlerContext;
+use crate::server::req_handler::ServerRequest;
+use crate::server::req_handler::ServerRequestUnaryHandler;
+use crate::server::req_handler::ServerRequestUntyped;
+use crate::server::req_single::ServerRequestSingle;
+use crate::server::resp_sink::ServerResponseSink;
+use crate::server::resp_sink_untyped::ServerResponseUntypedSink;
+use crate::ServerResponseUnarySink;
 use std::marker;
-use ServerResponseUnarySink;
 
 pub trait MethodHandler<Req, Resp>
 where
@@ -358,7 +358,7 @@ pub(crate) trait MethodHandlerDispatchUntyped {
 
 struct MethodHandlerDispatchImpl<Req: 'static, Resp: 'static> {
     desc: ArcOrStatic<MethodDescriptor<Req, Resp>>,
-    method_handler: Box<MethodHandler<Req, Resp> + Sync + Send>,
+    method_handler: Box<dyn MethodHandler<Req, Resp> + Sync + Send>,
 }
 
 impl<Req, Resp> MethodHandlerDispatchUntyped for MethodHandlerDispatchImpl<Req, Resp>
@@ -404,7 +404,7 @@ where
 
 pub struct ServerMethod {
     pub(crate) name: StringOrStatic,
-    pub(crate) dispatch: Box<MethodHandlerDispatchUntyped + Sync + Send>,
+    pub(crate) dispatch: Box<dyn MethodHandlerDispatchUntyped + Sync + Send>,
 }
 
 impl ServerMethod {

@@ -1,7 +1,7 @@
 use base64;
 
+use crate::chars::Chars;
 use bytes::Bytes;
-use chars::Chars;
 
 use httpbis::Header;
 use httpbis::Headers;
@@ -71,7 +71,8 @@ impl MetadataEntry {
             return Ok(None);
         }
         let key = MetadataKey {
-            name: Chars::from(header.name()),
+            // TODO: return subbytes
+            name: Chars::copy_from_str(header.name()),
         };
         let value = match key.is_bin() {
             true => Bytes::from(base64::decode(&header.value)?),

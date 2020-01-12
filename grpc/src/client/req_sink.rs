@@ -1,22 +1,24 @@
+use crate::client::types::ClientTypes;
+use crate::common::sink::SinkCommon;
+use crate::common::sink::SinkCommonUntyped;
+use crate::common::sink::SinkUntyped;
 use bytes::Bytes;
-use client::types::ClientTypes;
-use common::sink::SinkCommon;
-use common::sink::SinkCommonUntyped;
-use common::sink::SinkUntyped;
-use futures::future;
-use futures::future::Future;
-use futures::Poll;
+
+use crate::result;
+use futures::task::Context;
 use httpbis;
-use httpbis::StreamDead;
-use result;
+
+use futures::future;
+use std::future::Future;
+use std::task::Poll;
 
 pub struct ClientRequestSinkUntyped {
     pub(crate) common: SinkCommonUntyped<ClientTypes>,
 }
 
 impl SinkUntyped for ClientRequestSinkUntyped {
-    fn poll(&mut self) -> Poll<(), httpbis::StreamDead> {
-        self.common.http.poll()
+    fn poll(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), httpbis::StreamDead>> {
+        self.common.http.poll(cx)
     }
 
     fn send_data(&mut self, message: Bytes) -> result::Result<()> {
@@ -37,12 +39,12 @@ pub struct ClientRequestSink<Req: Send + 'static> {
 }
 
 impl<Req: Send> ClientRequestSink<Req> {
-    pub fn poll(&mut self) -> Poll<(), httpbis::StreamDead> {
-        self.common.poll()
+    pub fn poll(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), httpbis::StreamDead>> {
+        self.common.poll(cx)
     }
 
-    pub fn block_wait(&mut self) -> Result<(), StreamDead> {
-        future::poll_fn(|| self.poll()).wait()
+    pub fn wait<'a>(&'a mut self) -> impl Future<Output = Result<(), httpbis::StreamDead>> + 'a {
+        future::poll_fn(move |cx| self.poll(cx))
     }
 
     pub fn send_data(&mut self, message: Req) -> result::Result<()> {

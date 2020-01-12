@@ -2,15 +2,19 @@ use std::collections::VecDeque;
 
 use bytes::Bytes;
 
+use futures::future;
 use futures::stream;
 use futures::stream::Stream;
-use futures::Async;
-use futures::Poll;
+use futures::stream::StreamExt;
 
-use error::*;
+use crate::bytesx::bytes_extend;
+use crate::error::*;
+use crate::result;
+use futures::task::Context;
 use httpbis::DataOrTrailers;
 use httpbis::HttpStreamAfterHeaders;
-use result;
+use std::pin::Pin;
+use std::task::Poll;
 
 fn read_u32_be(bytes: &[u8]) -> u32 {
     0 | ((bytes[0] as u32) << 24)
@@ -66,7 +70,7 @@ pub fn parse_grpc_frame(stream: &[u8]) -> result::Result<Option<(&[u8], usize)>>
 
 pub fn parse_grpc_frame_from_bytes(stream: &mut Bytes) -> result::Result<Option<Bytes>> {
     if let Some(len) = parse_grpc_frame_0(&stream)? {
-        let r = stream.slice(GRPC_HEADER_LEN, len + GRPC_HEADER_LEN);
+        let r = stream.slice(GRPC_HEADER_LEN..len + GRPC_HEADER_LEN);
         stream.split_to(len + GRPC_HEADER_LEN);
         Ok(Some(r))
     } else {
@@ -137,11 +141,11 @@ pub struct GrpcFrameFromHttpFramesStreamRequest {
     http_stream_stream: HttpStreamAfterHeaders,
     buf: Bytes,
     parsed_frames: VecDeque<Bytes>,
-    error: Option<stream::Once<Bytes, Error>>,
+    error: Option<stream::Once<future::Ready<crate::Result<Bytes>>>>,
 }
 
 impl GrpcFrameFromHttpFramesStreamRequest {
-    pub fn new(http_stream_stream: HttpStreamAfterHeaders) -> Self {
+    pub fn _new(http_stream_stream: HttpStreamAfterHeaders) -> Self {
         GrpcFrameFromHttpFramesStreamRequest {
             http_stream_stream,
             buf: Bytes::new(),
@@ -152,38 +156,41 @@ impl GrpcFrameFromHttpFramesStreamRequest {
 }
 
 impl Stream for GrpcFrameFromHttpFramesStreamRequest {
-    type Item = Bytes;
-    type Error = Error;
+    type Item = crate::Result<Bytes>;
 
-    fn poll(&mut self) -> Poll<Option<Bytes>, Error> {
+    fn poll_next(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<crate::Result<Bytes>>> {
         loop {
             if let Some(ref mut error) = self.error {
-                return error.poll();
+                return error.poll_next_unpin(cx);
             }
 
-            self.parsed_frames
-                .extend(match parse_grpc_frames_from_bytes(&mut self.buf) {
-                    Ok(r) => r,
-                    Err(e) => {
-                        self.error = Some(stream::once(Err(e)));
-                        continue;
-                    }
-                });
+            let p_r = parse_grpc_frames_from_bytes(&mut self.buf);
+
+            self.parsed_frames.extend(match p_r {
+                Ok(r) => r,
+                Err(e) => {
+                    self.error = Some(stream::once(future::ready(Err(e))));
+                    continue;
+                }
+            });
 
             if let Some(frame) = self.parsed_frames.pop_front() {
-                return Ok(Async::Ready(Some(frame)));
+                return Poll::Ready(Some(Ok(frame)));
             }
 
-            let part_opt = match self.http_stream_stream.poll()? {
-                Async::NotReady => return Ok(Async::NotReady),
-                Async::Ready(part_opt) => part_opt,
+            let part_opt = match self.http_stream_stream.poll_next_unpin(cx)? {
+                Poll::Pending => return Poll::Pending,
+                Poll::Ready(part_opt) => part_opt,
             };
             let part = match part_opt {
                 None => {
                     if self.buf.is_empty() {
-                        return Ok(Async::Ready(None));
+                        return Poll::Ready(None);
                     } else {
-                        self.error = Some(stream::once(Err(Error::Other("partial frame"))));
+                        self.error = Some(stream::once(future::err(Error::Other("partial frame"))));
                         continue;
                     }
                 }
@@ -194,7 +201,7 @@ impl Stream for GrpcFrameFromHttpFramesStreamRequest {
                 // unexpected but OK
                 DataOrTrailers::Trailers(..) => (),
                 DataOrTrailers::Data(data, ..) => {
-                    self.buf.extend_from_slice(&data);
+                    bytes_extend(&mut self.buf, data);
                 }
             }
         }
@@ -204,6 +211,7 @@ impl Stream for GrpcFrameFromHttpFramesStreamRequest {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::bytesx::bytes_extend_from_slice;
 
     #[test]
     fn test_parse_grpc_frame() {
@@ -224,10 +232,10 @@ mod test {
     fn test_parse_grpc_frames_from_bytes() {
         fn t(r: &[&[u8]], input: &[u8], trail: &[u8]) {
             let mut b = Bytes::new();
-            b.extend_from_slice(input);
-            b.extend_from_slice(trail);
+            bytes_extend_from_slice(&mut b, input);
+            bytes_extend_from_slice(&mut b, trail);
 
-            let r: Vec<Bytes> = r.into_iter().map(|&s| Bytes::from(s)).collect();
+            let r: Vec<Bytes> = r.into_iter().map(|&s| Bytes::copy_from_slice(s)).collect();
 
             let rr = parse_grpc_frames_from_bytes(&mut b).unwrap();
             assert_eq!(r, rr);

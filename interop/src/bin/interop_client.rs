@@ -2,7 +2,6 @@ extern crate chrono;
 extern crate clap;
 extern crate env_logger;
 extern crate futures;
-extern crate futures_cpupool;
 extern crate grpc;
 extern crate grpc_interop;
 extern crate log;

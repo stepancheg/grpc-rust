@@ -8,6 +8,7 @@ use grpc::ClientStubExt;
 use long_tests::long_tests_pb::*;
 use long_tests::long_tests_pb_grpc::*;
 
+use futures::executor;
 use std::env;
 
 fn single_num_arg_or(cmd_args: &[String], or: u64) -> u64 {
@@ -31,10 +32,12 @@ fn run_echo(client: LongTestsClient, cmd_args: &[String]) {
         let mut req = EchoRequest::new();
         req.set_payload(payload.clone());
 
-        let r = client
-            .echo(grpc::RequestOptions::new(), req)
-            .wait_drop_metadata()
-            .expect("failed to get echo response");
+        let r = executor::block_on(
+            client
+                .echo(grpc::RequestOptions::new(), req)
+                .drop_metadata(),
+        )
+        .expect("failed to get echo response");
 
         assert!(payload == r.get_payload());
     }
