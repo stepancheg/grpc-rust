@@ -2,7 +2,7 @@
 
 set -ex
 
-rustc --versoin
+rustc --version
 
 export RUST_BACKTRACE=1
 
