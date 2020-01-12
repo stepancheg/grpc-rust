@@ -6,26 +6,17 @@ env:
 
 language: rust
 
-rust:
-  - stable
-  - beta
-  - nightly
-
-#addons:
-#  apt:
-#    packages:
-#    - protobuf-compiler
-
-install:
-  - rustc --version
-  - ci/install-protobuf.sh
-  - cargo install protobuf-codegen --version '2'
-  - export RUST_BACKTRACE=1
+matrix:
+  include:
+  - name: Stable
+    rust: stable
+  - name: Beta
+    rust: beta
+  - name: Nightly
+    rust: nightly
 
 script:
-  - cargo test --all
-  - ./grpc-compiler/test-protoc-plugin/gen.sh
-  - cargo check --all
+  - ci/run.sh
 
 notifications:
   email:
