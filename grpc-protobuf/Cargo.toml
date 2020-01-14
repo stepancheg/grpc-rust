@@ -8,6 +8,7 @@ description = "Protobuf marshaller for gRPC"
 repository = "https://github.com/stepancheg/grpc-rust"
 readme = "../README.md"
 keywords = ["grpc"]
+edition = "2018"
 
 [dependencies]
 protobuf        = { version = "2", features = ["with-bytes"] }

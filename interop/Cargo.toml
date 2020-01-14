@@ -5,6 +5,7 @@ repository = "http://github.com/stephancheg/grpc-rust/interop"
 version = "0.0.0"
 authors = ["Steve Jenson <stevej@buoyant.io>"]
 publish = false
+edition = "2018"
 
 [dependencies.grpc]
 path = "../grpc"
