@@ -269,12 +269,15 @@ fn server_streaming() {
     let mut rs = tester.call("x");
 
     test_sync.take(0);
-    assert_eq!("x0", executor::block_on(rs.next()).unwrap().unwrap());
-    test_sync.take(2);
-    assert_eq!("x1", executor::block_on(rs.next()).unwrap().unwrap());
-    test_sync.take(4);
-    assert_eq!("x2", executor::block_on(rs.next()).unwrap().unwrap());
-    assert!(executor::block_on(rs.next()).is_none());
+
+    executor::block_on(async {
+        assert_eq!("x0", rs.next().await.unwrap().unwrap());
+        test_sync.take(2);
+        assert_eq!("x1", rs.next().await.unwrap().unwrap());
+        test_sync.take(4);
+        assert_eq!("x2", rs.next().await.unwrap().unwrap());
+        assert!(rs.next().await.is_none());
+    });
 }
 
 #[test]
