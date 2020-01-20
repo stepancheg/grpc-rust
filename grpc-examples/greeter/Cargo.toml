@@ -30,13 +30,5 @@ name = "greeter_client"
 test = false
 
 [[bin]]
-name = "greeter_client_multi"
-test = false
-
-[[bin]]
 name = "greeter_server"
-test = false
-
-[[bin]]
-name = "greeter_server_multi_server"
 test = false
