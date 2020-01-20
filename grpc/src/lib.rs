@@ -11,7 +11,6 @@ extern crate tls_api_stub;
 extern crate httpbis;
 extern crate tokio;
 
-mod futures_misc;
 mod misc;
 
 mod client;
