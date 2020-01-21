@@ -14,8 +14,8 @@ use protobuf::Message;
 pub struct MarshallerProtobuf;
 
 impl<M: Message> Marshaller<M> for MarshallerProtobuf {
-    fn write(&self, m: &M) -> grpc::Result<Vec<u8>> {
-        m.write_to_bytes()
+    fn write(&self, m: &M, out: &mut Vec<u8>) -> grpc::Result<()> {
+        m.write_to_vec(out)
             .map_err(|e| grpc::Error::Marshaller(Box::new(e)))
     }
 

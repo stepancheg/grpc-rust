@@ -53,7 +53,8 @@ impl<M: 'static, T: Types> SinkCommon<M, T> {
     }
 
     pub fn send_data(&mut self, message: M) -> result::Result<()> {
-        let bytes = self.marshaller.write(&message)?;
+        let mut bytes = Vec::new();
+        self.marshaller.write(&message, &mut bytes)?;
         // TODO: extra allocation
         self.sink.send_data(Bytes::from(bytes))?;
         Ok(())

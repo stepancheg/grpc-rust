@@ -24,7 +24,7 @@ use futures::future;
 use futures::future::TryFutureExt;
 
 use crate::or_static::arc::ArcOrStatic;
-use crate::proto::grpc_frame::write_grpc_frame_to_vec;
+use crate::proto::grpc_frame::write_grpc_frame_cb;
 use crate::req::*;
 use crate::resp::*;
 use std::future::Future;
@@ -213,13 +213,17 @@ impl Client {
         headers.extend(options.metadata.into_headers());
 
         let req_bytes = match req {
-            Some(req) => match method.req_marshaller.write(&req) {
-                Ok(bytes) => {
-                    // TODO: extra allocation
-                    Some(Bytes::from(write_grpc_frame_to_vec(&bytes)))
+            Some(req) => {
+                // TODO: capacity
+                let mut frame = Vec::new();
+                match write_grpc_frame_cb(&mut frame, |frame| {
+                    method.req_marshaller.write(&req, frame)
+                }) {
+                    Ok(()) => {}
+                    Err(e) => return Box::pin(future::err(e)),
                 }
-                Err(e) => return Box::pin(future::err(e)),
-            },
+                Some(Bytes::from(frame))
+            }
             None => None,
         };
 

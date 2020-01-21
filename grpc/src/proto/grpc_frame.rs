@@ -119,6 +119,22 @@ pub fn parse_grpc_frame_completely(stream: &[u8]) -> result::Result<&[u8]> {
 }
 
 /// Encode data into grpc frame (add frame prefix)
+pub fn write_grpc_frame_cb<F, E>(stream: &mut Vec<u8>, frame: F) -> Result<(), E>
+where
+    F: FnOnce(&mut Vec<u8>) -> Result<(), E>,
+{
+    stream.push(0); // compressed flag
+    let size_pos = stream.len();
+    stream.extend_from_slice(&[0, 0, 0, 0]); // len
+    let frame_start = stream.len();
+    frame(stream)?;
+    let frame_size = stream.len() - frame_start;
+    assert!(frame_size <= u32::max_value() as usize);
+    stream[size_pos..size_pos + 4].copy_from_slice(&write_u32_be(frame_size as u32));
+    Ok(())
+}
+
+/// Encode data into grpc frame (add frame prefix)
 pub fn write_grpc_frame(stream: &mut Vec<u8>, frame: &[u8]) {
     assert!(frame.len() <= u32::max_value() as usize);
     stream.reserve(5 + frame.len());
@@ -255,5 +271,12 @@ mod test {
             &b"\0\x00\x00\x00\x02ab\0\x00\x00\x00\x03cde"[..],
             &b"\x00"[..],
         );
+    }
+
+    #[test]
+    fn test_write_grpc_frame_cb() {
+        let mut f = Vec::new();
+        write_grpc_frame_cb(&mut f, |f| Ok::<_, ()>(f.extend_from_slice(&[0x17, 0x19]))).unwrap();
+        assert_eq!(&b"\x00\x00\x00\x00\x02\x17\x19"[..], f.as_slice());
     }
 }
