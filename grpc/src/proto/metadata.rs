@@ -76,7 +76,7 @@ impl MetadataEntry {
         };
         let value = match key.is_bin() {
             true => Bytes::from(base64::decode(&header.value)?),
-            false => header.value,
+            false => header.value.into(),
         };
         Ok(Some(MetadataEntry { key, value }))
     }
