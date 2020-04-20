@@ -16,6 +16,7 @@ use crate::error::GrpcMessageError;
 
 use crate::bytesx::bytes_extend;
 use crate::proto::grpc_frame::parse_grpc_frames_from_bytes;
+use crate::proto::grpc_frame_parser::GrpcFrameParser;
 use crate::proto::grpc_status::GrpcStatus;
 use crate::proto::headers::HEADER_GRPC_MESSAGE;
 use crate::proto::headers::HEADER_GRPC_STATUS;
@@ -64,7 +65,7 @@ pub fn http_response_to_grpc_frames(response: httpbis::Response) -> StreamingRes
 
 struct GrpcFrameFromHttpFramesStreamResponse {
     http_stream_stream: HttpStreamAfterHeaders,
-    buf: Bytes,
+    buf: GrpcFrameParser,
     parsed_frames: VecDeque<Bytes>,
     error: Option<stream::Once<future::Ready<crate::Result<ItemOrMetadata<Bytes>>>>>,
 }
@@ -73,7 +74,7 @@ impl GrpcFrameFromHttpFramesStreamResponse {
     pub fn new(http_stream_stream: HttpStreamAfterHeaders) -> Self {
         GrpcFrameFromHttpFramesStreamResponse {
             http_stream_stream,
-            buf: Bytes::new(),
+            buf: GrpcFrameParser::default(),
             parsed_frames: VecDeque::new(),
             error: None,
         }
@@ -89,7 +90,7 @@ impl Stream for GrpcFrameFromHttpFramesStreamResponse {
                 return unsafe { Pin::new_unchecked(error) }.poll_next(cx);
             }
 
-            let p_r = parse_grpc_frames_from_bytes(&mut self.buf);
+            let p_r = self.buf.next_frames();
             self.parsed_frames.extend(match p_r {
                 Ok(r) => r,
                 Err(e) => {
@@ -146,7 +147,7 @@ impl Stream for GrpcFrameFromHttpFramesStreamResponse {
                     continue;
                 }
                 DataOrTrailers::Data(data, ..) => {
-                    bytes_extend(&mut self.buf, data);
+                    self.buf.enqueue(data);
                 }
             }
         }
