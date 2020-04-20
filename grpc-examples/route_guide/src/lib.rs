@@ -5,6 +5,7 @@ extern crate protobuf;
 
 pub mod route_guide;
 pub mod route_guide_grpc;
+pub mod client;
 pub mod server;
 
 pub const DEFAULT_PORT: u16 = 10000;
