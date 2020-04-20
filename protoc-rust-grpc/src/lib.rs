@@ -28,6 +28,7 @@ pub struct Args<'a> {
     pub rust_protobuf_customize: protoc_rust::Customize,
 }
 
+// TODO: replace with `Codegen` object
 pub fn run(args: Args) -> Result<()> {
     let protoc = protoc::Protoc::from_env_path();
     let version = protoc.version().expect("protoc version");
@@ -36,13 +37,12 @@ pub fn run(args: Args) -> Result<()> {
     }
 
     if args.rust_protobuf {
-        protoc_rust::run(protoc_rust::Args {
-            out_dir: args.out_dir,
-            includes: args.includes,
-            input: args.input,
-            customize: args.rust_protobuf_customize,
-            ..Default::default()
-        })?;
+        protoc_rust::Codegen::new()
+            .out_dir(args.out_dir)
+            .includes(args.includes)
+            .inputs(args.input)
+            .customize(args.rust_protobuf_customize)
+            .run()?;
     }
 
     let temp_dir = tempdir::TempDir::new("protoc-rust")?;
