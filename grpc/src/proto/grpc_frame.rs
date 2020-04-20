@@ -15,15 +15,6 @@ use httpbis::HttpStreamAfterHeaders;
 use std::pin::Pin;
 use std::task::Poll;
 
-fn write_u32_be(v: u32) -> [u8; 4] {
-    [
-        (v >> 24) as u8,
-        (v >> 16) as u8,
-        (v >> 8) as u8,
-        (v >> 0) as u8,
-    ]
-}
-
 pub const GRPC_HEADER_LEN: usize = 5;
 
 /// Return frame len
@@ -94,7 +85,7 @@ where
     frame(stream)?;
     let frame_size = stream.len() - frame_start;
     assert!(frame_size <= u32::max_value() as usize);
-    stream[size_pos..size_pos + 4].copy_from_slice(&write_u32_be(frame_size as u32));
+    stream[size_pos..size_pos + 4].copy_from_slice(&(frame_size as u32).to_be_bytes());
     Ok(())
 }
 
