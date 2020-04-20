@@ -109,21 +109,23 @@ impl Stream for GrpcFrameFromHttpFramesStreamResponse {
                     Poll::Ready(part_opt) => part_opt,
                 };
             let part = match part_opt {
-                None => {
-                    if self.buf.is_empty() {
-                        return Poll::Ready(None);
-                    } else {
-                        self.error = Some(stream::once(future::err(Error::Other("partial frame"))));
+                None => match self.buf.check_empty() {
+                    Ok(()) => return Poll::Ready(None),
+                    Err(e) => {
+                        self.error = Some(stream::once(future::err(e)));
                         continue;
                     }
-                }
+                },
                 Some(part) => part,
             };
 
             match part {
                 DataOrTrailers::Trailers(headers) => {
+                    if let Err(e) = self.buf.check_empty() {
+                        self.error = Some(stream::once(future::err(e)));
+                        continue;
+                    }
                     if !self.buf.is_empty() {
-                        self.error = Some(stream::once(future::err(Error::Other("partial frame"))));
                     } else {
                         let grpc_status = headers.get_opt_parse(HEADER_GRPC_STATUS);
                         if grpc_status == Some(GrpcStatus::Ok as i32) {

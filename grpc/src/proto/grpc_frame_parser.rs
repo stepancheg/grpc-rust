@@ -1,4 +1,5 @@
 use crate::proto::grpc_frame::parse_grpc_frame_header;
+use crate::error;
 use crate::result;
 use bytes::Buf;
 use bytes::Bytes;
@@ -50,5 +51,12 @@ impl GrpcFrameParser {
     /// Buffered data is empty.
     pub fn is_empty(&self) -> bool {
         self.next_frame_len.is_none() && !self.buffer.has_remaining()
+    }
+
+    pub fn check_empty(&self) -> result::Result<()> {
+        if !self.is_empty() {
+            return Err(error::Error::Other("partial frame"));
+        }
+        Ok(())
     }
 }
