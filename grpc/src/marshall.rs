@@ -7,7 +7,7 @@ pub trait Marshaller<M>: Send + Sync + 'static {
     /// Can be used for more efficient capacity allocation.
     ///
     /// Default implementation returns zero.
-    fn write_size_estimate(&self, m: &M) -> crate::Result<u32> {
+    fn write_size_estimate(&self, _m: &M) -> crate::Result<u32> {
         Ok(0)
     }
 

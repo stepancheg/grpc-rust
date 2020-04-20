@@ -49,18 +49,6 @@ pub fn parse_grpc_frame_header<B: Buf>(stream: &mut B) -> result::Result<Option<
     Ok(Some(stream.get_u32()))
 }
 
-// return message and size consumed
-pub fn parse_grpc_frame(stream: &[u8]) -> result::Result<Option<(&[u8], usize)>> {
-    parse_grpc_frame_0(stream).map(|o| {
-        o.map(|len| {
-            (
-                &stream[GRPC_HEADER_LEN..len + GRPC_HEADER_LEN],
-                len + GRPC_HEADER_LEN,
-            )
-        })
-    })
-}
-
 pub fn parse_grpc_frame_from_bytes(stream: &mut Bytes) -> result::Result<Option<Bytes>> {
     if let Some(len) = parse_grpc_frame_0(&stream)? {
         let r = stream.slice(GRPC_HEADER_LEN..len + GRPC_HEADER_LEN);
@@ -165,6 +153,18 @@ mod test {
                 }
             }
         }
+    }
+
+    // return message and size consumed
+    fn parse_grpc_frame(stream: &[u8]) -> result::Result<Option<(&[u8], usize)>> {
+        parse_grpc_frame_0(stream).map(|o| {
+            o.map(|len| {
+                (
+                    &stream[GRPC_HEADER_LEN..len + GRPC_HEADER_LEN],
+                    len + GRPC_HEADER_LEN,
+                )
+            })
+        })
     }
 
     #[test]
