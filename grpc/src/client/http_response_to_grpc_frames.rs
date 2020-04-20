@@ -2,7 +2,6 @@
 use std::collections::VecDeque;
 
 use futures::future::TryFutureExt;
-use futures::prelude::*;
 use futures::stream::Stream;
 
 use httpbis::Headers;
@@ -65,7 +64,6 @@ struct GrpcFrameFromHttpFramesStreamResponse {
     http_stream_stream: HttpStreamAfterHeaders,
     buf: GrpcFrameParser,
     parsed_frames: VecDeque<Bytes>,
-    error: Option<stream::Once<future::Ready<crate::Result<ItemOrMetadata<Bytes>>>>>,
 }
 
 impl GrpcFrameFromHttpFramesStreamResponse {
@@ -74,7 +72,6 @@ impl GrpcFrameFromHttpFramesStreamResponse {
             http_stream_stream,
             buf: GrpcFrameParser::default(),
             parsed_frames: VecDeque::new(),
-            error: None,
         }
     }
 }
@@ -84,18 +81,8 @@ impl Stream for GrpcFrameFromHttpFramesStreamResponse {
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         loop {
-            if let Some(ref mut error) = self.error {
-                return unsafe { Pin::new_unchecked(error) }.poll_next(cx);
-            }
-
-            let p_r = self.buf.next_frames();
-            self.parsed_frames.extend(match p_r {
-                Ok(r) => r,
-                Err(e) => {
-                    self.error = Some(stream::once(future::err(e)));
-                    continue;
-                }
-            });
+            let frames = self.buf.next_frames()?;
+            self.parsed_frames.extend(frames);
 
             if let Some(frame) = self.parsed_frames.pop_front() {
                 return Poll::Ready(Some(Ok(ItemOrMetadata::Item(frame))));
@@ -107,44 +94,33 @@ impl Stream for GrpcFrameFromHttpFramesStreamResponse {
                     Poll::Ready(part_opt) => part_opt,
                 };
             let part = match part_opt {
-                None => match self.buf.check_empty() {
-                    Ok(()) => return Poll::Ready(None),
-                    Err(e) => {
-                        self.error = Some(stream::once(future::err(e)));
-                        continue;
-                    }
-                },
+                None => {
+                    self.buf.check_empty()?;
+                    return Poll::Ready(None);
+                }
                 Some(part) => part,
             };
 
             match part {
                 DataOrTrailers::Trailers(headers) => {
-                    if let Err(e) = self.buf.check_empty() {
-                        self.error = Some(stream::once(future::err(e)));
-                        continue;
-                    }
-                    if !self.buf.is_empty() {
+                    self.buf.check_empty()?;
+                    let grpc_status = headers.get_opt_parse(HEADER_GRPC_STATUS);
+                    if grpc_status == Some(GrpcStatus::Ok as i32) {
+                        return Poll::Ready(Some(Ok(ItemOrMetadata::TrailingMetadata(
+                            Metadata::from_headers(headers)?,
+                        ))));
                     } else {
-                        let grpc_status = headers.get_opt_parse(HEADER_GRPC_STATUS);
-                        if grpc_status == Some(GrpcStatus::Ok as i32) {
-                            return Poll::Ready(Some(Ok(ItemOrMetadata::TrailingMetadata(
-                                Metadata::from_headers(headers)?,
-                            ))));
-                        } else {
-                            self.error = Some(stream::once(future::err(
-                                if let Some(message) = headers.get_opt(HEADER_GRPC_MESSAGE) {
-                                    Error::GrpcMessage(GrpcMessageError {
-                                        grpc_status: grpc_status
-                                            .unwrap_or(GrpcStatus::Unknown as i32),
-                                        grpc_message: message.to_owned(),
-                                    })
-                                } else {
-                                    Error::Other("not xxx")
-                                },
-                            )));
-                        }
+                        return Poll::Ready(Some(Err(
+                            if let Some(message) = headers.get_opt(HEADER_GRPC_MESSAGE) {
+                                Error::GrpcMessage(GrpcMessageError {
+                                    grpc_status: grpc_status.unwrap_or(GrpcStatus::Unknown as i32),
+                                    grpc_message: message.to_owned(),
+                                })
+                            } else {
+                                Error::Other("not xxx")
+                            },
+                        )));
                     }
-                    continue;
                 }
                 DataOrTrailers::Data(data, ..) => {
                     self.buf.enqueue(data);

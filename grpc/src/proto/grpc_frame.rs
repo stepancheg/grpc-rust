@@ -136,7 +136,6 @@ pub struct GrpcFrameFromHttpFramesStreamRequest {
     http_stream_stream: HttpStreamAfterHeaders,
     buf: GrpcFrameParser,
     parsed_frames: VecDeque<Bytes>,
-    error: Option<stream::Once<future::Ready<crate::Result<Bytes>>>>,
 }
 
 impl GrpcFrameFromHttpFramesStreamRequest {
@@ -145,7 +144,6 @@ impl GrpcFrameFromHttpFramesStreamRequest {
             http_stream_stream,
             buf: GrpcFrameParser::default(),
             parsed_frames: VecDeque::new(),
-            error: None,
         }
     }
 }
@@ -158,19 +156,9 @@ impl Stream for GrpcFrameFromHttpFramesStreamRequest {
         cx: &mut Context<'_>,
     ) -> Poll<Option<crate::Result<Bytes>>> {
         loop {
-            if let Some(ref mut error) = self.error {
-                return error.poll_next_unpin(cx);
-            }
+            let parsed_frames = self.buf.next_frames()?;
 
-            let p_r = self.buf.next_frames();
-
-            self.parsed_frames.extend(match p_r {
-                Ok(r) => r,
-                Err(e) => {
-                    self.error = Some(stream::once(future::ready(Err(e))));
-                    continue;
-                }
-            });
+            self.parsed_frames.extend(parsed_frames);
 
             if let Some(frame) = self.parsed_frames.pop_front() {
                 return Poll::Ready(Some(Ok(frame)));
@@ -181,13 +169,10 @@ impl Stream for GrpcFrameFromHttpFramesStreamRequest {
                 Poll::Ready(part_opt) => part_opt,
             };
             let part = match part_opt {
-                None => match self.buf.check_empty() {
-                    Ok(()) => return Poll::Ready(None),
-                    Err(e) => {
-                        self.error = Some(stream::once(future::err(e)));
-                        continue;
-                    }
-                },
+                None => {
+                    self.buf.check_empty()?;
+                    return Poll::Ready(None);
+                }
                 Some(part) => part,
             };
 
