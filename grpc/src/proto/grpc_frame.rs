@@ -207,6 +207,20 @@ mod test {
     use super::*;
     use crate::bytesx::bytes_extend_from_slice;
 
+    fn parse_grpc_frames_from_bytes(stream: &mut Bytes) -> result::Result<Vec<Bytes>> {
+        let mut r = Vec::new();
+        loop {
+            match parse_grpc_frame_from_bytes(stream)? {
+                Some(bytes) => {
+                    r.push(bytes);
+                }
+                None => {
+                    return Ok(r);
+                }
+            }
+        }
+    }
+
     #[test]
     fn test_parse_grpc_frame() {
         assert_eq!(None, parse_grpc_frame(b"").unwrap());
