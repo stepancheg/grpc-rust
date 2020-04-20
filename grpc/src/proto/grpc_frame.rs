@@ -1,9 +1,8 @@
 use std::collections::VecDeque;
 
-use bytes::{Buf, Bytes};
+use bytes::Buf;
+use bytes::Bytes;
 
-use futures::future;
-use futures::stream;
 use futures::stream::Stream;
 use futures::stream::StreamExt;
 
@@ -98,10 +97,12 @@ pub fn parse_grpc_frames_completely(stream: &[u8]) -> result::Result<Vec<&[u8]>>
 }
 
 /// Encode data into grpc frame (add frame prefix)
-pub fn write_grpc_frame_cb<F, E>(stream: &mut Vec<u8>, frame: F) -> Result<(), E>
+pub fn write_grpc_frame_cb<F, E>(stream: &mut Vec<u8>, estimate: u32, frame: F) -> Result<(), E>
 where
     F: FnOnce(&mut Vec<u8>) -> Result<(), E>,
 {
+    stream.reserve(estimate as usize + GRPC_HEADER_LEN);
+
     stream.push(0); // compressed flag
     let size_pos = stream.len();
     stream.extend_from_slice(&[0, 0, 0, 0]); // len
@@ -253,7 +254,10 @@ mod test {
     #[test]
     fn test_write_grpc_frame_cb() {
         let mut f = Vec::new();
-        write_grpc_frame_cb(&mut f, |f| Ok::<_, ()>(f.extend_from_slice(&[0x17, 0x19]))).unwrap();
+        write_grpc_frame_cb(&mut f, 0, |f| {
+            Ok::<_, ()>(f.extend_from_slice(&[0x17, 0x19]))
+        })
+        .unwrap();
         assert_eq!(&b"\x00\x00\x00\x00\x02\x17\x19"[..], f.as_slice());
     }
 }

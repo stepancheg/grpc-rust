@@ -14,7 +14,12 @@ use protobuf::Message;
 pub struct MarshallerProtobuf;
 
 impl<M: Message> Marshaller<M> for MarshallerProtobuf {
-    fn write(&self, m: &M, out: &mut Vec<u8>) -> grpc::Result<()> {
+    fn write_size_estimate(&self, m: &M) -> grpc::Result<u32> {
+        // TODO: implement it
+        Ok(0)
+    }
+
+    fn write(&self, m: &M, size_esimate: u32, out: &mut Vec<u8>) -> grpc::Result<()> {
         m.write_to_vec(out)
             .map_err(|e| grpc::Error::Marshaller(Box::new(e)))
     }

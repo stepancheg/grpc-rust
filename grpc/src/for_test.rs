@@ -9,7 +9,7 @@ use crate::result::Result;
 pub struct MarshallerString;
 
 impl Marshaller<String> for MarshallerString {
-    fn write(&self, m: &String, out: &mut Vec<u8>) -> Result<()> {
+    fn write(&self, m: &String, estimated_size: u32, out: &mut Vec<u8>) -> Result<()> {
         out.extend_from_slice(m.as_bytes());
         Ok(())
     }
@@ -23,7 +23,7 @@ impl Marshaller<String> for MarshallerString {
 pub struct MarshallerBytes;
 
 impl Marshaller<Vec<u8>> for MarshallerBytes {
-    fn write(&self, m: &Vec<u8>, out: &mut Vec<u8>) -> Result<()> {
+    fn write(&self, m: &Vec<u8>, estimated_size: u32, out: &mut Vec<u8>) -> Result<()> {
         out.extend_from_slice(&m);
         Ok(())
     }

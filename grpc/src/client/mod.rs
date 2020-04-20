@@ -214,10 +214,13 @@ impl Client {
 
         let req_bytes = match req {
             Some(req) => {
-                // TODO: capacity
                 let mut frame = Vec::new();
-                match write_grpc_frame_cb(&mut frame, |frame| {
-                    method.req_marshaller.write(&req, frame)
+                let size_estimate = match method.req_marshaller.write_size_estimate(&req) {
+                    Ok(len) => len,
+                    Err(e) => return Box::pin(future::err(e)),
+                };
+                match write_grpc_frame_cb(&mut frame, size_estimate, |frame| {
+                    method.req_marshaller.write(&req, size_estimate, frame)
                 }) {
                     Ok(()) => {}
                     Err(e) => return Box::pin(future::err(e)),
