@@ -80,22 +80,6 @@ pub fn parse_grpc_frame_from_bytes(stream: &mut Bytes) -> result::Result<Option<
     }
 }
 
-pub fn parse_grpc_frames_completely(stream: &[u8]) -> result::Result<Vec<&[u8]>> {
-    let mut r = Vec::new();
-    let mut pos = 0;
-    while pos < stream.len() {
-        let frame_opt = parse_grpc_frame(&stream[pos..])?;
-        match frame_opt {
-            None => return Err(Error::Other("not complete frames")),
-            Some((frame, len)) => {
-                r.push(frame);
-                pos += len;
-            }
-        }
-    }
-    Ok(r)
-}
-
 /// Encode data into grpc frame (add frame prefix)
 pub fn write_grpc_frame_cb<F, E>(stream: &mut Vec<u8>, estimate: u32, frame: F) -> Result<(), E>
 where
@@ -112,21 +96,6 @@ where
     assert!(frame_size <= u32::max_value() as usize);
     stream[size_pos..size_pos + 4].copy_from_slice(&write_u32_be(frame_size as u32));
     Ok(())
-}
-
-/// Encode data into grpc frame (add frame prefix)
-pub fn write_grpc_frame(stream: &mut Vec<u8>, frame: &[u8]) {
-    assert!(frame.len() <= u32::max_value() as usize);
-    stream.reserve(5 + frame.len());
-    stream.push(0); // compressed flag
-    stream.extend(&write_u32_be(frame.len() as u32));
-    stream.extend(frame);
-}
-
-pub fn write_grpc_frame_to_vec(frame: &[u8]) -> Vec<u8> {
-    let mut r = Vec::new();
-    write_grpc_frame(&mut r, frame);
-    r
 }
 
 trait RequestOrResponse {
