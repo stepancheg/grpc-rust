@@ -97,16 +97,6 @@ pub fn parse_grpc_frames_completely(stream: &[u8]) -> result::Result<Vec<&[u8]>>
     Ok(r)
 }
 
-#[allow(dead_code)]
-pub fn parse_grpc_frame_completely(stream: &[u8]) -> result::Result<&[u8]> {
-    let frames = parse_grpc_frames_completely(stream)?;
-    if frames.len() == 1 {
-        Ok(frames[0])
-    } else {
-        Err(Error::Other("expecting exactly one frame"))
-    }
-}
-
 /// Encode data into grpc frame (add frame prefix)
 pub fn write_grpc_frame_cb<F, E>(stream: &mut Vec<u8>, frame: F) -> Result<(), E>
 where
