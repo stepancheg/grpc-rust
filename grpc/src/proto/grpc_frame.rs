@@ -9,6 +9,7 @@ use futures::stream::StreamExt;
 
 use crate::bytesx::bytes_extend;
 use crate::error::*;
+use crate::proto::grpc_frame_parser::GrpcFrameParser;
 use crate::result;
 use futures::task::Context;
 use httpbis::DataOrTrailers;
@@ -165,7 +166,7 @@ trait RequestOrResponse {
 
 pub struct GrpcFrameFromHttpFramesStreamRequest {
     http_stream_stream: HttpStreamAfterHeaders,
-    buf: Bytes,
+    buf: GrpcFrameParser,
     parsed_frames: VecDeque<Bytes>,
     error: Option<stream::Once<future::Ready<crate::Result<Bytes>>>>,
 }
@@ -174,7 +175,7 @@ impl GrpcFrameFromHttpFramesStreamRequest {
     pub fn _new(http_stream_stream: HttpStreamAfterHeaders) -> Self {
         GrpcFrameFromHttpFramesStreamRequest {
             http_stream_stream,
-            buf: Bytes::new(),
+            buf: GrpcFrameParser::default(),
             parsed_frames: VecDeque::new(),
             error: None,
         }
@@ -193,7 +194,7 @@ impl Stream for GrpcFrameFromHttpFramesStreamRequest {
                 return error.poll_next_unpin(cx);
             }
 
-            let p_r = parse_grpc_frames_from_bytes(&mut self.buf);
+            let p_r = self.buf.next_frames();
 
             self.parsed_frames.extend(match p_r {
                 Ok(r) => r,
@@ -227,7 +228,7 @@ impl Stream for GrpcFrameFromHttpFramesStreamRequest {
                 // unexpected but OK
                 DataOrTrailers::Trailers(..) => (),
                 DataOrTrailers::Data(data, ..) => {
-                    bytes_extend(&mut self.buf, data);
+                    self.buf.enqueue(data);
                 }
             }
         }
