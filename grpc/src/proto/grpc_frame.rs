@@ -36,10 +36,26 @@ pub const GRPC_HEADER_LEN: usize = 5;
 
 /// Return frame len
 pub fn parse_grpc_frame_0(stream: &[u8]) -> result::Result<Option<usize>> {
-    if stream.len() < GRPC_HEADER_LEN {
+    let mut stream_copy = stream;
+    let len = match parse_grpc_frame_header(&mut stream_copy)? {
+        Some(len) => len,
+        None => return Ok(None),
+    };
+
+    let end = len as usize + GRPC_HEADER_LEN;
+    if end > stream.len() {
         return Ok(None);
     }
-    let compressed = match stream[0] {
+
+    Ok(Some(len as usize))
+}
+
+pub fn parse_grpc_frame_header<B: Buf>(stream: &mut B) -> result::Result<Option<u32>> {
+    if stream.remaining() < GRPC_HEADER_LEN {
+        return Ok(None);
+    }
+
+    let compressed = match stream.get_u8() {
         0 => false,
         1 => true,
         _ => return Err(Error::Other("unknown compression flag")),
@@ -47,13 +63,7 @@ pub fn parse_grpc_frame_0(stream: &[u8]) -> result::Result<Option<usize>> {
     if compressed {
         return Err(Error::Other("compression is not implemented"));
     }
-    let len = read_u32_be(&stream[1..]) as usize;
-    let end = len + GRPC_HEADER_LEN;
-    if end > stream.len() {
-        return Ok(None);
-    }
-
-    Ok(Some(len))
+    Ok(Some(stream.get_u32()))
 }
 
 // return message and size consumed
