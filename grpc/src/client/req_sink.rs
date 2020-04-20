@@ -1,8 +1,7 @@
 use crate::client::types::ClientTypes;
-use crate::common::sink::SinkCommon;
 use crate::common::sink::SinkCommonUntyped;
 use crate::common::sink::SinkUntyped;
-use bytes::Bytes;
+use crate::common::sink::{MessageToBeSerialized, SinkCommon};
 
 use crate::result;
 use futures::task::Context;
@@ -21,7 +20,7 @@ impl SinkUntyped for ClientRequestSinkUntyped {
         self.common.http.poll(cx)
     }
 
-    fn send_message(&mut self, message: Bytes) -> result::Result<()> {
+    fn send_message(&mut self, message: &dyn MessageToBeSerialized) -> result::Result<()> {
         self.common.send_message(message)?;
         Ok(())
     }

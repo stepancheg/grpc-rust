@@ -1,6 +1,5 @@
-use crate::common::sink::SinkCommonUntyped;
 use crate::common::sink::SinkUntyped;
-use bytes::Bytes;
+use crate::common::sink::{MessageToBeSerialized, SinkCommonUntyped};
 
 use crate::proto::grpc_status::GrpcStatus;
 use crate::proto::headers::headers_200;
@@ -22,7 +21,7 @@ impl SinkUntyped for ServerResponseUntypedSink {
         self.common.http.poll(cx)
     }
 
-    fn send_message(&mut self, message: Bytes) -> result::Result<()> {
+    fn send_message(&mut self, message: &dyn MessageToBeSerialized) -> result::Result<()> {
         if self.common.http.state() == httpbis::SenderState::ExpectingHeaders {
             self.send_metadata(Metadata::new())?;
         }
