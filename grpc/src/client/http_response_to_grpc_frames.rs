@@ -14,8 +14,6 @@ use crate::result;
 use crate::error::Error;
 use crate::error::GrpcMessageError;
 
-use crate::bytesx::bytes_extend;
-use crate::proto::grpc_frame::parse_grpc_frames_from_bytes;
 use crate::proto::grpc_frame_parser::GrpcFrameParser;
 use crate::proto::grpc_status::GrpcStatus;
 use crate::proto::headers::HEADER_GRPC_MESSAGE;

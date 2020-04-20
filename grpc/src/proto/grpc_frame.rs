@@ -7,7 +7,6 @@ use futures::stream;
 use futures::stream::Stream;
 use futures::stream::StreamExt;
 
-use crate::bytesx::bytes_extend;
 use crate::error::*;
 use crate::proto::grpc_frame_parser::GrpcFrameParser;
 use crate::result;
@@ -16,13 +15,6 @@ use httpbis::DataOrTrailers;
 use httpbis::HttpStreamAfterHeaders;
 use std::pin::Pin;
 use std::task::Poll;
-
-fn read_u32_be(bytes: &[u8]) -> u32 {
-    0 | ((bytes[0] as u32) << 24)
-        | ((bytes[1] as u32) << 16)
-        | ((bytes[2] as u32) << 8)
-        | ((bytes[3] as u32) << 0)
-}
 
 fn write_u32_be(v: u32) -> [u8; 4] {
     [
@@ -86,20 +78,6 @@ pub fn parse_grpc_frame_from_bytes(stream: &mut Bytes) -> result::Result<Option<
         Ok(Some(r))
     } else {
         Ok(None)
-    }
-}
-
-pub fn parse_grpc_frames_from_bytes(stream: &mut Bytes) -> result::Result<Vec<Bytes>> {
-    let mut r = Vec::new();
-    loop {
-        match parse_grpc_frame_from_bytes(stream)? {
-            Some(bytes) => {
-                r.push(bytes);
-            }
-            None => {
-                return Ok(r);
-            }
-        }
     }
 }
 
