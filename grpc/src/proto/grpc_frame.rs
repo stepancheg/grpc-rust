@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use bytes::Bytes;
+use bytes::{Buf, Bytes};
 
 use futures::future;
 use futures::stream;
@@ -71,7 +71,7 @@ pub fn parse_grpc_frame(stream: &[u8]) -> result::Result<Option<(&[u8], usize)>>
 pub fn parse_grpc_frame_from_bytes(stream: &mut Bytes) -> result::Result<Option<Bytes>> {
     if let Some(len) = parse_grpc_frame_0(&stream)? {
         let r = stream.slice(GRPC_HEADER_LEN..len + GRPC_HEADER_LEN);
-        stream.split_to(len + GRPC_HEADER_LEN);
+        stream.advance(len + GRPC_HEADER_LEN);
         Ok(Some(r))
     } else {
         Ok(None)

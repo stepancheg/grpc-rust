@@ -14,7 +14,6 @@ use std::thread;
 use bytes::Bytes;
 
 use futures::stream;
-use futures::stream::Stream;
 use futures::StreamExt;
 
 use grpc::*;

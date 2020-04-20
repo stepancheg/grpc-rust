@@ -1,6 +1,5 @@
 use crate::proto::grpc_status::GrpcStatus;
 use crate::Metadata;
-use bytes::Bytes;
 use httpbis::BytesDeque;
 use httpbis::Header;
 use httpbis::Headers;

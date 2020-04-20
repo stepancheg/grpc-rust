@@ -9,7 +9,6 @@ extern crate tls_api_native_tls;
 extern crate env_logger;
 
 use std::env;
-use std::net::SocketAddr;
 use std::sync::Arc;
 
 use grpc_examples_greeter::helloworld::*;
@@ -56,7 +55,7 @@ fn main() {
         // This is a bit complicated, because we need to explicitly pass root CA here
         // because server uses self-signed certificate.
         // TODO: simplify it
-        let mut tls_option =
+        let tls_option =
             httpbis::ClientTlsOption::Tls("foobar.com".to_owned(), Arc::new(test_tls_connector()));
         let grpc_client = Arc::new(
             grpc::ClientBuilder::new("::1", port)
