@@ -26,7 +26,7 @@ impl From<httpbis::SendError> for SendError {
 
 pub(crate) trait SinkUntyped {
     fn poll(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), httpbis::StreamDead>>;
-    fn send_data(&mut self, message: Bytes) -> result::Result<()>;
+    fn send_message(&mut self, message: Bytes) -> result::Result<()>;
 }
 
 pub(crate) struct SinkCommonUntyped<T: Types> {
@@ -34,7 +34,7 @@ pub(crate) struct SinkCommonUntyped<T: Types> {
 }
 
 impl<T: Types> SinkCommonUntyped<T> {
-    pub fn send_data(&mut self, message: Bytes) -> result::Result<()> {
+    pub fn send_message(&mut self, message: Bytes) -> result::Result<()> {
         // TODO: allocation
         self.http
             .send_data(Bytes::from(write_grpc_frame_to_vec(&message)))?;
@@ -57,7 +57,7 @@ impl<M: 'static, T: Types> SinkCommon<M, T> {
         let size_estimate = self.marshaller.write_size_estimate(&message)?;
         self.marshaller.write(&message, size_estimate, &mut bytes)?;
         // TODO: extra allocation
-        self.sink.send_data(Bytes::from(bytes))?;
+        self.sink.send_message(Bytes::from(bytes))?;
         Ok(())
     }
 }

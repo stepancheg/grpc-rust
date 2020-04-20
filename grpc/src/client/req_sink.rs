@@ -21,8 +21,8 @@ impl SinkUntyped for ClientRequestSinkUntyped {
         self.common.http.poll(cx)
     }
 
-    fn send_data(&mut self, message: Bytes) -> result::Result<()> {
-        self.common.send_data(message)?;
+    fn send_message(&mut self, message: Bytes) -> result::Result<()> {
+        self.common.send_message(message)?;
         Ok(())
     }
 }

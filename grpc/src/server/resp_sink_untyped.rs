@@ -22,11 +22,11 @@ impl SinkUntyped for ServerResponseUntypedSink {
         self.common.http.poll(cx)
     }
 
-    fn send_data(&mut self, message: Bytes) -> result::Result<()> {
+    fn send_message(&mut self, message: Bytes) -> result::Result<()> {
         if self.common.http.state() == httpbis::SenderState::ExpectingHeaders {
             self.send_metadata(Metadata::new())?;
         }
-        self.common.send_data(message)
+        self.common.send_message(message)
     }
 }
 
