@@ -1,12 +1,12 @@
-use crate::proto::grpc_frame::parse_grpc_frame_header;
 use crate::error;
+use crate::proto::grpc_frame::parse_grpc_frame_header;
 use crate::result;
 use bytes::Buf;
 use bytes::Bytes;
 use httpbis::BufGetBytes;
 use httpbis::BytesDeque;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(crate) struct GrpcFrameParser {
     /// Next frame length; stripped prefix from the queue
     next_frame_len: Option<u32>,
@@ -31,7 +31,7 @@ impl GrpcFrameParser {
     /// Parse next frame if buffer has full frame.
     pub fn next_frame(&mut self) -> result::Result<Option<Bytes>> {
         if let Some(len) = self.fill_next_frame_len()? {
-            if self.buffer.remaining() > len as usize {
+            if self.buffer.remaining() >= len as usize {
                 self.next_frame_len = None;
                 return Ok(Some(BufGetBytes::get_bytes(&mut self.buffer, len as usize)));
             }
@@ -58,5 +58,29 @@ impl GrpcFrameParser {
             return Err(error::Error::Other("partial frame"));
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use bytes::Bytes;
+
+    #[test]
+    fn test() {
+        fn parse(data: &[u8]) -> result::Result<Option<Bytes>> {
+            let mut parser = GrpcFrameParser::default();
+            parser.enqueue(Bytes::copy_from_slice(data));
+            parser.next_frame()
+        }
+
+        assert_eq!(None, parse(b"").unwrap());
+        assert_eq!(None, parse(b"1").unwrap());
+        assert_eq!(None, parse(b"14sc").unwrap());
+        assert_eq!(None, parse(b"\x00\x00\x00\x00\x07\x0a\x05wo").unwrap());
+        assert_eq!(
+            Some(Bytes::copy_from_slice(b"\x0a\x05world")),
+            parse(b"\x00\x00\x00\x00\x07\x0a\x05world").unwrap()
+        );
     }
 }
