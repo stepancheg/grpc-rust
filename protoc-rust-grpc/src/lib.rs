@@ -6,101 +6,173 @@ extern crate protobuf;
 extern crate protoc;
 extern crate protoc_rust;
 
+use protoc::Protoc;
+use protoc_rust::Customize;
 use std::fs;
 use std::io;
 use std::io::Read;
 use std::io::Write;
+use std::path::{Path, PathBuf};
 
 pub type Error = io::Error;
 pub type Result<T> = io::Result<T>;
 
+/// Utility to generate `.rs` files.
 #[derive(Debug, Default)]
-pub struct Args<'a> {
+pub struct Codegen {
+    protoc: Option<Protoc>,
     /// --lang_out= param
-    pub out_dir: &'a str,
+    out_dir: PathBuf,
     /// -I args
-    pub includes: &'a [&'a str],
+    includes: Vec<PathBuf>,
     /// List of .proto files to compile
-    pub input: &'a [&'a str],
+    inputs: Vec<PathBuf>,
     /// Generate rust-protobuf files along with rust-gprc
-    pub rust_protobuf: bool,
+    rust_protobuf: bool,
     /// Customize rust-protobuf codegen
-    pub rust_protobuf_customize: protoc_rust::Customize,
+    rust_protobuf_customize: protoc_rust::Customize,
 }
 
-// TODO: replace with `Codegen` object
-pub fn run(args: Args) -> Result<()> {
-    let protoc = protoc::Protoc::from_env_path();
-    let version = protoc.version().expect("protoc version");
-    if !version.is_3() {
-        panic!("protobuf must have version 3");
+impl Codegen {
+    /// Create new codegen object.
+    pub fn new() -> Codegen {
+        Default::default()
     }
 
-    if args.rust_protobuf {
-        protoc_rust::Codegen::new()
-            .out_dir(args.out_dir)
-            .includes(args.includes)
-            .inputs(args.input)
-            .customize(args.rust_protobuf_customize)
-            .run()?;
+    /// Set `--LANG_out=...` param
+    pub fn out_dir(&mut self, out_dir: impl AsRef<Path>) -> &mut Self {
+        self.out_dir = out_dir.as_ref().to_owned();
+        self
     }
 
-    let temp_dir = tempdir::TempDir::new("protoc-rust")?;
-    let temp_file = temp_dir.path().join("descriptor.pbbin");
-    let temp_file = temp_file.to_str().expect("utf-8 file name");
-
-    protoc.write_descriptor_set(protoc::DescriptorSetOutArgs {
-        out: temp_file,
-        includes: args.includes,
-        input: args.input,
-        include_imports: true,
-    })?;
-
-    let mut fds = Vec::new();
-    let mut file = fs::File::open(temp_file)?;
-    file.read_to_end(&mut fds)?;
-
-    drop(file);
-    drop(temp_dir);
-
-    let fds: protobuf::descriptor::FileDescriptorSet =
-        protobuf::parse_from_bytes(&fds).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-
-    let mut includes = args.includes;
-    if includes.is_empty() {
-        static DOT_SLICE: &'static [&'static str] = &["."];
-        includes = DOT_SLICE;
+    /// Append a path to `-I` args
+    pub fn include(&mut self, include: impl AsRef<Path>) -> &mut Self {
+        self.includes.push(include.as_ref().to_owned());
+        self
     }
 
-    let mut files_to_generate = Vec::new();
-    'outer: for file in args.input {
+    /// Append multiple paths to `-I` args
+    pub fn includes(&mut self, includes: impl IntoIterator<Item = impl AsRef<Path>>) -> &mut Self {
         for include in includes {
-            if let Some(truncated) = remove_path_prefix(file, include) {
-                files_to_generate.push(truncated.to_owned());
-                continue 'outer;
-            }
+            self.include(include);
+        }
+        self
+    }
+
+    /// Append a `.proto` file path to compile
+    pub fn input(&mut self, input: impl AsRef<Path>) -> &mut Self {
+        self.inputs.push(input.as_ref().to_owned());
+        self
+    }
+
+    /// Append multiple `.proto` file paths to compile
+    pub fn inputs(&mut self, inputs: impl IntoIterator<Item = impl AsRef<Path>>) -> &mut Self {
+        for input in inputs {
+            self.input(input);
+        }
+        self
+    }
+
+    /// Generate rust-protobuf files along with rust-gprc
+    pub fn rust_protobuf(&mut self, rust_protobuf: bool) -> &mut Self {
+        self.rust_protobuf = rust_protobuf;
+        self
+    }
+
+    /// Generate rust-protobuf files along with rust-gprc
+    pub fn rust_protobuf_customize(&mut self, rust_protobuf_customize: Customize) -> &mut Self {
+        self.rust_protobuf_customize = rust_protobuf_customize;
+        self
+    }
+
+    // TODO: replace with `Codegen` object
+    pub fn run(&self) -> Result<()> {
+        let protoc = self
+            .protoc
+            .clone()
+            .unwrap_or_else(|| protoc::Protoc::from_env_path());
+        let version = protoc.version().expect("protoc version");
+        if !version.is_3() {
+            panic!("protobuf must have version 3");
         }
 
-        return Err(Error::new(
-            io::ErrorKind::Other,
-            format!(
-                "file {:?} is not found in includes {:?}",
-                file, args.includes
-            ),
-        ));
+        if self.rust_protobuf {
+            protoc_rust::Codegen::new()
+                .out_dir(&self.out_dir)
+                .includes(&self.includes)
+                .inputs(&self.inputs)
+                .customize(self.rust_protobuf_customize.clone())
+                .run()?;
+        }
+
+        let temp_dir = tempdir::TempDir::new("protoc-rust")?;
+        let temp_file = temp_dir.path().join("descriptor.pbbin");
+        let temp_file = temp_file.to_str().expect("utf-8 file name");
+
+        let includes: Vec<&str> = self
+            .includes
+            .iter()
+            .map(|p| p.as_os_str().to_str().unwrap())
+            .collect();
+        let inputs: Vec<&str> = self
+            .inputs
+            .iter()
+            .map(|p| p.as_os_str().to_str().unwrap())
+            .collect();
+        protoc.write_descriptor_set(protoc::DescriptorSetOutArgs {
+            out: temp_file,
+            includes: &includes,
+            input: &inputs,
+            include_imports: true,
+        })?;
+
+        let mut fds = Vec::new();
+        let mut file = fs::File::open(temp_file)?;
+        file.read_to_end(&mut fds)?;
+
+        drop(file);
+        drop(temp_dir);
+
+        let fds: protobuf::descriptor::FileDescriptorSet = protobuf::parse_from_bytes(&fds)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+        let mut includes = self.includes.clone();
+        if includes.is_empty() {
+            includes = vec![PathBuf::from(".")];
+        }
+
+        let mut files_to_generate = Vec::new();
+        'outer: for file in &self.inputs {
+            for include in &includes {
+                if let Some(truncated) =
+                    remove_path_prefix(file.to_str().unwrap(), include.to_str().unwrap())
+                {
+                    files_to_generate.push(truncated.to_owned());
+                    continue 'outer;
+                }
+            }
+
+            return Err(Error::new(
+                io::ErrorKind::Other,
+                format!(
+                    "file {:?} is not found in includes {:?}",
+                    file, self.includes
+                ),
+            ));
+        }
+
+        let gen_result = grpc_compiler::codegen::gen(fds.get_file(), &files_to_generate);
+
+        for r in gen_result {
+            let r: protobuf::compiler_plugin::GenResult = r;
+            let file = format!("{}/{}", self.out_dir.display(), r.name);
+            let mut file = fs::File::create(&file)?;
+            file.write_all(&r.content)?;
+            file.flush()?;
+        }
+
+        Ok(())
     }
-
-    let gen_result = grpc_compiler::codegen::gen(fds.get_file(), &files_to_generate);
-
-    for r in gen_result {
-        let r: protobuf::compiler_plugin::GenResult = r;
-        let file = format!("{}/{}", args.out_dir, r.name);
-        let mut file = fs::File::create(&file)?;
-        file.write_all(&r.content)?;
-        file.flush()?;
-    }
-
-    Ok(())
 }
 
 fn remove_dot_slash(path: &str) -> &str {

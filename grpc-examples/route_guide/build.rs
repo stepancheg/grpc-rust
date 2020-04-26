@@ -1,12 +1,10 @@
 extern crate protoc_rust_grpc;
 
 fn main() {
-    protoc_rust_grpc::run(protoc_rust_grpc::Args {
-        out_dir: "src",
-        includes: &[],
-        input: &["route_guide.proto"],
-        rust_protobuf: true,
-        ..Default::default()
-    })
-    .expect("protoc-rust-grpc");
+    protoc_rust_grpc::Codegen::new()
+        .out_dir("src")
+        .input("route_guide.proto")
+        .rust_protobuf(true)
+        .run()
+        .expect("protoc-rust-grpc");
 }
