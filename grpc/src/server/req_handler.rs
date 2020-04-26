@@ -2,7 +2,6 @@ use bytes::Bytes;
 
 use crate::marshall::Marshaller;
 use crate::or_static::arc::ArcOrStatic;
-use crate::proto::grpc_frame::parse_grpc_frame_from_bytes;
 use crate::result;
 use crate::server::req_handler_unary::RequestHandlerUnaryToStream;
 use crate::server::req_stream::ServerRequestStreamSenderHandler;
@@ -13,7 +12,7 @@ use std::marker;
 
 use futures::channel::mpsc;
 
-use crate::bytesx::bytes_extend;
+use crate::proto::grpc_frame_parser::GrpcFrameParser;
 use crate::Metadata;
 use crate::ServerRequestStream;
 
@@ -44,23 +43,24 @@ where
 }
 
 struct ServerStreamStreamHandlerUntypedHandler<H: ServerRequestStreamHandlerUntyped> {
-    buf: Bytes,
+    buf: GrpcFrameParser,
     handler: H,
 }
 
 impl<H: ServerRequestStreamHandlerUntyped> ServerStreamStreamHandlerUntypedHandler<H> {
     fn process_buf(&mut self) -> result::Result<()> {
-        loop {
-            let old_len = self.buf.len();
-            let grpc_message = match parse_grpc_frame_from_bytes(&mut self.buf)? {
-                Some(grpc_message) => grpc_message,
-                None => return Ok(()),
-            };
-            let consumed = old_len - self.buf.len();
-
+        let mut total_consumed = 0;
+        while let Some((grpc_message, consumed)) = self.buf.next_frame()? {
             // TODO: checked cast
             self.handler.grpc_message(grpc_message, consumed as u32)?;
+            total_consumed += consumed;
         }
+
+        if total_consumed != 0 {
+            self.handler.buffer_processed(total_consumed)?;
+        }
+
+        Ok(())
     }
 
     fn end_stream(&mut self) -> result::Result<()> {
@@ -77,25 +77,15 @@ impl<H: ServerRequestStreamHandlerUntyped> httpbis::ServerRequestStreamHandler
     for ServerStreamStreamHandlerUntypedHandler<H>
 {
     fn data_frame(&mut self, data: Bytes, end_stream: bool) -> httpbis::Result<()> {
-        if self.buf.is_empty() {
-            self.buf = data;
-        } else {
-            bytes_extend(&mut self.buf, data);
-        }
+        self.buf.enqueue(data);
 
         self.process_buf()?;
 
         if end_stream {
+            self.buf.check_empty()?;
+
             self.end_stream()?;
             return Ok(());
-        }
-
-        if self.buf.len() != 0 {
-            trace!(
-                "buffer processed, still contains {}, calling handler",
-                self.buf.len()
-            );
-            self.handler.buffer_processed(self.buf.len())?;
         }
 
         Ok(())
@@ -159,7 +149,7 @@ impl<'a> ServerRequestUntyped<'a> {
             let (handler, r) = handler(increase_in_window);
             (
                 ServerStreamStreamHandlerUntypedHandler {
-                    buf: Bytes::new(),
+                    buf: GrpcFrameParser::default(),
                     handler,
                 },
                 r,

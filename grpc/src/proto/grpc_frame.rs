@@ -17,22 +17,6 @@ use std::task::Poll;
 
 pub const GRPC_HEADER_LEN: usize = 5;
 
-/// Return frame len
-pub fn parse_grpc_frame_0(stream: &[u8]) -> result::Result<Option<usize>> {
-    let mut stream_copy = stream;
-    let len = match parse_grpc_frame_header(&mut stream_copy)? {
-        Some(len) => len,
-        None => return Ok(None),
-    };
-
-    let end = len as usize + GRPC_HEADER_LEN;
-    if end > stream.len() {
-        return Ok(None);
-    }
-
-    Ok(Some(len as usize))
-}
-
 pub fn parse_grpc_frame_header<B: Buf>(stream: &mut B) -> result::Result<Option<u32>> {
     if stream.remaining() < GRPC_HEADER_LEN {
         return Ok(None);
@@ -47,16 +31,6 @@ pub fn parse_grpc_frame_header<B: Buf>(stream: &mut B) -> result::Result<Option<
         return Err(Error::Other("compression is not implemented"));
     }
     Ok(Some(stream.get_u32()))
-}
-
-pub fn parse_grpc_frame_from_bytes(stream: &mut Bytes) -> result::Result<Option<Bytes>> {
-    if let Some(len) = parse_grpc_frame_0(&stream)? {
-        let r = stream.slice(GRPC_HEADER_LEN..len + GRPC_HEADER_LEN);
-        stream.advance(len + GRPC_HEADER_LEN);
-        Ok(Some(r))
-    } else {
-        Ok(None)
-    }
 }
 
 /// Encode data into grpc frame (add frame prefix)
@@ -139,7 +113,33 @@ impl Stream for GrpcFrameFromHttpFramesStreamRequest {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::bytesx::bytes_extend_from_slice;
+    use bytes::BytesMut;
+
+    /// Return frame len
+    fn parse_grpc_frame_0(stream: &[u8]) -> result::Result<Option<usize>> {
+        let mut stream_copy = stream;
+        let len = match parse_grpc_frame_header(&mut stream_copy)? {
+            Some(len) => len,
+            None => return Ok(None),
+        };
+
+        let end = len as usize + GRPC_HEADER_LEN;
+        if end > stream.len() {
+            return Ok(None);
+        }
+
+        Ok(Some(len as usize))
+    }
+
+    fn parse_grpc_frame_from_bytes(stream: &mut Bytes) -> result::Result<Option<Bytes>> {
+        if let Some(len) = parse_grpc_frame_0(&stream)? {
+            let r = stream.slice(GRPC_HEADER_LEN..len + GRPC_HEADER_LEN);
+            stream.advance(len + GRPC_HEADER_LEN);
+            Ok(Some(r))
+        } else {
+            Ok(None)
+        }
+    }
 
     fn parse_grpc_frames_from_bytes(stream: &mut Bytes) -> result::Result<Vec<Bytes>> {
         let mut r = Vec::new();
@@ -185,9 +185,10 @@ mod test {
     #[test]
     fn test_parse_grpc_frames_from_bytes() {
         fn t(r: &[&[u8]], input: &[u8], trail: &[u8]) {
-            let mut b = Bytes::new();
-            bytes_extend_from_slice(&mut b, input);
-            bytes_extend_from_slice(&mut b, trail);
+            let mut b = BytesMut::new();
+            b.extend_from_slice(input);
+            b.extend_from_slice(trail);
+            let mut b = b.freeze();
 
             let r: Vec<Bytes> = r.into_iter().map(|&s| Bytes::copy_from_slice(s)).collect();
 

@@ -37,8 +37,6 @@ mod futures_grpc;
 pub mod marshall;
 mod method;
 
-mod bytesx;
-
 pub mod prelude;
 
 pub mod rt;
