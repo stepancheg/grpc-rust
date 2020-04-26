@@ -5,12 +5,6 @@ use crate::route_guide::RouteNote;
 use crate::route_guide::RouteSummary;
 use crate::route_guide_grpc::RouteGuide;
 
-use futures::future;
-
-use futures::stream;
-use futures::TryFutureExt;
-use futures::TryStreamExt;
-
 use futures::stream::StreamExt;
 
 use grpc::Metadata;
@@ -73,10 +67,12 @@ impl RouteGuide for RouteGuideImpl {
     ) -> grpc::Result<()> {
         let req = req.take_message();
         let saved_features = self.saved_features.clone();
-        o.spawn(|| {
+        o.spawn(async move {
             for feature in &saved_features[..] {
-                resp.ready().await?;
-                resp.send_data(feature.clone())?;
+                if in_range(feature.get_location(), &req) {
+                    resp.ready().await?;
+                    resp.send_data(feature.clone())?;
+                }
             }
             resp.send_trailers(Metadata::new())
         });
@@ -91,25 +87,26 @@ impl RouteGuide for RouteGuideImpl {
     ) -> grpc::Result<()> {
         let start_time = Instant::now();
 
-        struct State {
-            point_count: u32,
-            feature_count: u32,
-            distance: u32,
-            last_point: Option<Point>,
-        }
-
-        let mut state = State {
-            point_count: 0,
-            feature_count: 0,
-            distance: 0,
-            last_point: None,
-        };
-
         let saved_features = self.saved_features.clone();
 
-        o.spawn(|| {
-            let mut stream = req.into_stream();
-            while let Some(point) = stream.next() {
+        let mut stream = req.into_stream();
+
+        o.spawn(async move {
+            struct State {
+                point_count: u32,
+                feature_count: u32,
+                distance: u32,
+                last_point: Option<Point>,
+            }
+
+            let mut state = State {
+                point_count: 0,
+                feature_count: 0,
+                distance: 0,
+                last_point: None,
+            };
+
+            while let Some(point) = stream.next().await {
                 let point = point?;
                 state.point_count += 1;
                 for feature in &saved_features[..] {
