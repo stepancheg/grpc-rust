@@ -73,7 +73,7 @@ impl<H: ServerRequestStreamHandlerUntyped> ServerStreamStreamHandlerUntypedHandl
     }
 }
 
-impl<H: ServerRequestStreamHandlerUntyped> httpbis::ServerStreamHandler
+impl<H: ServerRequestStreamHandlerUntyped> httpbis::ServerRequestStreamHandler
     for ServerStreamStreamHandlerUntypedHandler<H>
 {
     fn data_frame(&mut self, data: Bytes, end_stream: bool) -> httpbis::Result<()> {
