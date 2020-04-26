@@ -69,23 +69,17 @@ impl RouteGuide for RouteGuideImpl {
         &self,
         o: ServerHandlerContext,
         mut req: ServerRequestSingle<Rectangle>,
-        resp: ServerResponseSink<Feature>,
+        mut resp: ServerResponseSink<Feature>,
     ) -> grpc::Result<()> {
         let req = req.take_message();
         let saved_features = self.saved_features.clone();
-        let stream = stream::iter(0..saved_features.len())
-            .filter_map(move |i| {
-                let feature = saved_features[i].clone();
-                future::ready({
-                    if in_range(feature.get_location(), &req) {
-                        Some(feature)
-                    } else {
-                        None
-                    }
-                })
-            })
-            .map(Ok);
-        o.pump(stream, resp);
+        o.spawn(|| {
+            for feature in &saved_features[..] {
+                resp.ready().await?;
+                resp.send_data(feature.clone())?;
+            }
+            resp.send_trailers(Metadata::new())
+        });
         Ok(())
     }
 
@@ -104,7 +98,7 @@ impl RouteGuide for RouteGuideImpl {
             last_point: Option<Point>,
         }
 
-        let state = State {
+        let mut state = State {
             point_count: 0,
             feature_count: 0,
             distance: 0,
@@ -113,9 +107,10 @@ impl RouteGuide for RouteGuideImpl {
 
         let saved_features = self.saved_features.clone();
 
-        let f = req
-            .into_stream()
-            .try_fold(state, move |mut state, point| {
+        o.spawn(|| {
+            let mut stream = req.into_stream();
+            while let Some(point) = stream.next() {
+                let point = point?;
                 state.point_count += 1;
                 for feature in &saved_features[..] {
                     if feature.get_location() == &point {
@@ -126,16 +121,17 @@ impl RouteGuide for RouteGuideImpl {
                     state.distance += calc_distance(last_point, &point);
                 }
                 state.last_point = Some(point);
-                future::ok::<_, grpc::Error>(state)
-            })
-            .map_ok(move |state| RouteSummary {
+            }
+
+            resp.finish(RouteSummary {
                 point_count: state.point_count as i32,
                 feature_count: state.feature_count as i32,
                 distance: state.distance as i32,
                 elapsed_time: start_time.elapsed().as_secs() as i32,
                 ..Default::default()
-            });
-        o.pump_future(f, resp);
+            })
+        });
+
         Ok(())
     }
 
