@@ -1,4 +1,5 @@
-use futures::{future, FutureExt, StreamExt};
+use futures::future;
+use futures::StreamExt;
 
 use crate::Metadata;
 
@@ -11,6 +12,7 @@ use std::task::Context;
 use std::task::Poll;
 use tokio::runtime::Handle;
 
+/// An object passed to server handlers.
 pub struct ServerHandlerContext {
     pub ctx: httpbis::ServerHandlerContext,
     // TODO: move to request
@@ -18,61 +20,54 @@ pub struct ServerHandlerContext {
 }
 
 impl ServerHandlerContext {
+    /// Tokio event loop handle (can be used to spawn a future for example).
     pub fn loop_remote(&self) -> Handle {
         self.ctx.loop_remote()
     }
 
-    pub fn spawn_poll_fn<F>(&self, mut f: F)
+    /// Spawn a future, ignore result.
+    pub fn spawn<F>(&self, f: F)
+    where
+        F: Future<Output = crate::Result<()>> + Send + 'static,
+    {
+        self.loop_remote().spawn(async {
+            if let Err(e) = f.await {
+                warn!("spaned future returned error: {:?}", e);
+            }
+        });
+    }
+
+    /// Spawn a poll_fn future. Function error is ignored.
+    pub fn spawn_poll_fn<F>(&self, f: F)
     where
         F: FnMut(&mut Context<'_>) -> Poll<crate::Result<()>> + Send + 'static,
     {
-        self.loop_remote()
-            .spawn(future::poll_fn(move |cx| match f(cx) {
-                Poll::Pending => Poll::Pending,
-                Poll::Ready(Ok(())) => Poll::Ready(()),
-                Poll::Ready(Err(e)) => {
-                    warn!("poll_fn returned error: {:?}", e);
-                    Poll::Ready(())
-                }
-            }));
+        self.spawn(future::poll_fn(f))
     }
 
+    /// Spawn a future which polls stream and sends items to [`ServerResponseSink`].
     pub fn pump<Resp, S>(&self, mut stream: S, mut dest: ServerResponseSink<Resp>)
     where
         Resp: Send + 'static,
         S: stream::Stream<Item = crate::Result<Resp>> + Unpin + Send + 'static,
     {
-        self.spawn_poll_fn(move |cx| loop {
-            if let Poll::Pending = dest.poll(cx)? {
-                return Poll::Pending;
+        self.spawn(async move {
+            while let Some(m) = stream.next().await {
+                dest.send_data(m?)?;
             }
-            match stream.poll_next_unpin(cx)? {
-                Poll::Pending => return Poll::Pending,
-                Poll::Ready(Some(m)) => {
-                    dest.send_data(m)?;
-                }
-                Poll::Ready(None) => {
-                    dest.send_trailers(Metadata::new())?;
-                    return Poll::Ready(Ok(()));
-                }
-            }
-        })
+            dest.send_trailers(Metadata::new())
+        });
     }
 
-    pub fn pump_future<Resp, F>(&self, mut future: F, dest: ServerResponseUnarySink<Resp>)
+    /// Spawn the provided future in tokio even loop, send result to given sink.
+    pub fn pump_future<Resp, F>(&self, future: F, dest: ServerResponseUnarySink<Resp>)
     where
         Resp: Send + 'static,
         F: Future<Output = crate::Result<Resp>> + Unpin + Send + 'static,
     {
-        let mut dest = Some(dest);
-        self.spawn_poll_fn(move |cx| loop {
-            match future.poll_unpin(cx)? {
-                Poll::Pending => return Poll::Pending,
-                Poll::Ready(m) => {
-                    dest.take().unwrap().finish(m)?;
-                    return Poll::Ready(Ok(()));
-                }
-            }
-        })
+        self.spawn(async move {
+            let m = future.await?;
+            dest.finish(m)
+        });
     }
 }
