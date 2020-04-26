@@ -21,7 +21,6 @@ use std::io::Read;
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::task::Poll;
 use std::time::Instant;
 
 // https://github.com/grpc/grpc-go/blob/master/examples/route_guide/server/server.go
@@ -138,20 +137,19 @@ impl RouteGuide for RouteGuideImpl {
         req: ServerRequest<RouteNote>,
         mut resp: ServerResponseSink<RouteNote>,
     ) -> grpc::Result<()> {
-        let mut req = req.into_stream();
-
         let route_notes_map = self.route_notes.clone();
 
-        o.spawn_poll_fn(move |cx| {
+        let mut req = req.into_stream();
+
+        o.spawn(async move {
             loop {
                 // Wait until resp is writable
-                if let Poll::Pending = resp.poll(cx)? {
-                    return Poll::Pending;
-                }
+                resp.ready().await?;
 
-                match req.poll_next_unpin(cx)? {
-                    Poll::Pending => return Poll::Pending,
-                    Poll::Ready(Some(note)) => {
+                match req.next().await {
+                    Some(note) => {
+                        let note = note?;
+
                         let key = serialize(note.get_location());
 
                         let mut route_notes_map = route_notes_map.lock().unwrap();
@@ -163,13 +161,13 @@ impl RouteGuide for RouteGuideImpl {
                             resp.send_data(note.clone())?;
                         }
                     }
-                    Poll::Ready(None) => {
-                        resp.send_trailers(Metadata::new())?;
-                        return Poll::Ready(Ok(()));
+                    None => {
+                        return resp.send_trailers(Metadata::new());
                     }
                 }
             }
         });
+
         Ok(())
     }
 }
