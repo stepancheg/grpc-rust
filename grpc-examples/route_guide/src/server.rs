@@ -33,14 +33,14 @@ use std::time::Instant;
 // https://github.com/grpc/grpc-go/blob/master/examples/route_guide/server/server.go
 #[derive(Default)]
 pub struct RouteGuideImpl {
-    saved_features: Vec<Feature>,
+    saved_features: Arc<Vec<Feature>>,
     route_notes: Arc<Mutex<HashMap<String, Vec<RouteNote>>>>,
 }
 
 impl RouteGuideImpl {
     pub fn new_and_load_db() -> RouteGuideImpl {
         RouteGuideImpl {
-            saved_features: load_features(Path::new(ROUTE_GUIDE_DB_PATH)),
+            saved_features: Arc::new(load_features(Path::new(ROUTE_GUIDE_DB_PATH))),
             route_notes: Default::default(),
         }
     }
@@ -72,9 +72,10 @@ impl RouteGuide for RouteGuideImpl {
         resp: ServerResponseSink<Feature>,
     ) -> grpc::Result<()> {
         let req = req.take_message();
-        // TODO: do not clone
-        let stream = stream::iter(self.saved_features.clone())
-            .filter_map(move |feature| {
+        let saved_features = self.saved_features.clone();
+        let stream = stream::iter(0..saved_features.len())
+            .filter_map(move |i| {
+                let feature = saved_features[i].clone();
                 future::ready({
                     if in_range(feature.get_location(), &req) {
                         Some(feature)
@@ -116,7 +117,7 @@ impl RouteGuide for RouteGuideImpl {
             .into_stream()
             .try_fold(state, move |mut state, point| {
                 state.point_count += 1;
-                for feature in &saved_features {
+                for feature in &saved_features[..] {
                     if feature.get_location() == &point {
                         state.feature_count += 1;
                     }
