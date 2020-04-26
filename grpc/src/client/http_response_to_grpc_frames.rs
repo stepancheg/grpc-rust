@@ -81,7 +81,7 @@ impl Stream for GrpcFrameFromHttpFramesStreamResponse {
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         loop {
-            let frames = self.buf.next_frames()?;
+            let frames = self.buf.next_frames()?.0;
             self.parsed_frames.extend(frames);
 
             if let Some(frame) = self.parsed_frames.pop_front() {

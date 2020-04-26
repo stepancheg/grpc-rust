@@ -105,7 +105,7 @@ impl Stream for GrpcFrameFromHttpFramesStreamRequest {
         cx: &mut Context<'_>,
     ) -> Poll<Option<crate::Result<Bytes>>> {
         loop {
-            let parsed_frames = self.buf.next_frames()?;
+            let parsed_frames = self.buf.next_frames()?.0;
 
             self.parsed_frames.extend(parsed_frames);
 
