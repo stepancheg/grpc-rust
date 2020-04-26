@@ -1,3 +1,5 @@
+#![deny(intra_doc_link_resolution_failure)]
+
 #[macro_use]
 extern crate log;
 
