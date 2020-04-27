@@ -12,7 +12,7 @@ edition = "2018"
 
 [dependencies]
 protobuf        = { version = "2", features = ["with-bytes"] }
-grpc            = { version = "0.7.0", path = "../grpc" }
+grpc            = { version = "=0.7.0", path = "../grpc" }
 bytes           = "0.5.*"
 
 [lib]
