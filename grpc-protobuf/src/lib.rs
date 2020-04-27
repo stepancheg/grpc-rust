@@ -1,4 +1,6 @@
-//! Implementation of marshaller for protobuf parameter types.
+#![deny(intra_doc_link_resolution_failure)]
+
+//! Implementation of marshaller for rust-protobuf parameter types.
 
 extern crate bytes;
 extern crate grpc;
