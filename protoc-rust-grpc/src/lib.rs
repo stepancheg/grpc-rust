@@ -1,4 +1,7 @@
+//! API to generate `.rs` files.
+
 #![deny(intra_doc_link_resolution_failure)]
+#![deny(missing_docs)]
 
 extern crate tempdir;
 
@@ -16,7 +19,9 @@ use std::io::Read;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
+/// Error type alias.
 pub type Error = io::Error;
+/// Result type alias.
 pub type Result<T> = io::Result<T>;
 
 /// Utility to generate `.rs` files.
