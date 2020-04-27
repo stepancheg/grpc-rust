@@ -1,3 +1,5 @@
+#![deny(intra_doc_link_resolution_failure)]
+
 extern crate tempdir;
 
 extern crate grpc_compiler;
@@ -85,7 +87,11 @@ impl Codegen {
         self
     }
 
-    // TODO: replace with `Codegen` object
+    /// Run the codegen.
+    ///
+    /// Generate `_grpc.rs` files, and if [`rust_protobuf_customize`](Codegen::rust_protobuf_customize)
+    /// is specified, generate rust-protobuf `.rs` files too.
+    ///
     pub fn run(&self) -> Result<()> {
         let protoc = self
             .protoc
