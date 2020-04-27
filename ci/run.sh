@@ -8,16 +8,18 @@ export RUST_BACKTRACE=1
 
 ci/install-protobuf.sh
 
-cargo test --all --all-targets
+if test "$ACTION" = "test-protoc-plugin"; then
+    (
+        cargo install protobuf-codegen
 
-(
-    cargo install protobuf-codegen
+        cd grpc-compiler/test-protoc-plugin
 
-    cd grpc-compiler/test-protoc-plugin
+        ./gen.sh
 
-    ./gen.sh
-
-    cargo check --all
-)
+        cargo check --all
+    )
+else
+    cargo test --all --all-targets
+fi
 
 # vim: set ts=4 sw=4 et:

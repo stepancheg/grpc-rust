@@ -14,6 +14,9 @@ matrix:
     rust: beta
   - name: Nightly
     rust: nightly
+  - name: test-protoc-plugin
+    rust: stable
+    env: ACTION=test-protoc-plugin
 
 script:
   - ci/run.sh
