@@ -158,18 +158,26 @@ impl<'a> ServerRequestUntyped<'a> {
     }
 }
 
+/// Streaming server request.
+///
+/// This object is passed to server handlers.
 pub struct ServerRequest<'a, M: 'static> {
     pub(crate) req: ServerRequestUntyped<'a>,
     pub(crate) marshaller: ArcOrStatic<dyn Marshaller<M>>,
 }
 
 impl<'a, M: Send + 'static> ServerRequest<'a, M> {
+    /// Get request metadata.
     pub fn metadata(&self) -> Metadata {
         // TODO: take, not clone
         // TODO: do not unwrap
         Metadata::from_headers(self.req.req.headers.clone()).unwrap()
     }
 
+    /// Register server stream handler.
+    ///
+    /// This is low level operation, hard to use. Most users use
+    /// [`into_stream`](ServerRequest::into_stream) operation.
     pub fn register_stream_handler<F, H, R>(self, handler: F) -> R
     where
         H: ServerRequestStreamHandler<M>,
@@ -188,6 +196,10 @@ impl<'a, M: Send + 'static> ServerRequest<'a, M> {
         })
     }
 
+    /// Register basic stream handler (without manual control flow).
+    ///
+    /// This is low level operation, hard to use. Most users use
+    /// [`into_stream`](ServerRequest::into_stream) operation.
     pub fn register_stream_handler_basic<H>(self, handler: H)
     where
         H: FnMut(Option<M>) -> result::Result<()> + Send + 'static,
@@ -238,6 +250,9 @@ impl<'a, M: Send + 'static> ServerRequest<'a, M> {
         })
     }
 
+    /// Register unary request handler.
+    ///
+    /// Few people need this operation.
     pub fn register_unary_handler<H>(self, handler: H)
     where
         H: ServerRequestUnaryHandler<M>,
@@ -256,6 +271,7 @@ impl<'a, M: Send + 'static> ServerRequest<'a, M> {
         })
     }
 
+    /// Convert request into easy to use [`ServerRequestStream`] object.
     pub fn into_stream(self) -> ServerRequestStream<M> {
         self.register_stream_handler(|increase_in_window| {
             let (tx, rx) = mpsc::unbounded();

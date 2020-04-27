@@ -31,12 +31,15 @@ use std::future::Future;
 use std::pin::Pin;
 use tokio::runtime::Handle;
 
+/// Client configuration.
 #[derive(Default, Debug, Clone)]
 pub struct ClientConf {
+    /// HTTP/2 client configuration.
     pub http: httpbis::ClientConf,
 }
 
 impl ClientConf {
+    /// Create default configuration.
     pub fn new() -> ClientConf {
         Default::default()
     }
@@ -53,6 +56,7 @@ enum Tls<T: tls_api::TlsConnector> {
     None,
 }
 
+/// Builder for [`Client`].
 pub struct ClientBuilder<'a, T: tls_api::TlsConnector> {
     client_type: ClientBuilderType<'a>,
     http_scheme: HttpScheme,

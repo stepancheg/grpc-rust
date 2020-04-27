@@ -6,22 +6,33 @@ use httpbis;
 
 use crate::proto::metadata;
 
+/// Error from gRPC protocol headers.
 #[derive(Debug)]
 pub struct GrpcMessageError {
+    /// Content of `grpc-status` header.
     pub grpc_status: i32,
 
-    /// Content of `grpc-message` header
+    /// Content of `grpc-message` header.
     pub grpc_message: String,
 }
 
+/// All grpc crate errors.
 #[derive(Debug)]
 pub enum Error {
+    /// I/O error.
     Io(io::Error),
+    /// rust-http2 error.
     Http(httpbis::Error),
+    /// Error from gRPC protocol.
     GrpcMessage(GrpcMessageError),
+    /// Failed to decode megadata.
     MetadataDecode(metadata::MetadataDecodeError),
+    /// Someone panicked.
     Panic(String),
+    /// Marshaller error.
     Marshaller(Box<dyn std_Error + Send + Sync>),
+    /// Other error.
+    // TODO: get rid of it.
     Other(&'static str),
 }
 

@@ -10,14 +10,17 @@ use futures::channel::mpsc;
 use crate::futures_grpc::GrpcStream;
 use crate::proto::metadata::Metadata;
 
+/// gRPC request options.
 #[derive(Debug, Default, Clone)]
 pub struct RequestOptions {
+    /// Request metadata.
     pub metadata: Metadata,
-    // TODO: do not ignore
+    /// Request is cacheable (not implemented).
     pub cachable: bool,
 }
 
 impl RequestOptions {
+    /// Default request options.
     pub fn new() -> RequestOptions {
         Default::default()
     }

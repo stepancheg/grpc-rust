@@ -1,8 +1,13 @@
 use crate::Metadata;
 use std::mem;
 
+/// Unary request.
+///
+/// This object is passed to unary request handlers.
 pub struct ServerRequestSingle<Req> {
+    /// Request metadata.
     pub metadata: Metadata,
+    /// The message.
     pub message: Req,
 }
 

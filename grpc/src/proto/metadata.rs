@@ -6,9 +6,10 @@ use bytes::Bytes;
 use httpbis::Header;
 use httpbis::Headers;
 
+/// Metadata key (basically, a header name).
 #[derive(Debug, Clone)]
 pub struct MetadataKey {
-    pub name: Chars,
+    name: Chars,
 }
 
 impl MetadataKey {
@@ -82,16 +83,19 @@ impl MetadataEntry {
     }
 }
 
+/// Request or response metadata.
 #[derive(Default, Debug, Clone)]
 pub struct Metadata {
     pub entries: Vec<MetadataEntry>,
 }
 
 impl Metadata {
+    /// Empty metadata object.
     pub fn new() -> Metadata {
         Default::default()
     }
 
+    /// Create metadata from HTTP/2 headers.
     pub fn from_headers(headers: Headers) -> Result<Metadata, MetadataDecodeError> {
         let mut r = Metadata::new();
         for h in headers.iter() {
@@ -103,6 +107,7 @@ impl Metadata {
         Ok(r)
     }
 
+    /// Convert metadata into HTTP/2 headers.
     pub fn into_headers(self) -> Headers {
         Headers::from_vec(
             self.entries
@@ -112,7 +117,7 @@ impl Metadata {
         )
     }
 
-    // Get metadata by key
+    /// Get metadata by key
     pub fn get<'a>(&'a self, name: &str) -> Option<&'a [u8]> {
         for e in &self.entries {
             if e.key.as_str() == name {
@@ -122,10 +127,12 @@ impl Metadata {
         None
     }
 
+    /// Concatenate.
     pub fn extend(&mut self, extend: Metadata) {
         self.entries.extend(extend.entries);
     }
 
+    /// Add metadata object.
     pub fn add(&mut self, key: MetadataKey, value: Bytes) {
         self.entries.push(MetadataEntry { key, value });
     }

@@ -18,6 +18,11 @@ pub(crate) enum HandlerToStream<Req: Send + 'static> {
     BufferProcessed(usize),
 }
 
+/// Easy to use request stream object.
+///
+/// This object implements [`Stream`].
+///
+/// This object increases incoming window after each message received.
 pub struct ServerRequestStream<Req>
 where
     Req: Send + 'static,

@@ -63,27 +63,33 @@ impl ServerServiceDefinition {
     }
 }
 
+/// gRPC server configuration.
 #[derive(Default, Debug, Clone)]
 pub struct ServerConf {}
 
 impl ServerConf {
+    /// Default configuration.
     pub fn new() -> ServerConf {
         Default::default()
     }
 }
 
+/// Builder for gRPC server.
 pub struct ServerBuilder<A: tls_api::TlsAcceptor = tls_api_stub::TlsAcceptor> {
+    /// HTTP/2 server builder.
     pub http: httpbis::ServerBuilder<A>,
-    pub conf: ServerConf,
+    conf: ServerConf,
 }
 
 impl ServerBuilder<tls_api_stub::TlsAcceptor> {
+    /// New builder for no-TLS HTTP/2.
     pub fn new_plain() -> ServerBuilder {
         ServerBuilder::new()
     }
 }
 
 impl<A: tls_api::TlsAcceptor> ServerBuilder<A> {
+    /// New builder for given TLS acceptor.
     pub fn new() -> ServerBuilder<A> {
         ServerBuilder {
             http: httpbis::ServerBuilder::new(),
@@ -91,6 +97,7 @@ impl<A: tls_api::TlsAcceptor> ServerBuilder<A> {
         }
     }
 
+    /// New builder for unix socket HTTP/2 server.
     #[cfg(unix)]
     pub fn new_unix() -> ServerBuilder<A> {
         ServerBuilder {
@@ -99,6 +106,9 @@ impl<A: tls_api::TlsAcceptor> ServerBuilder<A> {
         }
     }
 
+    /// Register service for this server.
+    ///
+    /// Service definition is typically in generated code.
     pub fn add_service(&mut self, def: ServerServiceDefinition) {
         self.http.service.set_service(
             &def.prefix.clone(),
@@ -108,6 +118,7 @@ impl<A: tls_api::TlsAcceptor> ServerBuilder<A> {
         );
     }
 
+    /// Build server.
     pub fn build(mut self) -> Result<Server> {
         self.http.conf.thread_name = Some(
             self.http
@@ -122,6 +133,7 @@ impl<A: tls_api::TlsAcceptor> ServerBuilder<A> {
     }
 }
 
+/// Running server.
 #[derive(Debug)]
 pub struct Server {
     server: httpbis::Server,
