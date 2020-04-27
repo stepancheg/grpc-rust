@@ -1,4 +1,5 @@
 // copied from https://github.com/grpc/grpc/blob/master/include/grpc/impl/codegen/status.h
+/// gRPC status constants.
 #[allow(dead_code)]
 #[derive(Copy, Clone, Debug)]
 pub enum GrpcStatus {

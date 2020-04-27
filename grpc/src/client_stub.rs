@@ -10,9 +10,10 @@ pub trait ClientStub: Sized {
     fn with_client(grpc_client: Arc<Client>) -> Self;
 }
 
+/// Utilities to work with generated code clients.
 pub trait ClientStubExt: Sized {
     /// Create a plain (non-encrypted) client connected to specified host and port
-    fn new_plain(host: &str, port: u16, conf: ClientConf) -> grpc_Result<Self>;
+    fn new_plain(host: &str, port: u16, conf: ClientConf) -> crate::Result<Self>;
 
     /// Create a client connected to specified host and port using TLS.
     fn new_tls<C: ::tls_api::TlsConnector>(
