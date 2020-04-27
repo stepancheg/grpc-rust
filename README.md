@@ -12,7 +12,9 @@ Some development questions in [FAQ](/docs/FAQ.md).
 
 ## Current status
 
-It basically works. See `grpc-examples/src/bin/greeter_{client,server}.rs`. It can be tested
+It basically works, but not suitable for production use.
+
+See `grpc-examples/src/bin/greeter_{client,server}.rs`. It can be tested
 for example with [go client](https://github.com/grpc/grpc-go/tree/master/examples/helloworld):
 
 ```
@@ -56,25 +58,12 @@ In Cargo.toml:
 
 ```ini
 [dependencies]
-grpc            = "~0.6"
+grpc            = "~0.7"
 protobuf        = "~2"
-futures         = "~0.1"
-futures-cpupool = "~0.1"
+futures         = "~0.3"
 
 [build-dependencies]
-protoc-rust-grpc = "0.6.1"
-```
-
-In `lib.rs` or `main.rs` (or any other submodule):
-
-```rust
-extern crate protobuf;
-extern crate grpc;
-extern crate futures;
-extern crate futures_cpupool;
-
-pub mod myproto;
-pub mod myproto_grpc;
+protoc-rust-grpc = "~0.7"
 ```
 
 ## TODO
