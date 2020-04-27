@@ -35,7 +35,11 @@ $ greeter_client rust
 > 2016/08/19 05:44:45 Greeting: Hello rust
 ```
 
-Client and server are implemented asynchronously.
+## Route guide
+
+[Route guide](https://github.com/grpc/grpc-go/tree/master/examples/route_guide)
+example implementation in grpc-rust is in
+[grpc-examples folder](https://github.com/stepancheg/grpc-rust/tree/master/grpc-examples/route_guide).
 
 ## How to generate rust code
 
