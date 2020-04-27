@@ -20,6 +20,13 @@ if test "$ACTION" = "test-protoc-plugin"; then
     )
 else
     cargo test --all --all-targets
+
+    # `--all-targets` does not include doctests
+    # https://github.com/rust-lang/cargo/issues/6669
+    cargo test --doc
+
+    # Check the docs
+    cargo doc
 fi
 
 # vim: set ts=4 sw=4 et:
