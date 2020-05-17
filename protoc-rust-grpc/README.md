@@ -6,8 +6,6 @@ API to generate .rs files to be used e. g.
 Example code:
 
 ```rust
-extern crate protoc_rust_grpc;
-
 fn main() {
     protoc_rust_grpc::run(protoc_rust_grpc::Args {
         out_dir: "src",

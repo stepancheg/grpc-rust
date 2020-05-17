@@ -1,5 +1,3 @@
-extern crate grpc_compiler;
-
 use grpc_compiler::codegen;
 
 fn main() {

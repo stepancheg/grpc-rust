@@ -1,12 +1,3 @@
-extern crate chrono;
-extern crate clap;
-extern crate env_logger;
-extern crate futures;
-extern crate grpc;
-extern crate grpc_interop;
-extern crate log;
-extern crate protobuf;
-
 use grpc::prelude::*;
 use grpc_interop::interop_client;
 use grpc_interop::test_grpc::TestServiceClient;

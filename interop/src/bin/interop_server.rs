@@ -1,12 +1,6 @@
-extern crate bytes;
-extern crate env_logger;
-extern crate futures;
-extern crate grpc;
-extern crate protobuf;
 #[macro_use]
 extern crate log;
 
-extern crate grpc_interop;
 use grpc_interop::*;
 
 use std::thread;

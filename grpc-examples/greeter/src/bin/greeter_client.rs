@@ -1,13 +1,3 @@
-extern crate futures;
-extern crate grpc;
-extern crate grpc_examples_greeter;
-extern crate httpbis;
-
-extern crate tls_api;
-extern crate tls_api_native_tls;
-
-extern crate env_logger;
-
 use std::env;
 use std::sync::Arc;
 

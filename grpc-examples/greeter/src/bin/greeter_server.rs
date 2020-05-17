@@ -1,10 +1,3 @@
-extern crate futures;
-
-extern crate grpc;
-extern crate grpc_examples_greeter;
-extern crate tls_api;
-extern crate tls_api_native_tls;
-
 use std::env;
 use std::thread;
 

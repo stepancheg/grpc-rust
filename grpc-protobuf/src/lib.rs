@@ -2,10 +2,6 @@
 
 //! Implementation of marshaller for rust-protobuf parameter types.
 
-extern crate bytes;
-extern crate grpc;
-extern crate protobuf;
-
 use bytes::Bytes;
 
 use grpc::marshall::Marshaller;

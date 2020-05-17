@@ -1,8 +1,5 @@
-extern crate futures;
-extern crate grpc;
 #[macro_use]
 extern crate log;
-extern crate log_ndc_env_logger;
 
 mod test_misc;
 

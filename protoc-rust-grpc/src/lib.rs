@@ -3,14 +3,6 @@
 #![deny(intra_doc_link_resolution_failure)]
 #![deny(missing_docs)]
 
-extern crate tempdir;
-
-extern crate grpc_compiler;
-
-extern crate protobuf;
-extern crate protoc;
-extern crate protoc_rust;
-
 use protoc::Protoc;
 use protoc_rust::Customize;
 use std::fs;

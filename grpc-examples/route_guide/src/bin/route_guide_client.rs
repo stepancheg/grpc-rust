@@ -1,10 +1,3 @@
-extern crate env_logger;
-extern crate futures;
-extern crate grpc;
-extern crate grpc_examples_route_guide;
-extern crate protobuf;
-extern crate rand;
-
 use grpc::prelude::*;
 
 use futures::executor;

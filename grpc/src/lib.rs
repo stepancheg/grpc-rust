@@ -3,16 +3,6 @@
 #[macro_use]
 extern crate log;
 
-extern crate base64;
-extern crate bytes;
-extern crate futures;
-
-extern crate tls_api;
-extern crate tls_api_stub;
-
-extern crate httpbis;
-extern crate tokio;
-
 mod misc;
 
 mod client;
