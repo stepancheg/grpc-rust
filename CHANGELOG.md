@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## [0.8.0] - 2020-05-17
+
 - Upgrade httpbis, tls-api, rustls dependencies
 
 ## [0.7.0]
