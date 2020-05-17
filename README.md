@@ -62,12 +62,12 @@ In Cargo.toml:
 
 ```ini
 [dependencies]
-grpc            = "~0.7"
+grpc            = "~0.8"
 protobuf        = "~2"
 futures         = "~0.3"
 
 [build-dependencies]
-protoc-rust-grpc = "~0.7"
+protoc-rust-grpc = "~0.8"
 ```
 
 ## TODO
