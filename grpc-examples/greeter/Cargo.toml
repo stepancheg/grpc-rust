@@ -16,9 +16,9 @@ path = "../../grpc-protobuf"
 [dependencies]
 protobuf        = "2"
 futures         = "0.3.*"
-tls-api            = "0.3.*"
-tls-api-native-tls = "0.3.*"
-#httpbis         = "~0.7"
+tls-api            = "0.4.*"
+tls-api-native-tls = "0.4.*"
+#httpbis         = "~0.8"
 httpbis         = { git = "https://github.com/stepancheg/rust-http2" }
 env_logger      = "~0.5"
 
