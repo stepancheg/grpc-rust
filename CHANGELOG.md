@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+## [0.8.1] - 2020-05-26
+
+- Fix compilation on Windows
+
 ## [0.8.0] - 2020-05-17
 
 - Upgrade httpbis, tls-api, rustls dependencies
