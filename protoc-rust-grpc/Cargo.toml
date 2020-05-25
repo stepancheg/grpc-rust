@@ -1,6 +1,6 @@
 [package]
 name = "protoc-rust-grpc"
-version = "0.8.0"
+version = "0.8.1"
 authors = ["Stepan Koltsov <stepan.koltsov@gmail.com>"]
 homepage = "https://github.com/stepancheg/rust-protobuf/protoc-rust/"
 repository = "https://github.com/stepancheg/rust-protobuf/protoc-rust/"
@@ -18,5 +18,5 @@ test = false
 protoc        = "2"
 protoc-rust   = "2"
 protobuf      = "2"
-grpc-compiler = { path = "../grpc-compiler", version = "=0.8.0" }
+grpc-compiler = { path = "../grpc-compiler", version = "=0.8.1" }
 tempdir       = "0.3"

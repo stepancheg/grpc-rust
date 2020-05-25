@@ -1,7 +1,7 @@
 [package]
 
 name = "grpc-protobuf"
-version = "0.8.0"
+version = "0.8.1"
 authors = ["Stepan Koltsov <stepan.koltsov@gmail.com>"]
 license = "MIT/Apache-2.0"
 description = "Protobuf marshaller for gRPC"
@@ -12,7 +12,7 @@ edition = "2018"
 
 [dependencies]
 protobuf        = { version = "2", features = ["with-bytes"] }
-grpc = { path = "../grpc", version = "=0.8.0" }
+grpc = { path = "../grpc", version = "=0.8.1" }
 bytes           = "0.5.*"
 
 [lib]
