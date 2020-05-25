@@ -56,6 +56,6 @@ impl<C: ClientStub> ClientStubExt for C {
 
     #[cfg(not(unix))]
     fn new_plain_unix(addr: &str, conf: ClientConf) -> grpc_Result<Self> {
-        Err(::Error::Other("new_plain_unix unsupported"))
+        Err(crate::Error::Other("new_plain_unix unsupported"))
     }
 }
