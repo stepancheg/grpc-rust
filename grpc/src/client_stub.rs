@@ -46,16 +46,10 @@ impl<C: ClientStub> ClientStubExt for C {
             .map(|c| Self::with_client(Arc::new(c)))
     }
 
-    #[cfg(unix)]
     fn new_plain_unix(addr: &str, conf: ClientConf) -> grpc_Result<Self> {
         ClientBuilder::new_unix(addr)
             .conf(conf)
             .build()
             .map(|c| Self::with_client(Arc::new(c)))
-    }
-
-    #[cfg(not(unix))]
-    fn new_plain_unix(addr: &str, conf: ClientConf) -> grpc_Result<Self> {
-        Err(crate::Error::Other("new_plain_unix unsupported"))
     }
 }
