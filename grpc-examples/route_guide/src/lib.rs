@@ -1,6 +1,6 @@
+pub mod client;
 pub mod route_guide;
 pub mod route_guide_grpc;
-pub mod client;
 pub mod server;
 mod test;
 
