@@ -3,6 +3,7 @@ name = "test-protoc-plugin"
 version = "0.0.0"
 authors = ["Stepan Koltsov <stepan.koltsov@gmail.com>"]
 publish = false
+edition = "2018"
 
 [dependencies]
 tls-api         = "0.4.*"
