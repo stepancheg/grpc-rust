@@ -10,6 +10,7 @@ pub(crate) static HEADER_GRPC_MESSAGE: &'static str = "grpc-message";
 pub(crate) fn headers_500(grpc_status: GrpcStatus, message: String) -> Headers {
     Headers::from_vec(vec![
         Header::new(":status", "500"),
+        Header::new("content-type", "application/grpc"),
         Header::new(HEADER_GRPC_STATUS, format!("{}", grpc_status as i32)),
         Header::new(HEADER_GRPC_MESSAGE, message),
     ])
