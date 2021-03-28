@@ -9,7 +9,8 @@ use std::fs;
 use std::io;
 use std::io::Read;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 
 /// Error type alias.
 pub type Error = io::Error;

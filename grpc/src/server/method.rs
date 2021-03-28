@@ -2,12 +2,13 @@ use std::sync::Arc;
 
 use crate::common::sink::SinkCommon;
 
+use crate::method::GrpcStreaming;
+use crate::method::GrpcStreamingBidi;
 use crate::method::GrpcStreamingClientStreaming;
 use crate::method::GrpcStreamingFlavor;
 use crate::method::GrpcStreamingServerStreaming;
 use crate::method::GrpcStreamingUnary;
 use crate::method::MethodDescriptor;
-use crate::method::{GrpcStreaming, GrpcStreamingBidi};
 use crate::or_static::arc::ArcOrStatic;
 use crate::or_static::string::StringOrStatic;
 use crate::result;

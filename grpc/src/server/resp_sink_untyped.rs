@@ -1,5 +1,6 @@
+use crate::common::sink::MessageToBeSerialized;
+use crate::common::sink::SinkCommonUntyped;
 use crate::common::sink::SinkUntyped;
-use crate::common::sink::{MessageToBeSerialized, SinkCommonUntyped};
 
 use crate::proto::grpc_status::GrpcStatus;
 use crate::proto::headers::headers_200;

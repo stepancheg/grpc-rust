@@ -2,8 +2,6 @@
 
 set -ex
 
-export PROTOBUF_VERSION=3.1.0
-
 rustc --version
 
 export RUST_BACKTRACE=1

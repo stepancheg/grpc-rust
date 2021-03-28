@@ -1,7 +1,8 @@
 use crate::client::types::ClientTypes;
+use crate::common::sink::MessageToBeSerialized;
+use crate::common::sink::SinkCommon;
 use crate::common::sink::SinkCommonUntyped;
 use crate::common::sink::SinkUntyped;
-use crate::common::sink::{MessageToBeSerialized, SinkCommon};
 
 use crate::result;
 use futures::task::Context;

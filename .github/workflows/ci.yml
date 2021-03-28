@@ -86,6 +86,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       ACTION: test-protoc-plugin
+      PROTOBUF_VERSION: 3.1.0
     steps:
       - name: cargo cache
         uses: actions/cache@v2

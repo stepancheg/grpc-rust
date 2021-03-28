@@ -11,7 +11,9 @@ use grpc::rt::*;
 use grpc::*;
 
 use futures::executor;
-use futures::{future, TryFutureExt, TryStreamExt};
+use futures::future;
+use futures::TryFutureExt;
+use futures::TryStreamExt;
 use std::thread;
 use test_misc::*;
 
