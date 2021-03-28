@@ -1,0 +1,12 @@
+{
+    # Line length
+    "MD013": false,
+    # Headings should be surrounded by blank lines
+    "MD022": false,
+    # Multiple headings with the same content
+    "MD024": false,
+    # Lists should be surrounded by blank lines
+    "MD032": false
+    # First line in file should be a top level heading
+    "MD041": false
+}
