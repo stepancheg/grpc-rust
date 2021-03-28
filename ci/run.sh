@@ -10,6 +10,9 @@ export RUST_BACKTRACE=1
 
 ci/install-protobuf.sh
 
+# Add protoc to path
+PATH="$PATH:$HOME/bin"
+
 if test "$ACTION" = "test-protoc-plugin"; then
     (
         cargo install protobuf-codegen
