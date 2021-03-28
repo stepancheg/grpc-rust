@@ -6,8 +6,6 @@ rustc --version
 
 export RUST_BACKTRACE=1
 
-ci/install-protobuf.sh
-
 # Add protoc to path
 PATH="$PATH:$HOME/bin"
 

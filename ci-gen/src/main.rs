@@ -14,6 +14,7 @@ fn steps(os: Os, channel: RustToolchain) -> Vec<Step> {
     let mut steps = Vec::new();
     steps.push(checkout_sources());
     steps.push(rust_install_toolchain(channel));
+    steps.push(install_protobuf_step());
     steps.push(Step::run("run", "ci/run.sh"));
     steps
 }
@@ -71,6 +72,7 @@ fn test_protoc_plugin_job() -> Job {
     steps.push(cargo_cache());
     steps.push(checkout_sources());
     steps.push(rust_install_toolchain(RustToolchain::Stable));
+    steps.push(install_protobuf_step());
     steps.push(Step::run("run", "ci/run.sh"));
     Job {
         id: "test-protoc-plugin".to_owned(),
