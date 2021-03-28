@@ -95,7 +95,9 @@ fn jobs() -> Vec<Job> {
 
     r.push(cargo_doc_job());
 
-    r.push(rustfmt_check_job());
+    // TODO: enable
+    //r.push(rustfmt_check_job());
+
     r.push(super_linter_job());
 
     r
