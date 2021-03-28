@@ -1,0 +1,10 @@
+[package]
+name = "ci-gen"
+version = "0.0.0"
+authors = ["Stiopa Koltsov <stepan.koltsov@gmail.com>"]
+edition = "2018"
+publish = false
+
+[dependencies]
+gh-actions-gen = { git = "https://github.com/stepancheg/gh-actions-gen", rev = "b154f45b8889995bb499335222e393db5af726b1" }
+#gh-actions-gen = { path = "../../gh-actions-gen/gh-actions-gen" }
