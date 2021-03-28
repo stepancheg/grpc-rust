@@ -8,4 +8,5 @@ members = [
     "long-tests/with-rust",
     "interop",
     "protoc-rust-grpc",
+    "ci-gen",
 ]
