@@ -115,7 +115,6 @@ jobs:
     name: test-protoc-plugin
     runs-on: ubuntu-latest
     env:
-      ACTION: test-protoc-plugin
       PROTOBUF_VERSION: 3.1.0
       RUST_BACKTRACE: "1"
     steps:
@@ -135,8 +134,14 @@ jobs:
       - name: install protobuf
         run: "./ci/install-protobuf.sh"
         shell: bash
-      - name: run
-        run: ci/run.sh
+      - name: install protobuf-codegen
+        run: cargo install protobuf-codegen
+        shell: bash
+      - name: gen
+        run: grpc-compiler/test-protoc-plugin/gen.sh
+        shell: bash
+      - name: check
+        run: cargo check --manifest-path grpc-compiler/test-protoc-plugin/Cargo.toml
         shell: bash
   cargo-doc:
     name: cargo doc

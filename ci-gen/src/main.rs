@@ -73,12 +73,19 @@ fn test_protoc_plugin_job() -> Job {
     steps.push(checkout_sources());
     steps.push(rust_install_toolchain(RustToolchain::Stable));
     steps.push(install_protobuf_step());
-    steps.push(Step::run("run", "ci/run.sh"));
+    steps.push(Step::run(
+        "install protobuf-codegen",
+        "cargo install protobuf-codegen",
+    ));
+    steps.push(Step::run("gen", "grpc-compiler/test-protoc-plugin/gen.sh"));
+    steps.push(Step::run(
+        "check",
+        "cargo check --manifest-path grpc-compiler/test-protoc-plugin/Cargo.toml",
+    ));
     Job {
         id: "test-protoc-plugin".to_owned(),
         name: "test-protoc-plugin".to_owned(),
         env: vec![
-            ("ACTION".to_owned(), "test-protoc-plugin".to_owned()),
             protobuf_version_env(),
             rust_backtrace_env(),
         ],
