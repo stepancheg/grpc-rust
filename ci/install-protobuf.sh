@@ -10,9 +10,6 @@ die() {
 test -n "$PROTOBUF_VERSION" || die "PROTOBUF_VERSION env var is undefined"
 
 case "$PROTOBUF_VERSION" in
-2*)
-    basename="protobuf-$PROTOBUF_VERSION"
-    ;;
 3*)
     basename="protobuf-cpp-$PROTOBUF_VERSION"
     ;;
