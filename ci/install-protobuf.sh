@@ -28,4 +28,4 @@ cd protobuf-$PROTOBUF_VERSION
 ./configure --prefix=$HOME && make -j2 && make install
 
 test -n "$GITHUB_PATH"
-echo "$HOME/bin" >> $GITHUB_PATH
+echo "$HOME/bin" >>$GITHUB_PATH
