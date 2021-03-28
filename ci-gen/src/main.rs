@@ -85,10 +85,7 @@ fn test_protoc_plugin_job() -> Job {
     Job {
         id: "test-protoc-plugin".to_owned(),
         name: "test-protoc-plugin".to_owned(),
-        env: vec![
-            protobuf_version_env(),
-            rust_backtrace_env(),
-        ],
+        env: vec![protobuf_version_env(), rust_backtrace_env()],
         steps,
         ..Default::default()
     }

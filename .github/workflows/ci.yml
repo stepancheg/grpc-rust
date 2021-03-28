@@ -121,8 +121,8 @@ jobs:
       - name: cargo cache
         uses: actions/cache@v2
         with:
-          path: "/.cargo/registry\n~/.cargo/git\n"
-          key: "${{ runner.os }}-cargo"
+          path: "~/.cargo/registry\n~/.cargo/git\n"
+          key: "${{ runner.os }}-cargo-2"
       - name: Checkout sources
         uses: actions/checkout@v2
       - name: Install toolchain
