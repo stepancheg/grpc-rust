@@ -7,8 +7,8 @@ authors = ["Stepan Koltsov <stepan.koltsov@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-protobuf = "2"
-protobuf-codegen = "2"
+protobuf = "~2.18.1"
+protobuf-codegen = "~2.18.1"
 
 [[bin]]
 

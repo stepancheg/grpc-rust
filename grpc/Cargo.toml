@@ -15,8 +15,8 @@ log             = "0.4"
 log-ndc         = "0.2.*"
 futures         = "0.3.1"
 tokio           = { version = "~0.2.6", features = ["net", "uds", "io-util", "time"] }
-#httpbis         = "~0.9"
-httpbis         = { git = "https://github.com/stepancheg/rust-http2" }
+httpbis         = "~0.9"
+#httpbis         = { git = "https://github.com/stepancheg/rust-http2" }
 tls-api         = "0.4.*"
 tls-api-stub    = "0.4.*"
 bytes           = "0.5.*"

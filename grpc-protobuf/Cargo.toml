@@ -11,7 +11,7 @@ keywords = ["grpc"]
 edition = "2018"
 
 [dependencies]
-protobuf        = { version = "2", features = ["with-bytes"] }
+protobuf        = { version = "~2.18.1", features = ["with-bytes"] }
 grpc = { path = "../grpc", version = "=0.9.0-pre" }
 bytes           = "0.5.*"
 

@@ -7,7 +7,7 @@ edition = "2018"
 
 [dependencies]
 tls-api         = "0.4.*"
-protobuf        = "2"
+protobuf        = "~2.18.1"
 grpc            = { path = "../../grpc" }
 grpc-protobuf   = { path = "../../grpc-protobuf" }
 

@@ -15,12 +15,12 @@ path = "../../grpc"
 path = "../../grpc-protobuf"
 
 [dependencies]
-protobuf        = "2"
+protobuf        = "~2.18.1"
 futures         = "0.3.*"
 tls-api            = "0.4.*"
 tls-api-native-tls = "0.4.*"
-#httpbis         = "~0.9"
-httpbis         = { git = "https://github.com/stepancheg/rust-http2" }
+httpbis         = "~0.9"
+#httpbis         = { git = "https://github.com/stepancheg/rust-http2" }
 env_logger      = "~0.5"
 
 [build-dependencies]
