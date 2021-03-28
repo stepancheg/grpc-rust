@@ -107,6 +107,9 @@ jobs:
     name: cargo doc
     runs-on: ubuntu-latest
     steps:
+      - name: install protobuf
+        run: "./ci/install-protobuf.sh"
+        shell: bash
       - name: Checkout sources
         uses: actions/checkout@v2
       - name: Install toolchain

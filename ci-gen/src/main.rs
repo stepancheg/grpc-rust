@@ -39,9 +39,14 @@ const _WINDOWS: Os = Os {
     ghwf: Env::WindowsLatest,
 };
 
+fn install_protobuf_step() -> Step {
+    Step::run("install protobuf", "./ci/install-protobuf.sh")
+}
+
 fn cargo_doc_job() -> Job {
     let os = LINUX;
     let mut steps = Vec::new();
+    steps.push(install_protobuf_step());
     steps.push(checkout_sources());
     steps.push(rust_install_toolchain(RustToolchain::Stable));
     steps.push(cargo_doc("cargo doc", ""));
