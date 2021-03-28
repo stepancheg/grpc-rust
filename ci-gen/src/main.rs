@@ -46,8 +46,8 @@ fn install_protobuf_step() -> Step {
 fn cargo_doc_job() -> Job {
     let os = LINUX;
     let mut steps = Vec::new();
-    steps.push(install_protobuf_step());
     steps.push(checkout_sources());
+    steps.push(install_protobuf_step());
     steps.push(rust_install_toolchain(RustToolchain::Stable));
     steps.push(cargo_doc("cargo doc", ""));
     Job {
