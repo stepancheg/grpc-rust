@@ -106,6 +106,8 @@ jobs:
   cargo-doc:
     name: cargo doc
     runs-on: ubuntu-latest
+    env:
+      PROTOBUF_VERSION: 3.1.0
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2

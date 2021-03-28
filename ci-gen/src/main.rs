@@ -54,6 +54,7 @@ fn cargo_doc_job() -> Job {
         id: "cargo-doc".to_owned(),
         name: "cargo doc".to_owned(),
         runs_on: os.ghwf,
+        env: vec![("PROTOBUF_VERSION".to_owned(), "3.1.0".to_owned())],
         steps,
         ..Default::default()
     }
