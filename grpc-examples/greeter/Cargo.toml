@@ -15,7 +15,7 @@ path = "../../grpc"
 path = "../../grpc-protobuf"
 
 [dependencies]
-protobuf        = "2"
+protobuf        = "~2.18.2"
 futures         = "0.3.*"
 tls-api            = "0.4.*"
 tls-api-native-tls = "0.4.*"
