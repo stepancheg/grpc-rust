@@ -45,6 +45,10 @@ fn protobuf_version_env() -> (String, String) {
     ("PROTOBUF_VERSION".to_owned(), "3.1.0".to_owned())
 }
 
+fn rust_backtrace_env() -> (String, String) {
+    ("RUST_BACKTRACE".to_owned(), "1".to_owned())
+}
+
 fn cargo_doc_job() -> Job {
     let os = LINUX;
     let mut steps = Vec::new();
@@ -56,7 +60,7 @@ fn cargo_doc_job() -> Job {
         id: "cargo-doc".to_owned(),
         name: "cargo doc".to_owned(),
         runs_on: os.ghwf,
-        env: vec![protobuf_version_env()],
+        env: vec![protobuf_version_env(), rust_backtrace_env()],
         steps,
         ..Default::default()
     }
@@ -74,6 +78,7 @@ fn test_protoc_plugin_job() -> Job {
         env: vec![
             ("ACTION".to_owned(), "test-protoc-plugin".to_owned()),
             protobuf_version_env(),
+            rust_backtrace_env(),
         ],
         steps,
         ..Default::default()
@@ -96,6 +101,7 @@ fn jobs() -> Vec<Job> {
                 id: format!("{}-{}", os.name, channel),
                 name: format!("{} {}", os.name, channel),
                 runs_on: os.ghwf,
+                env: vec![protobuf_version_env(), rust_backtrace_env()],
                 steps: steps(os, channel),
                 ..Default::default()
             });

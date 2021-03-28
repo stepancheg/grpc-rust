@@ -9,6 +9,9 @@ jobs:
   linux-stable:
     name: linux stable
     runs-on: ubuntu-latest
+    env:
+      PROTOBUF_VERSION: 3.1.0
+      RUST_BACKTRACE: "1"
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
@@ -24,6 +27,9 @@ jobs:
   macos-stable:
     name: macos stable
     runs-on: macos-latest
+    env:
+      PROTOBUF_VERSION: 3.1.0
+      RUST_BACKTRACE: "1"
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
@@ -39,6 +45,9 @@ jobs:
   linux-beta:
     name: linux beta
     runs-on: ubuntu-latest
+    env:
+      PROTOBUF_VERSION: 3.1.0
+      RUST_BACKTRACE: "1"
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
@@ -54,6 +63,9 @@ jobs:
   linux-nightly:
     name: linux nightly
     runs-on: ubuntu-latest
+    env:
+      PROTOBUF_VERSION: 3.1.0
+      RUST_BACKTRACE: "1"
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
@@ -69,6 +81,9 @@ jobs:
   macos-nightly:
     name: macos nightly
     runs-on: macos-latest
+    env:
+      PROTOBUF_VERSION: 3.1.0
+      RUST_BACKTRACE: "1"
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
@@ -87,6 +102,7 @@ jobs:
     env:
       ACTION: test-protoc-plugin
       PROTOBUF_VERSION: 3.1.0
+      RUST_BACKTRACE: "1"
     steps:
       - name: cargo cache
         uses: actions/cache@v2
@@ -109,6 +125,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       PROTOBUF_VERSION: 3.1.0
+      RUST_BACKTRACE: "1"
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
