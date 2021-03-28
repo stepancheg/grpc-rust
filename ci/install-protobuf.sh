@@ -26,3 +26,6 @@ curl -sL https://github.com/google/protobuf/releases/download/v$PROTOBUF_VERSION
 cd protobuf-$PROTOBUF_VERSION
 
 ./configure --prefix=$HOME && make -j2 && make install
+
+test -n "$GITHUB_PATH"
+echo "$HOME/bin" >> $GITHUB_PATH
