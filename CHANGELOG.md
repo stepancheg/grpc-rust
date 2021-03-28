@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+## [0.8.3] - 2021-03-29
+
+- Pin protobuf version to 2.18.2 to fix compilation: incompatibility of bytes crate
+
 ## [0.8.1] - 2020-05-26
 
 - Fix compilation on Windows
