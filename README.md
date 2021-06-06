@@ -63,7 +63,7 @@ In Cargo.toml:
 ```ini
 [dependencies]
 grpc            = "~0.8"
-protobuf        = "~2"
+protobuf        = "2.23"
 futures         = "~0.3"
 
 [build-dependencies]

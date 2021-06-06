@@ -14,16 +14,19 @@ edition = "2018"
 log             = "0.4"
 log-ndc         = "0.2.*"
 futures         = "0.3.1"
-tokio           = { version = "~0.2.6", features = ["net", "uds", "io-util", "time"] }
-httpbis         = "~0.9"
-#httpbis         = { git = "https://github.com/stepancheg/rust-http2" }
-tls-api         = "0.4.*"
-tls-api-stub    = "0.4.*"
-bytes           = "0.5.*"
+tokio = { version = "1.2.0", features = ["io-util", "net", "time", "rt"] }
+tokio-util = { version = "0.6.3", features = ["io"] }
+#httpbis         = "~0.9"
+httpbis         = { git = "https://github.com/stepancheg/rust-http2" }
+#httpbis         = { path = "../../rust-http2/httpbis" }
+tls-api         = "0.5.0"
+tls-api-stub    = "0.5.0"
+bytes           = "1.0.1"
 base64          = "0.9"
 
 [dev-dependencies]
 log-ndc-env-logger = "~0.2"
+rand = "0.8.3"
 
 [lib]
 doctest = false

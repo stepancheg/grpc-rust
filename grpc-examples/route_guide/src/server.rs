@@ -42,7 +42,6 @@ impl RouteGuideImpl {
 impl RouteGuide for RouteGuideImpl {
     fn get_feature(
         &self,
-        _o: ServerHandlerContext,
         req: ServerRequestSingle<Point>,
         resp: ServerResponseUnarySink<Feature>,
     ) -> grpc::Result<()> {
@@ -60,13 +59,13 @@ impl RouteGuide for RouteGuideImpl {
 
     fn list_features(
         &self,
-        o: ServerHandlerContext,
         mut req: ServerRequestSingle<Rectangle>,
         mut resp: ServerResponseSink<Feature>,
     ) -> grpc::Result<()> {
+        let loop_handle = req.loop_handle();
         let req = req.take_message();
         let saved_features = self.saved_features.clone();
-        o.spawn(async move {
+        loop_handle.spawn(async move {
             for feature in &saved_features[..] {
                 if in_range(feature.get_location(), &req) {
                     resp.ready().await?;
@@ -80,7 +79,6 @@ impl RouteGuide for RouteGuideImpl {
 
     fn record_route(
         &self,
-        o: ServerHandlerContext,
         req: ServerRequest<Point>,
         resp: ServerResponseUnarySink<RouteSummary>,
     ) -> grpc::Result<()> {
@@ -88,9 +86,11 @@ impl RouteGuide for RouteGuideImpl {
 
         let saved_features = self.saved_features.clone();
 
+        let loop_handle = req.loop_handle();
+
         let mut stream = req.into_stream();
 
-        o.spawn(async move {
+        loop_handle.spawn(async move {
             struct State {
                 point_count: u32,
                 feature_count: u32,
@@ -133,15 +133,16 @@ impl RouteGuide for RouteGuideImpl {
 
     fn route_chat(
         &self,
-        o: ServerHandlerContext,
         req: ServerRequest<RouteNote>,
         mut resp: ServerResponseSink<RouteNote>,
     ) -> grpc::Result<()> {
         let route_notes_map = self.route_notes.clone();
 
+        let loop_handle = req.loop_handle();
+
         let mut req = req.into_stream();
 
-        o.spawn(async move {
+        loop_handle.spawn(async move {
             loop {
                 // Wait until resp is writable
                 resp.ready().await?;

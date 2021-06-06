@@ -17,8 +17,8 @@ path = "../../grpc-protobuf"
 [dependencies]
 log             = "0.4.*"
 env_logger      = "~0.5"
-protobuf        = "~2.18.2"
-tls-api         = "0.4.*"
+protobuf        = "2.23"
+tls-api         = "0.5.0"
 futures         = "0.3.*"
 
 [build-dependencies]

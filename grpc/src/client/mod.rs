@@ -6,7 +6,9 @@ pub(crate) mod types;
 
 use bytes::Bytes;
 
+use httpbis::ClientIntf;
 use httpbis::ClientTlsOption;
+use httpbis::EndStream;
 use httpbis::Header;
 use httpbis::Headers;
 use httpbis::HttpScheme;
@@ -29,6 +31,8 @@ use crate::req::*;
 use crate::resp::*;
 use std::future::Future;
 use std::pin::Pin;
+use tls_api::TlsConnector;
+use tls_api::TlsConnectorType;
 use tokio::runtime::Handle;
 
 /// Client configuration.
@@ -50,22 +54,31 @@ enum ClientBuilderType<'a> {
     Unix { socket: &'a str },
 }
 
-enum Tls<T: tls_api::TlsConnector> {
-    Explict(ClientTlsOption<T>),
-    Implicit,
+enum Tls {
+    Explict(ClientTlsOption),
+    Implicit(&'static dyn TlsConnectorType),
     None,
 }
 
-/// Builder for [`Client`].
-pub struct ClientBuilder<'a, T: tls_api::TlsConnector> {
-    client_type: ClientBuilderType<'a>,
-    http_scheme: HttpScheme,
-    event_loop: Option<Handle>,
-    pub conf: ClientConf,
-    tls: Tls<T>,
+impl Tls {
+    pub fn http_scheme(&self) -> HttpScheme {
+        match self {
+            Tls::Explict(x) => x.http_scheme(),
+            Tls::Implicit(_) => HttpScheme::Https,
+            Tls::None => HttpScheme::Http,
+        }
+    }
 }
 
-impl<'a, T: tls_api::TlsConnector> ClientBuilder<'a, T> {
+/// Builder for [`Client`].
+pub struct ClientBuilder<'a> {
+    client_type: ClientBuilderType<'a>,
+    event_loop: Option<Handle>,
+    pub conf: ClientConf,
+    tls: Tls,
+}
+
+impl<'a> ClientBuilder<'a> {
     pub fn with_event_loop(mut self, event_loop: Handle) -> Self {
         self.event_loop = Some(event_loop);
         self
@@ -77,7 +90,7 @@ impl<'a, T: tls_api::TlsConnector> ClientBuilder<'a, T> {
     }
 
     pub fn build(self) -> result::Result<Client> {
-        let mut builder = httpbis::ClientBuilder::<T>::new();
+        let mut builder = httpbis::ClientBuilder::new();
         let mut conf = self.conf;
         conf.http.thread_name = Some(
             conf.http
@@ -86,8 +99,14 @@ impl<'a, T: tls_api::TlsConnector> ClientBuilder<'a, T> {
         );
         let (host, port) = match self.client_type {
             ClientBuilderType::Tcp { host, port } => {
-                if self.http_scheme == HttpScheme::Https {
-                    builder.set_tls(host)?;
+                match self.tls {
+                    Tls::Explict(_) => {
+                        todo!()
+                    }
+                    Tls::Implicit(x) => {
+                        builder.set_tls_dyn(host, x)?;
+                    }
+                    Tls::None => {}
                 }
                 builder.set_addr((host, port))?;
                 (host, Some(port))
@@ -99,27 +118,27 @@ impl<'a, T: tls_api::TlsConnector> ClientBuilder<'a, T> {
         };
         builder.event_loop = self.event_loop;
         builder.conf = conf.http;
+        let http_scheme = self.tls.http_scheme();
         match self.tls {
             Tls::Explict(tls) => {
                 builder.tls = tls;
             }
-            Tls::Implicit | Tls::None => {}
+            Tls::Implicit(..) | Tls::None => {}
         }
 
         Ok(Client {
             client: ::std::sync::Arc::new(builder.build()?),
             host: host.to_owned(),
-            http_scheme: self.http_scheme,
+            http_scheme,
             port,
         })
     }
 }
 
-impl<'a> ClientBuilder<'a, tls_api_stub::TlsConnector> {
+impl<'a> ClientBuilder<'a> {
     pub fn new(host: &'a str, port: u16) -> Self {
         ClientBuilder {
             client_type: ClientBuilderType::Tcp { port, host },
-            http_scheme: HttpScheme::Http,
             event_loop: None,
             conf: Default::default(),
             tls: Tls::None,
@@ -129,30 +148,24 @@ impl<'a> ClientBuilder<'a, tls_api_stub::TlsConnector> {
     pub fn new_unix(addr: &'a str) -> Self {
         ClientBuilder {
             client_type: ClientBuilderType::Unix { socket: addr },
-            http_scheme: HttpScheme::Http,
             event_loop: None,
             conf: Default::default(),
             tls: Tls::None,
         }
     }
 
-    pub fn tls<TLS: tls_api::TlsConnector>(self) -> ClientBuilder<'a, TLS> {
+    pub fn tls<TLS: TlsConnector>(self) -> ClientBuilder<'a> {
         ClientBuilder {
             client_type: self.client_type,
-            http_scheme: HttpScheme::Https,
             event_loop: self.event_loop,
             conf: self.conf,
-            tls: Tls::Implicit,
+            tls: Tls::Implicit(TLS::TYPE_DYN),
         }
     }
 
-    pub fn explicit_tls<TLS: tls_api::TlsConnector>(
-        self,
-        tls: ClientTlsOption<TLS>,
-    ) -> ClientBuilder<'a, TLS> {
+    pub fn explicit_tls(self, tls: ClientTlsOption) -> ClientBuilder<'a> {
         ClientBuilder {
             client_type: self.client_type,
-            http_scheme: tls.http_scheme(),
             event_loop: self.event_loop,
             conf: self.conf,
             tls: Tls::Explict(tls),
@@ -234,7 +247,10 @@ impl Client {
             None => None,
         };
 
-        let end_stream = req_bytes.is_some();
+        let end_stream = match req_bytes.is_some() {
+            true => EndStream::Yes,
+            false => EndStream::No,
+        };
 
         //        let request_frames = {
         //            let method = method.clone();

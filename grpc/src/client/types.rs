@@ -4,7 +4,6 @@ use crate::common::types::Types;
 pub(crate) struct ClientTypes;
 
 impl Types for ClientTypes {
-    type HttpSink = httpbis::ClientRequest;
     type SinkUntyped = ClientRequestSinkUntyped;
 }
 

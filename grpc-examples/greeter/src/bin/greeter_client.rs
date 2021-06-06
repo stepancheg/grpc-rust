@@ -13,7 +13,6 @@ use tls_api::TlsConnectorBuilder;
 
 fn test_tls_connector() -> tls_api_native_tls::TlsConnector {
     let root_ca = include_bytes!("../root-ca.der");
-    let root_ca = tls_api::Certificate::from_der(root_ca.to_vec());
 
     let mut builder = tls_api_native_tls::TlsConnector::builder().unwrap();
     builder
@@ -45,8 +44,10 @@ fn main() {
         // This is a bit complicated, because we need to explicitly pass root CA here
         // because server uses self-signed certificate.
         // TODO: simplify it
-        let tls_option =
-            httpbis::ClientTlsOption::Tls("foobar.com".to_owned(), Arc::new(test_tls_connector()));
+        let tls_option = httpbis::ClientTlsOption::Tls(
+            "foobar.com".to_owned(),
+            Arc::new(test_tls_connector().into_dyn()),
+        );
         let grpc_client = Arc::new(
             grpc::ClientBuilder::new("::1", port)
                 .explicit_tls(tls_option)

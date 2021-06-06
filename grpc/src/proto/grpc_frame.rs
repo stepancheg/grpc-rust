@@ -1,9 +1,6 @@
-use std::collections::VecDeque;
-
 use bytes::Buf;
 use bytes::Bytes;
 
-use futures::stream::Stream;
 use futures::stream::StreamExt;
 
 use crate::error::*;
@@ -11,7 +8,6 @@ use crate::proto::grpc_frame_parser::GrpcFrameParser;
 use crate::result;
 use futures::task::Context;
 use httpbis::DataOrTrailers;
-use httpbis::HttpStreamAfterHeaders;
 use std::pin::Pin;
 use std::task::Poll;
 
@@ -55,60 +51,60 @@ trait RequestOrResponse {
     fn need_trailing_header() -> bool;
 }
 
-pub struct GrpcFrameFromHttpFramesStreamRequest {
-    http_stream_stream: HttpStreamAfterHeaders,
-    buf: GrpcFrameParser,
-    parsed_frames: VecDeque<Bytes>,
-}
-
-impl GrpcFrameFromHttpFramesStreamRequest {
-    pub fn _new(http_stream_stream: HttpStreamAfterHeaders) -> Self {
-        GrpcFrameFromHttpFramesStreamRequest {
-            http_stream_stream,
-            buf: GrpcFrameParser::default(),
-            parsed_frames: VecDeque::new(),
-        }
-    }
-}
-
-impl Stream for GrpcFrameFromHttpFramesStreamRequest {
-    type Item = crate::Result<Bytes>;
-
-    fn poll_next(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Option<crate::Result<Bytes>>> {
-        loop {
-            let parsed_frames = self.buf.next_frames()?.0;
-
-            self.parsed_frames.extend(parsed_frames);
-
-            if let Some(frame) = self.parsed_frames.pop_front() {
-                return Poll::Ready(Some(Ok(frame)));
-            }
-
-            let part_opt = match self.http_stream_stream.poll_next_unpin(cx)? {
-                Poll::Pending => return Poll::Pending,
-                Poll::Ready(part_opt) => part_opt,
-            };
-            let part = match part_opt {
-                None => {
-                    self.buf.check_empty()?;
-                    return Poll::Ready(None);
-                }
-                Some(part) => part,
-            };
-
-            match part {
-                // unexpected but OK
-                DataOrTrailers::Trailers(..) => (),
-                DataOrTrailers::Data(data, ..) => {
-                    self.buf.enqueue(data);
-                }
-            }
-        }
-    }
-}
+// pub struct GrpcFrameFromHttpFramesStreamRequest {
+//     http_stream_stream: HttpStreamAfterHeaders,
+//     buf: GrpcFrameParser,
+//     parsed_frames: VecDeque<Bytes>,
+// }
+//
+// impl GrpcFrameFromHttpFramesStreamRequest {
+//     pub fn _new(http_stream_stream: HttpStreamAfterHeaders) -> Self {
+//         GrpcFrameFromHttpFramesStreamRequest {
+//             http_stream_stream,
+//             buf: GrpcFrameParser::default(),
+//             parsed_frames: VecDeque::new(),
+//         }
+//     }
+// }
+//
+// impl Stream for GrpcFrameFromHttpFramesStreamRequest {
+//     type Item = crate::Result<Bytes>;
+//
+//     fn poll_next(
+//         mut self: Pin<&mut Self>,
+//         cx: &mut Context<'_>,
+//     ) -> Poll<Option<crate::Result<Bytes>>> {
+//         loop {
+//             let parsed_frames = self.buf.next_frames()?.0;
+//
+//             self.parsed_frames.extend(parsed_frames);
+//
+//             if let Some(frame) = self.parsed_frames.pop_front() {
+//                 return Poll::Ready(Some(Ok(frame)));
+//             }
+//
+//             let part_opt = match self.http_stream_stream.poll_next_unpin(cx)? {
+//                 Poll::Pending => return Poll::Pending,
+//                 Poll::Ready(part_opt) => part_opt,
+//             };
+//             let part = match part_opt {
+//                 None => {
+//                     self.buf.check_empty()?;
+//                     return Poll::Ready(None);
+//                 }
+//                 Some(part) => part,
+//             };
+//
+//             match part {
+//                 // unexpected but OK
+//                 DataOrTrailers::Trailers(..) => (),
+//                 DataOrTrailers::Data(data, ..) => {
+//                     self.buf.enqueue(data);
+//                 }
+//             }
+//         }
+//     }
+// }
 
 #[cfg(test)]
 mod test {

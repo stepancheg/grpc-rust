@@ -1,6 +1,6 @@
 use crate::proto::grpc_status::GrpcStatus;
 use crate::Metadata;
-use httpbis::BytesDeque;
+use bytes::Bytes;
 use httpbis::Header;
 use httpbis::Headers;
 
@@ -40,7 +40,7 @@ pub(crate) fn grpc_error_message(message: &str) -> httpbis::SimpleHttpMessage {
     ]);
     httpbis::SimpleHttpMessage {
         headers,
-        body: BytesDeque::new(),
+        body: Bytes::new(),
     }
 }
 

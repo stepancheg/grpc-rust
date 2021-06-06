@@ -11,7 +11,6 @@ struct LongTestsServerImpl {}
 impl LongTests for LongTestsServerImpl {
     fn echo(
         &self,
-        _: ServerHandlerContext,
         req: ServerRequestSingle<EchoRequest>,
         resp: ServerResponseUnarySink<EchoResponse>,
     ) -> grpc::Result<()> {
@@ -22,7 +21,6 @@ impl LongTests for LongTestsServerImpl {
 
     fn char_count(
         &self,
-        _: ServerHandlerContext,
         req: ServerRequest<CharCountRequest>,
         resp: ServerResponseUnarySink<CharCountResponse>,
     ) -> grpc::Result<()> {
@@ -47,25 +45,25 @@ impl LongTests for LongTestsServerImpl {
 
     fn random_strings(
         &self,
-        c: ServerHandlerContext,
         req: ServerRequestSingle<RandomStringsRequest>,
         mut resp: ServerResponseSink<RandomStringsResponse>,
     ) -> grpc::Result<()> {
         let mut rem = req.message.count;
-        c.spawn_poll_fn(move |cx| loop {
-            if let Poll::Pending = resp.poll(cx)? {
-                return Poll::Pending;
-            }
-            if rem == 0 {
-                resp.send_trailers(Metadata::new())?;
-                return Poll::Ready(Ok(()));
-            }
-            let s = "aabb".to_owned();
-            let mut m = RandomStringsResponse::new();
-            m.set_s(s);
-            resp.send_data(m)?;
-            rem -= 1;
-        });
+        req.loop_handle()
+            .spawn(futures::future::poll_fn(move |cx| loop {
+                if let Poll::Pending = resp.poll(cx)? {
+                    return Poll::Pending;
+                }
+                if rem == 0 {
+                    resp.send_trailers(Metadata::new())?;
+                    return Poll::Ready(Ok::<_, grpc::Error>(()));
+                }
+                let s = "aabb".to_owned();
+                let mut m = RandomStringsResponse::new();
+                m.set_s(s);
+                resp.send_data(m)?;
+                rem -= 1;
+            }));
         Ok(())
     }
 }

@@ -13,12 +13,12 @@ path = "../grpc"
 path = "../grpc-protobuf"
 
 [dependencies]
-bytes           = "0.5.*"
+bytes = "1.0.1"
 log             = "0.4.*"
 env_logger      = "~0.5"
-protobuf        = "~2.18.2"
+protobuf        = "2.23"
 futures         = "0.3.*"
-tls-api         = "0.4.*"
+tls-api         = "0.5.0"
 chrono          = "0.2.25"
 clap            = "2.20.0"
 

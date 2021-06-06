@@ -36,18 +36,6 @@ pub enum Error {
     Other(&'static str),
 }
 
-impl From<httpbis::SendError> for Error {
-    fn from(e: httpbis::SendError) -> Self {
-        Error::Http(httpbis::Error::from(e))
-    }
-}
-
-impl From<httpbis::StreamDead> for Error {
-    fn from(e: httpbis::StreamDead) -> Self {
-        Error::Http(httpbis::Error::from(e))
-    }
-}
-
 fn _assert_debug<D: ::std::fmt::Debug>(_: &D) {}
 
 fn _assert_grpc_error_debug(e: &Error) {

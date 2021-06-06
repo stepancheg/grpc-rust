@@ -7,8 +7,10 @@ use crate::server::types::ServerTypes;
 use httpbis;
 
 use futures::future;
+use futures::stream;
 use futures::task::Context;
 use std::task::Poll;
+use tokio::runtime::Handle;
 
 /// Sink for server gRPC response.
 pub struct ServerResponseSink<Resp: Send + 'static> {
@@ -21,12 +23,12 @@ impl<Resp: Send> ServerResponseSink<Resp> {
     /// stream is ready to accept data.
     ///
     /// Higher level wrapper (future) is [`ready`](ServerResponseSink::ready).
-    pub fn poll(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), httpbis::StreamDead>> {
+    pub fn poll(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), httpbis::Error>> {
         self.common.poll(cx)
     }
 
     /// A future is resolved when the sink is available to receive more data.
-    pub async fn ready(&mut self) -> Result<(), httpbis::StreamDead> {
+    pub async fn ready(&mut self) -> Result<(), httpbis::Error> {
         future::poll_fn(|cx| self.poll(cx)).await
     }
 
@@ -60,5 +62,12 @@ impl<Resp: Send> ServerResponseSink<Resp> {
     pub fn send_grpc_error(&mut self, status: GrpcStatus, message: String) -> result::Result<()> {
         self.common.sink.send_grpc_error(status, message)?;
         Ok(())
+    }
+
+    pub fn pump_from<S>(self, handle: &Handle, stream: S)
+    where
+        S: stream::Stream<Item = crate::Result<Resp>> + Unpin + Send + 'static,
+    {
+        todo!()
     }
 }

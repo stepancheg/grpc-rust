@@ -59,7 +59,6 @@ impl TestService for TestServerImpl {
     // One empty request followed by one empty response.
     fn empty_call(
         &self,
-        _ctx: ServerHandlerContext,
         _req: ServerRequestSingle<Empty>,
         resp: ServerResponseUnarySink<Empty>,
     ) -> grpc::Result<()> {
@@ -69,7 +68,6 @@ impl TestService for TestServerImpl {
     // One request followed by one response.
     fn unary_call(
         &self,
-        _ctx: ServerHandlerContext,
         req: ServerRequestSingle<SimpleRequest>,
         mut resp: ServerResponseUnarySink<SimpleResponse>,
     ) -> grpc::Result<()> {
@@ -99,7 +97,6 @@ impl TestService for TestServerImpl {
     // satisfy subsequent requests.
     fn cacheable_unary_call(
         &self,
-        _ctx: ServerHandlerContext,
         _req: ServerRequestSingle<SimpleRequest>,
         resp: ServerResponseUnarySink<SimpleResponse>,
     ) -> grpc::Result<()> {
@@ -111,10 +108,10 @@ impl TestService for TestServerImpl {
     // The server returns the payload with client desired type and sizes.
     fn streaming_output_call(
         &self,
-        o: ServerHandlerContext,
         mut req: ServerRequestSingle<StreamingOutputCallRequest>,
         resp: ServerResponseSink<StreamingOutputCallResponse>,
     ) -> grpc::Result<()> {
+        let loop_handle = req.loop_handle();
         let sizes = req
             .message
             .take_response_parameters()
@@ -127,7 +124,7 @@ impl TestService for TestServerImpl {
             response.set_payload(payload);
             Ok(response)
         });
-        o.pump(output, resp);
+        resp.pump_from(&loop_handle, output);
         Ok(())
     }
 
@@ -135,7 +132,6 @@ impl TestService for TestServerImpl {
     // The server returns the aggregated size of client payload as the result.
     fn streaming_input_call(
         &self,
-        _ctx: ServerHandlerContext,
         req: ServerRequest<StreamingInputCallRequest>,
         resp: ServerResponseUnarySink<StreamingInputCallResponse>,
     ) -> grpc::Result<()> {
@@ -161,15 +157,15 @@ impl TestService for TestServerImpl {
     // demonstrates the idea of full duplexing.
     fn full_duplex_call(
         &self,
-        o: ServerHandlerContext,
         req: ServerRequest<StreamingOutputCallRequest>,
         mut resp: ServerResponseSink<StreamingOutputCallResponse>,
     ) -> grpc::Result<()> {
         let metadata = req.metadata()?;
         debug!("sending custom metadata");
         resp.send_metadata(echo_custom_metadata(&metadata))?;
+        let loop_handle = req.loop_handle();
         let mut req = req.into_stream();
-        o.spawn_poll_fn(move |cx| loop {
+        loop_handle.spawn(futures::future::poll_fn(move |cx| loop {
             if let Poll::Pending = resp.poll(cx)? {
                 return Poll::Pending;
             }
@@ -184,7 +180,7 @@ impl TestService for TestServerImpl {
                             GrpcStatus::from_code_or_unknown(m.get_response_status().code as u32),
                             m.get_response_status().message.clone(),
                         )?;
-                        return Poll::Ready(Ok(()));
+                        return Poll::Ready(Ok::<_, grpc::Error>(()));
                     }
 
                     for p in &m.response_parameters {
@@ -205,7 +201,7 @@ impl TestService for TestServerImpl {
                 }
                 Poll::Pending => return Poll::Pending,
             }
-        });
+        }));
         Ok(())
     }
 
@@ -216,7 +212,6 @@ impl TestService for TestServerImpl {
     // first request.
     fn half_duplex_call(
         &self,
-        _ctx: ServerHandlerContext,
         _req: ServerRequest<StreamingOutputCallRequest>,
         mut resp: ServerResponseSink<StreamingOutputCallResponse>,
     ) -> grpc::Result<()> {

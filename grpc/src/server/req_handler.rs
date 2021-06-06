@@ -5,8 +5,9 @@ use crate::or_static::arc::ArcOrStatic;
 use crate::result;
 use crate::server::req_handler_unary::RequestHandlerUnaryToStream;
 use crate::server::req_stream::ServerRequestStreamSenderHandler;
+use httpbis::EndStream;
 use httpbis::Headers;
-use httpbis::ServerIncreaseInWindow;
+use httpbis::IncreaseInWindow;
 
 use std::marker;
 
@@ -15,16 +16,17 @@ use futures::channel::mpsc;
 use crate::proto::grpc_frame_parser::GrpcFrameParser;
 use crate::Metadata;
 use crate::ServerRequestStream;
+use tokio::runtime::Handle;
 
 pub(crate) trait ServerRequestStreamHandlerUntyped: Send + 'static {
-    fn grpc_message(&mut self, message: Bytes, frame_size: u32) -> result::Result<()>;
+    fn grpc_message(&mut self, message: Bytes, frame_size: usize) -> result::Result<()>;
     fn end_stream(&mut self) -> result::Result<()>;
     fn error(&mut self, error: crate::Error) -> result::Result<()>;
     fn buffer_processed(&mut self, buffered: usize) -> result::Result<()>;
 }
 
 pub trait ServerRequestStreamHandler<M>: Send + 'static {
-    fn grpc_message(&mut self, message: M, frame_size: u32) -> result::Result<()>;
+    fn grpc_message(&mut self, message: M, frame_size: usize) -> result::Result<()>;
     fn end_stream(&mut self) -> result::Result<()>;
     fn error(&mut self, error: crate::Error) -> result::Result<()> {
         Err(error)
@@ -52,7 +54,7 @@ impl<H: ServerRequestStreamHandlerUntyped> ServerStreamStreamHandlerUntypedHandl
         let mut total_consumed = 0;
         while let Some((grpc_message, consumed)) = self.buf.next_frame()? {
             // TODO: checked cast
-            self.handler.grpc_message(grpc_message, consumed as u32)?;
+            self.handler.grpc_message(grpc_message, consumed)?;
             total_consumed += consumed;
         }
 
@@ -76,12 +78,12 @@ impl<H: ServerRequestStreamHandlerUntyped> ServerStreamStreamHandlerUntypedHandl
 impl<H: ServerRequestStreamHandlerUntyped> httpbis::ServerRequestStreamHandler
     for ServerStreamStreamHandlerUntypedHandler<H>
 {
-    fn data_frame(&mut self, data: Bytes, end_stream: bool) -> httpbis::Result<()> {
+    fn data_frame(&mut self, data: Bytes, end_stream: EndStream) -> httpbis::Result<()> {
         self.buf.enqueue(data);
 
         self.process_buf()?;
 
-        if end_stream {
+        if end_stream == EndStream::Yes {
             self.buf.check_empty()?;
 
             self.end_stream()?;
@@ -91,7 +93,7 @@ impl<H: ServerRequestStreamHandlerUntyped> httpbis::ServerRequestStreamHandler
         Ok(())
     }
 
-    fn trailers(&mut self, trailers: Headers) -> httpbis::Result<()> {
+    fn trailers(mut self: Box<Self>, trailers: Headers) -> httpbis::Result<()> {
         // there are no trailers in gRPC request
         drop(trailers);
 
@@ -103,7 +105,7 @@ impl<H: ServerRequestStreamHandlerUntyped> httpbis::ServerRequestStreamHandler
         Ok(())
     }
 
-    fn error(&mut self, error: httpbis::Error) -> httpbis::Result<()> {
+    fn error(mut self: Box<Self>, error: httpbis::Error) -> httpbis::Result<()> {
         self.handler.error(error.into())?;
         Ok(())
     }
@@ -117,7 +119,7 @@ struct ServerRequestStreamHandlerHandler<M: 'static, H: ServerRequestStreamHandl
 impl<M, H: ServerRequestStreamHandler<M>> ServerRequestStreamHandlerUntyped
     for ServerRequestStreamHandlerHandler<M, H>
 {
-    fn grpc_message(&mut self, message: Bytes, frame_size: u32) -> result::Result<()> {
+    fn grpc_message(&mut self, message: Bytes, frame_size: usize) -> result::Result<()> {
         let message = self.marshaller.read(message)?;
         self.handler.grpc_message(message, frame_size)
     }
@@ -146,10 +148,14 @@ impl<'a> ServerRequestUntyped<'a> {
         Ok(Metadata::from_headers(self.req.headers.clone())?)
     }
 
+    pub fn loop_handle(&self) -> Handle {
+        self.req.loop_handle()
+    }
+
     pub fn register_stream_handler<F, H, R>(self, handler: F) -> R
     where
         H: ServerRequestStreamHandlerUntyped,
-        F: FnOnce(ServerIncreaseInWindow) -> (H, R),
+        F: FnOnce(IncreaseInWindow) -> (H, R),
     {
         self.req.register_stream_handler(|increase_in_window| {
             let (handler, r) = handler(increase_in_window);
@@ -178,6 +184,10 @@ impl<'a, M: Send + 'static> ServerRequest<'a, M> {
         self.req.metadata()
     }
 
+    pub fn loop_handle(&self) -> Handle {
+        self.req.loop_handle()
+    }
+
     /// Register server stream handler.
     ///
     /// This is low level operation, hard to use. Most users use
@@ -185,7 +195,7 @@ impl<'a, M: Send + 'static> ServerRequest<'a, M> {
     pub fn register_stream_handler<F, H, R>(self, handler: F) -> R
     where
         H: ServerRequestStreamHandler<M>,
-        F: FnOnce(ServerIncreaseInWindow) -> (H, R),
+        F: FnOnce(IncreaseInWindow) -> (H, R),
     {
         let marshaller = self.marshaller.clone();
         self.req.register_stream_handler(|increase_in_window| {
@@ -214,7 +224,7 @@ impl<'a, M: Send + 'static> ServerRequest<'a, M> {
                 M: Send + 'static,
                 F: FnMut(Option<M>) -> result::Result<()> + Send + 'static,
             {
-                increase_in_window: ServerIncreaseInWindow,
+                increase_in_window: IncreaseInWindow,
                 handler: F,
                 _marker: marker::PhantomData<M>,
             }
@@ -224,8 +234,9 @@ impl<'a, M: Send + 'static> ServerRequest<'a, M> {
                 M: Send + 'static,
                 F: FnMut(Option<M>) -> result::Result<()> + Send + 'static,
             {
-                fn grpc_message(&mut self, message: M, frame_size: u32) -> result::Result<()> {
+                fn grpc_message(&mut self, message: M, frame_size: usize) -> result::Result<()> {
                     (self.handler)(Some(message))?;
+                    // TODO: unwrap
                     self.increase_in_window.data_frame_processed(frame_size);
                     self.increase_in_window.increase_window_auto()?;
                     Ok(())

@@ -4,9 +4,9 @@ use std::thread;
 use grpc_examples_greeter::helloworld::*;
 use grpc_examples_greeter::helloworld_grpc::*;
 
-use grpc::ServerHandlerContext;
 use grpc::ServerRequestSingle;
 use grpc::ServerResponseUnarySink;
+use tls_api::TlsAcceptor;
 use tls_api::TlsAcceptorBuilder;
 
 struct GreeterImpl;
@@ -14,7 +14,6 @@ struct GreeterImpl;
 impl Greeter for GreeterImpl {
     fn say_hello(
         &self,
-        _: ServerHandlerContext,
         req: ServerRequestSingle<HelloRequest>,
         resp: ServerResponseUnarySink<HelloReply>,
     ) -> grpc::Result<()> {
@@ -32,7 +31,7 @@ impl Greeter for GreeterImpl {
 
 fn test_tls_acceptor() -> tls_api_native_tls::TlsAcceptor {
     let pkcs12 = include_bytes!("../foobar.com.p12");
-    let builder = tls_api_native_tls::TlsAcceptorBuilder::from_pkcs12(pkcs12, "mypass").unwrap();
+    let builder = tls_api_native_tls::TlsAcceptor::builder_from_pkcs12(pkcs12, "mypass").unwrap();
     builder.build().unwrap()
 }
 

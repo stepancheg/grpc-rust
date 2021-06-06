@@ -1,7 +1,5 @@
 use crate::client::types::ClientTypes;
-use crate::common::http_sink::HttpSink;
 use crate::common::types::Types;
-use crate::error;
 use bytes::Bytes;
 
 use crate::marshall::Marshaller;
@@ -11,11 +9,22 @@ use crate::result;
 use crate::server::types::ServerTypes;
 use futures::task::Context;
 use httpbis;
+use httpbis::SinkAfterHeadersBox;
+use std::marker;
 use std::task::Poll;
 
 pub trait MessageToBeSerialized {
     fn size_estimate(&self) -> result::Result<u32>;
     fn write(&self, size_estimate: u32, out: &mut Vec<u8>) -> result::Result<()>;
+
+    fn serialize_to_grpc_frame(&self) -> result::Result<Bytes> {
+        let mut data = Vec::new();
+        let size_estimate = self.size_estimate()?;
+        write_grpc_frame_cb(&mut data, size_estimate, |data| {
+            self.write(size_estimate, data)
+        })?;
+        Ok(Bytes::from(data))
+    }
 }
 
 struct MessageToBeSerializedImpl<'a, T> {
@@ -33,24 +42,15 @@ impl<'a, T: 'static> MessageToBeSerialized for MessageToBeSerializedImpl<'a, T> 
     }
 }
 
-pub enum SendError {
-    Http(httpbis::SendError),
-    _Marshall(error::Error),
-}
-
-impl From<httpbis::SendError> for SendError {
-    fn from(e: httpbis::SendError) -> Self {
-        SendError::Http(e)
-    }
-}
-
+/// Client request or server response.
 pub(crate) trait SinkUntyped {
-    fn poll(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), httpbis::StreamDead>>;
+    fn poll(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), httpbis::Error>>;
     fn send_message(&mut self, message: &dyn MessageToBeSerialized) -> result::Result<()>;
 }
 
 pub(crate) struct SinkCommonUntyped<T: Types> {
-    pub(crate) http: T::HttpSink,
+    pub(crate) http: SinkAfterHeadersBox,
+    pub(crate) _marker: marker::PhantomData<T>,
 }
 
 impl<T: Types> SinkCommonUntyped<T> {
@@ -71,7 +71,7 @@ pub(crate) struct SinkCommon<M: 'static, T: Types> {
 }
 
 impl<M: 'static, T: Types> SinkCommon<M, T> {
-    pub fn poll(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), httpbis::StreamDead>> {
+    pub fn poll(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), httpbis::Error>> {
         self.sink.poll(cx)
     }
 

@@ -2,7 +2,7 @@ use crate::error;
 use crate::result;
 use crate::server::req_handler::ServerRequestStreamHandler;
 use crate::server::req_handler::ServerRequestUnaryHandler;
-use httpbis::ServerIncreaseInWindow;
+use httpbis::IncreaseInWindow;
 use std::marker;
 
 pub(crate) struct RequestHandlerUnaryToStream<M, H>
@@ -10,7 +10,7 @@ where
     H: ServerRequestUnaryHandler<M>,
     M: Send + 'static,
 {
-    pub(crate) increase_in_window: ServerIncreaseInWindow,
+    pub(crate) increase_in_window: IncreaseInWindow,
     pub(crate) handler: H,
     pub(crate) message: Option<M>,
     pub(crate) _marker: marker::PhantomData<M>,
@@ -21,7 +21,7 @@ where
     H: ServerRequestUnaryHandler<M>,
     M: Send + 'static,
 {
-    fn grpc_message(&mut self, message: M, frame_size: u32) -> result::Result<()> {
+    fn grpc_message(&mut self, message: M, frame_size: usize) -> result::Result<()> {
         self.increase_in_window.data_frame_processed(frame_size);
         self.increase_in_window.increase_window_auto()?;
         if let Some(_) = self.message {

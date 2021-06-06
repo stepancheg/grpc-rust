@@ -14,6 +14,7 @@ mod proto;
 
 mod assert_types;
 
+pub(crate) mod bytesx;
 mod chars;
 mod or_static;
 mod req;

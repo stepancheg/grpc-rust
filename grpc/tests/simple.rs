@@ -40,11 +40,7 @@ where
 /// Single unary method server
 fn new_server_unary<H>(service: &str, method: &str, handler: H) -> Server
 where
-    H: Fn(
-            ServerHandlerContext,
-            ServerRequestSingle<String>,
-            ServerResponseUnarySink<String>,
-        ) -> grpc::Result<()>
+    H: Fn(ServerRequestSingle<String>, ServerResponseUnarySink<String>) -> grpc::Result<()>
         + Sync
         + Send
         + 'static,
@@ -55,11 +51,7 @@ where
 /// Single server streaming method server
 fn new_server_server_streaming<H>(service: &str, method: &str, handler: H) -> Server
 where
-    H: Fn(
-            ServerHandlerContext,
-            ServerRequestSingle<String>,
-            ServerResponseSink<String>,
-        ) -> grpc::Result<()>
+    H: Fn(ServerRequestSingle<String>, ServerResponseSink<String>) -> grpc::Result<()>
         + Sync
         + Send
         + 'static,
@@ -70,11 +62,7 @@ where
 /// Single server streaming method server
 fn new_server_client_streaming<H>(service: &str, method: &str, handler: H) -> Server
 where
-    H: Fn(
-            ServerHandlerContext,
-            ServerRequest<String>,
-            ServerResponseUnarySink<String>,
-        ) -> grpc::Result<()>
+    H: Fn(ServerRequest<String>, ServerResponseUnarySink<String>) -> grpc::Result<()>
         + Sync
         + Send
         + 'static,
@@ -92,11 +80,7 @@ struct TesterUnary {
 impl TesterUnary {
     fn new<H>(handler: H) -> TesterUnary
     where
-        H: Fn(
-                ServerHandlerContext,
-                ServerRequestSingle<String>,
-                ServerResponseUnarySink<String>,
-            ) -> grpc::Result<()>
+        H: Fn(ServerRequestSingle<String>, ServerResponseUnarySink<String>) -> grpc::Result<()>
             + Sync
             + Send
             + 'static,
@@ -151,11 +135,7 @@ struct TesterServerStreaming {
 impl TesterServerStreaming {
     fn new<H>(handler: H) -> Self
     where
-        H: Fn(
-                ServerHandlerContext,
-                ServerRequestSingle<String>,
-                ServerResponseSink<String>,
-            ) -> grpc::Result<()>
+        H: Fn(ServerRequestSingle<String>, ServerResponseSink<String>) -> grpc::Result<()>
             + Sync
             + Send
             + 'static,
@@ -189,11 +169,7 @@ struct TesterClientStreaming {
 impl TesterClientStreaming {
     fn new<H>(handler: H) -> Self
     where
-        H: Fn(
-                ServerHandlerContext,
-                ServerRequest<String>,
-                ServerResponseUnarySink<String>,
-            ) -> grpc::Result<()>
+        H: Fn(ServerRequest<String>, ServerResponseUnarySink<String>) -> grpc::Result<()>
             + Sync
             + Send
             + 'static,
@@ -220,7 +196,7 @@ impl TesterClientStreaming {
 fn unary() {
     init_logger();
 
-    let tester = TesterUnary::new(|_m, req, resp| resp.finish(req.message));
+    let tester = TesterUnary::new(|req, resp| resp.finish(req.message));
 
     assert_eq!("aa", executor::block_on(tester.call("aa")).unwrap());
 }
@@ -229,7 +205,7 @@ fn unary() {
 fn error_in_handler() {
     init_logger();
 
-    let tester = TesterUnary::new(|_m, _req, _resp| Err(grpc::Error::Other("my error")));
+    let tester = TesterUnary::new(|_req, _resp| Err(grpc::Error::Other("my error")));
 
     tester.call_expect_grpc_error_contain("aa", "grpc server handler did not close the sender");
 }
@@ -239,7 +215,7 @@ fn error_in_handler() {
 fn _panic_in_handler() {
     init_logger();
 
-    let tester = TesterUnary::new(|_m, _req, _resp| panic!("icnap"));
+    let tester = TesterUnary::new(|_req, _resp| panic!("icnap"));
 
     tester.call_expect_grpc_error("aa", |m| {
         m.find("Panic").is_some() && m.find("icnap").is_some()
@@ -253,12 +229,13 @@ fn server_streaming() {
     let test_sync = Arc::new(TestSync::new());
     let test_sync_server = test_sync.clone();
 
-    let tester = TesterServerStreaming::new(move |_m, req, mut resp| {
+    let tester = TesterServerStreaming::new(move |req, mut resp| {
+        let message = req.message;
         let sync = test_sync_server.clone();
         thread::spawn(move || {
             for i in 0..3 {
                 sync.take(i * 2 + 1);
-                resp.send_data(format!("{}{}", req.message, i)).unwrap();
+                resp.send_data(format!("{}{}", message, i)).unwrap();
             }
             resp.send_trailers(Metadata::new()).unwrap();
         });
@@ -283,9 +260,10 @@ fn server_streaming() {
 fn client_streaming() {
     init_logger();
 
-    let tester = TesterClientStreaming::new(move |m, req, resp| {
+    let tester = TesterClientStreaming::new(move |req, resp| {
+        let loop_handle = req.loop_handle();
         let request_stream = req.into_stream();
-        m.ctx.loop_remote().spawn(
+        loop_handle.spawn(
             request_stream
                 .try_fold(String::new(), |mut s, message| {
                     s.push_str(&message);

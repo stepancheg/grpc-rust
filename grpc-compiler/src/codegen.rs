@@ -295,7 +295,7 @@ impl<'a> MethodGen<'a> {
 
     fn server_sig(&self) -> String {
         format!(
-            "{}(&self, o: ::grpc::ServerHandlerContext, req: {}, resp: {}) -> ::grpc::Result<()>",
+            "{}(&self, req: {}, resp: {}) -> ::grpc::Result<()>",
             self.snake_name(),
             self.server_req_type(),
             self.server_resp_type(),
@@ -492,7 +492,7 @@ impl<'a> ServiceGen<'a> {
                             method.write_descriptor(w, "::grpc::rt::ArcOrStatic::Static(&", "),");
                             w.block("{", "},", |w| {
                                 w.write_line(&format!("let handler_copy = {}.clone();", handler));
-                                w.write_line(&format!("::grpc::rt::MethodHandler{}::new(move |ctx, req, resp| (*handler_copy).{}(ctx, req, resp))",
+                                w.write_line(&format!("::grpc::rt::MethodHandler{}::new(move |req, resp| (*handler_copy).{}(req, resp))",
                                     method.streaming_upper(),
                                     method.snake_name()));
                             });

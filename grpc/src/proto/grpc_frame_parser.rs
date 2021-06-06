@@ -1,3 +1,4 @@
+use crate::bytesx::bytes_deque::BytesDeque;
 use crate::error;
 use crate::proto::grpc_frame::parse_grpc_frame_header;
 use crate::proto::grpc_frame::GRPC_HEADER_LEN;
@@ -5,7 +6,6 @@ use crate::result;
 use bytes::Buf;
 use bytes::Bytes;
 use httpbis::BufGetBytes;
-use httpbis::BytesDeque;
 
 #[derive(Default, Debug)]
 pub(crate) struct GrpcFrameParser {

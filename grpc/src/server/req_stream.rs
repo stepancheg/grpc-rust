@@ -2,12 +2,12 @@ use futures::channel::mpsc;
 use futures::stream::Stream;
 use futures::stream::StreamExt;
 
-use httpbis::ServerIncreaseInWindow;
-
 use crate::result;
 
 use crate::server::req_handler::ServerRequestStreamHandler;
 use futures::task::Context;
+use httpbis::IncreaseInWindow;
+use std::convert::TryInto;
 use std::pin::Pin;
 use std::task::Poll;
 
@@ -28,7 +28,7 @@ where
     Req: Send + 'static,
 {
     pub(crate) req: mpsc::UnboundedReceiver<HandlerToStream<Req>>,
-    pub(crate) increase_in_window: ServerIncreaseInWindow,
+    pub(crate) increase_in_window: IncreaseInWindow,
 }
 
 pub(crate) struct ServerRequestStreamSenderHandler<Req: Send + 'static> {
@@ -48,8 +48,12 @@ impl<Req: Send + 'static> ServerRequestStreamSenderHandler<Req> {
 impl<Req: Send + 'static> ServerRequestStreamHandler<Req>
     for ServerRequestStreamSenderHandler<Req>
 {
-    fn grpc_message(&mut self, message: Req, frame_size: u32) -> result::Result<()> {
-        self.send(HandlerToStream::Message(message, frame_size))
+    fn grpc_message(&mut self, message: Req, frame_size: usize) -> result::Result<()> {
+        // TODO: unwrap
+        self.send(HandlerToStream::Message(
+            message,
+            frame_size.try_into().unwrap(),
+        ))
     }
 
     fn end_stream(&mut self) -> result::Result<()> {
@@ -85,7 +89,8 @@ impl<Req: Send + 'static> Stream for ServerRequestStream<Req> {
             match item {
                 HandlerToStream::Message(req, frame_size) => {
                     // TODO: increase on next poll
-                    self.increase_in_window.data_frame_processed(frame_size);
+                    self.increase_in_window
+                        .data_frame_processed(frame_size as usize);
                     self.increase_in_window.increase_window_auto()?;
                     return Poll::Ready(Some(Ok(req)));
                 }

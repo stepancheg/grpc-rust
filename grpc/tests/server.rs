@@ -10,7 +10,6 @@ use futures::executor;
 use test_misc::*;
 
 fn echo_fn(
-    _: ServerHandlerContext,
     req: ServerRequestSingle<String>,
     resp: ServerResponseUnarySink<String>,
 ) -> grpc::Result<()> {
@@ -18,7 +17,6 @@ fn echo_fn(
 }
 
 fn reverse_fn(
-    _: ServerHandlerContext,
     req: ServerRequestSingle<String>,
     resp: ServerResponseUnarySink<String>,
 ) -> grpc::Result<()> {

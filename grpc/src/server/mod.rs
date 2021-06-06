@@ -15,9 +15,6 @@ use httpbis;
 
 use result::Result;
 
-use tls_api;
-use tls_api_stub;
-
 use crate::common::sink::SinkCommonUntyped;
 use crate::proto::grpc_status::GrpcStatus;
 use crate::proto::headers::grpc_error_message;
@@ -54,7 +51,7 @@ impl ServerServiceDefinition {
         mut resp: ServerResponseUntypedSink,
     ) -> result::Result<()> {
         match self.find_method(name) {
-            Some(method) => method.dispatch.start_request(ctx, req, resp),
+            Some(method) => method.dispatch.start_request(req, resp),
             None => {
                 resp.send_grpc_error(GrpcStatus::Unimplemented, "Unimplemented method".to_owned())?;
                 Ok(())
@@ -75,22 +72,22 @@ impl ServerConf {
 }
 
 /// Builder for gRPC server.
-pub struct ServerBuilder<A: tls_api::TlsAcceptor = tls_api_stub::TlsAcceptor> {
+pub struct ServerBuilder {
     /// HTTP/2 server builder.
-    pub http: httpbis::ServerBuilder<A>,
+    pub http: httpbis::ServerBuilder,
     conf: ServerConf,
 }
 
-impl ServerBuilder<tls_api_stub::TlsAcceptor> {
+impl ServerBuilder {
     /// New builder for no-TLS HTTP/2.
     pub fn new_plain() -> ServerBuilder {
         ServerBuilder::new()
     }
 }
 
-impl<A: tls_api::TlsAcceptor> ServerBuilder<A> {
+impl ServerBuilder {
     /// New builder for given TLS acceptor.
-    pub fn new() -> ServerBuilder<A> {
+    pub fn new() -> ServerBuilder {
         ServerBuilder {
             http: httpbis::ServerBuilder::new(),
             conf: ServerConf::new(),
@@ -99,7 +96,7 @@ impl<A: tls_api::TlsAcceptor> ServerBuilder<A> {
 
     /// New builder for unix socket HTTP/2 server.
     #[cfg(unix)]
-    pub fn new_unix() -> ServerBuilder<A> {
+    pub fn new_unix() -> ServerBuilder {
         ServerBuilder {
             http: httpbis::ServerBuilder::new(),
             conf: ServerConf::new(),
@@ -157,7 +154,6 @@ struct GrpcServerHandler {
 impl httpbis::ServerHandler for GrpcServerHandler {
     fn start_request(
         &self,
-        context: httpbis::ServerHandlerContext,
         req: httpbis::ServerRequest,
         mut resp: httpbis::ServerResponse,
     ) -> httpbis::Result<()> {
@@ -175,17 +171,17 @@ impl httpbis::ServerHandler for GrpcServerHandler {
 
         let req = ServerRequestUntyped { req };
 
-        resp.set_drop_callback(move |resp| {
-            Ok(resp.send_message(grpc_error_message(
+        resp.set_drop_callback(move || {
+            Ok(grpc_error_message(
                 "grpc server handler did not close the sender",
-            ))?)
+            ))
         });
 
-        let resp = ServerResponseUntypedSink {
-            common: SinkCommonUntyped { http: resp },
-        };
+        let resp = ServerResponseUntypedSink::Headers(resp);
 
-        let context = ServerHandlerContext { ctx: context };
+        let context = ServerHandlerContext {
+            handle: req.req.loop_handle(),
+        };
 
         // TODO: catch unwind
         self.service_definition

@@ -9,6 +9,7 @@ use futures::task::Context;
 use httpbis;
 
 use futures::future;
+use httpbis::SinkAfterHeadersBox;
 use std::future::Future;
 use std::task::Poll;
 
@@ -17,7 +18,7 @@ pub struct ClientRequestSinkUntyped {
 }
 
 impl SinkUntyped for ClientRequestSinkUntyped {
-    fn poll(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), httpbis::StreamDead>> {
+    fn poll(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), httpbis::Error>> {
         self.common.http.poll(cx)
     }
 
@@ -44,7 +45,7 @@ impl<Req: Send> ClientRequestSink<Req> {
     ///
     /// When request is not polled, [`send_data`](ClientRequestSink::send_data)
     /// will be successful anyway, but client memory can overflow.
-    pub fn poll(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), httpbis::StreamDead>> {
+    pub fn poll(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), httpbis::Error>> {
         self.common.poll(cx)
     }
 
@@ -52,7 +53,7 @@ impl<Req: Send> ClientRequestSink<Req> {
     ///
     /// When request is not polled, [`send_data`](ClientRequestSink::send_data)
     /// will be successful anyway, but client memory can overflow.
-    pub fn wait<'a>(&'a mut self) -> impl Future<Output = Result<(), httpbis::StreamDead>> + 'a {
+    pub fn wait<'a>(&'a mut self) -> impl Future<Output = Result<(), httpbis::Error>> + 'a {
         future::poll_fn(move |cx| self.poll(cx))
     }
 

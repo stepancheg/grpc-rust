@@ -12,7 +12,6 @@ use crate::method::MethodDescriptor;
 use crate::or_static::arc::ArcOrStatic;
 use crate::or_static::string::StringOrStatic;
 use crate::result;
-use crate::server::ctx::ServerHandlerContext;
 use crate::server::req_handler::ServerRequest;
 use crate::server::req_handler::ServerRequestUnaryHandler;
 use crate::server::req_handler::ServerRequestUntyped;
@@ -22,18 +21,15 @@ use crate::server::resp_sink_untyped::ServerResponseUntypedSink;
 use crate::Metadata;
 use crate::ServerResponseUnarySink;
 use std::marker;
+use tokio::runtime::Handle;
 
 pub trait MethodHandler<Req, Resp>
 where
     Req: Send + 'static,
     Resp: Send + 'static,
 {
-    fn handle(
-        &self,
-        context: ServerHandlerContext,
-        req: ServerRequest<Req>,
-        resp: ServerResponseSink<Resp>,
-    ) -> result::Result<()>;
+    fn handle(&self, req: ServerRequest<Req>, resp: ServerResponseSink<Resp>)
+        -> result::Result<()>;
 }
 
 pub struct MethodHandlerUnary<F> {
@@ -89,11 +85,7 @@ impl<F> MethodHandlerUnary<F> {
     where
         Req: Send + 'static,
         Resp: Send + 'static,
-        F: Fn(
-                ServerHandlerContext,
-                ServerRequestSingle<Req>,
-                ServerResponseUnarySink<Resp>,
-            ) -> result::Result<()>
+        F: Fn(ServerRequestSingle<Req>, ServerResponseUnarySink<Resp>) -> result::Result<()>
             + Send
             + 'static,
     {
@@ -106,11 +98,7 @@ impl<F> MethodHandlerClientStreaming<F> {
     where
         Req: Send + 'static,
         Resp: Send + 'static,
-        F: Fn(
-                ServerHandlerContext,
-                ServerRequest<Req>,
-                ServerResponseUnarySink<Resp>,
-            ) -> result::Result<()>
+        F: Fn(ServerRequest<Req>, ServerResponseUnarySink<Resp>) -> result::Result<()>
             + Send
             + 'static,
     {
@@ -123,11 +111,7 @@ impl<F> MethodHandlerServerStreaming<F> {
     where
         Req: Send + 'static,
         Resp: Send + 'static,
-        F: Fn(
-                ServerHandlerContext,
-                ServerRequestSingle<Req>,
-                ServerResponseSink<Resp>,
-            ) -> result::Result<()>
+        F: Fn(ServerRequestSingle<Req>, ServerResponseSink<Resp>) -> result::Result<()>
             + Send
             + 'static,
     {
@@ -140,13 +124,7 @@ impl<F> MethodHandlerBidi<F> {
     where
         Req: Send + 'static,
         Resp: Send + 'static,
-        F: Fn(
-                ServerHandlerContext,
-                ServerRequest<Req>,
-                ServerResponseSink<Resp>,
-            ) -> result::Result<()>
-            + Send
-            + 'static,
+        F: Fn(ServerRequest<Req>, ServerResponseSink<Resp>) -> result::Result<()> + Send + 'static,
     {
         MethodHandlerBidi { f: Arc::new(f) }
     }
@@ -156,18 +134,13 @@ impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerUnary<F>
 where
     Req: Send + 'static,
     Resp: Send + 'static,
-    F: Fn(
-            ServerHandlerContext,
-            ServerRequestSingle<Req>,
-            ServerResponseUnarySink<Resp>,
-        ) -> result::Result<()>
+    F: Fn(ServerRequestSingle<Req>, ServerResponseUnarySink<Resp>) -> result::Result<()>
         + Send
         + Sync
         + 'static,
 {
     fn handle(
         &self,
-        ctx: ServerHandlerContext,
         req: ServerRequest<Req>,
         resp: ServerResponseSink<Resp>,
     ) -> result::Result<()> {
@@ -175,16 +148,12 @@ where
         where
             Req: Send + 'static,
             Resp: Send + 'static,
-            F: Fn(
-                    ServerHandlerContext,
-                    ServerRequestSingle<Req>,
-                    ServerResponseUnarySink<Resp>,
-                ) -> result::Result<()>
+            F: Fn(ServerRequestSingle<Req>, ServerResponseUnarySink<Resp>) -> result::Result<()>
                 + Send
                 + Sync
                 + 'static,
         {
-            ctx: ServerHandlerContext,
+            loop_handle: Handle,
             metadata: Metadata,
             f: Arc<F>,
             resp: ServerResponseSink<Resp>,
@@ -195,32 +164,33 @@ where
         where
             Req: Send + 'static,
             Resp: Send + 'static,
-            F: Fn(
-                    ServerHandlerContext,
-                    ServerRequestSingle<Req>,
-                    ServerResponseUnarySink<Resp>,
-                ) -> result::Result<()>
+            F: Fn(ServerRequestSingle<Req>, ServerResponseUnarySink<Resp>) -> result::Result<()>
                 + Send
                 + Sync
                 + 'static,
         {
             fn grpc_message(&mut self, message: Req) -> result::Result<()> {
                 let HandlerImpl {
-                    ctx,
+                    loop_handle,
                     f,
                     resp,
                     metadata,
                     _marker,
                 } = self.take().unwrap();
-                let req = ServerRequestSingle { metadata, message };
+                let req = ServerRequestSingle {
+                    loop_handle: &loop_handle,
+                    metadata,
+                    message,
+                };
                 let resp = ServerResponseUnarySink { sink: resp };
-                f(ctx, req, resp)
+                f(req, resp)
             }
         }
 
         let metadata = req.metadata()?;
+        let loop_handle = req.loop_handle();
         req.register_unary_handler(Some(HandlerImpl {
-            ctx,
+            loop_handle,
             metadata,
             f: self.f.clone(),
             resp,
@@ -235,23 +205,18 @@ impl<Req: Send + 'static, Resp: Send + 'static, F> MethodHandler<Req, Resp>
     for MethodHandlerClientStreaming<F>
 where
     Resp: Send + 'static,
-    F: Fn(
-            ServerHandlerContext,
-            ServerRequest<Req>,
-            ServerResponseUnarySink<Resp>,
-        ) -> result::Result<()>
+    F: Fn(ServerRequest<Req>, ServerResponseUnarySink<Resp>) -> result::Result<()>
         + Send
         + Sync
         + 'static,
 {
     fn handle(
         &self,
-        ctx: ServerHandlerContext,
         req: ServerRequest<Req>,
         resp: ServerResponseSink<Resp>,
     ) -> result::Result<()> {
         let resp = ServerResponseUnarySink { sink: resp };
-        (self.f)(ctx, req, resp)
+        (self.f)(req, resp)
     }
 }
 
@@ -259,18 +224,13 @@ impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerServerStreaming<F>
 where
     Req: Send + 'static,
     Resp: Send + 'static,
-    F: Fn(
-            ServerHandlerContext,
-            ServerRequestSingle<Req>,
-            ServerResponseSink<Resp>,
-        ) -> result::Result<()>
+    F: Fn(ServerRequestSingle<Req>, ServerResponseSink<Resp>) -> result::Result<()>
         + Send
         + Sync
         + 'static,
 {
     fn handle(
         &self,
-        ctx: ServerHandlerContext,
         req: ServerRequest<Req>,
         resp: ServerResponseSink<Resp>,
     ) -> result::Result<()> {
@@ -278,16 +238,12 @@ where
         where
             Req: Send + 'static,
             Resp: Send + 'static,
-            F: Fn(
-                    ServerHandlerContext,
-                    ServerRequestSingle<Req>,
-                    ServerResponseSink<Resp>,
-                ) -> result::Result<()>
+            F: Fn(ServerRequestSingle<Req>, ServerResponseSink<Resp>) -> result::Result<()>
                 + Send
                 + Sync
                 + 'static,
         {
-            ctx: ServerHandlerContext,
+            loop_handle: Handle,
             metadata: Metadata,
             f: Arc<F>,
             resp: ServerResponseSink<Resp>,
@@ -298,34 +254,32 @@ where
         where
             Req: Send + 'static,
             Resp: Send + 'static,
-            F: Fn(
-                    ServerHandlerContext,
-                    ServerRequestSingle<Req>,
-                    ServerResponseSink<Resp>,
-                ) -> result::Result<()>
+            F: Fn(ServerRequestSingle<Req>, ServerResponseSink<Resp>) -> result::Result<()>
                 + Send
                 + Sync
                 + 'static,
         {
             fn grpc_message(&mut self, req: Req) -> result::Result<()> {
                 let HandlerImpl {
-                    ctx,
+                    loop_handle,
                     f,
                     metadata,
                     resp,
                     _marker,
                 } = self.take().unwrap();
                 let req = ServerRequestSingle {
+                    loop_handle: &loop_handle,
                     metadata,
                     message: req,
                 };
-                f(ctx, req, resp)
+                f(req, resp)
             }
         }
 
         let metadata = req.metadata()?;
+        let loop_handle = req.loop_handle();
         req.register_unary_handler(Some(HandlerImpl {
-            ctx,
+            loop_handle,
             metadata,
             f: self.f.clone(),
             resp,
@@ -340,25 +294,23 @@ impl<Req, Resp, F> MethodHandler<Req, Resp> for MethodHandlerBidi<F>
 where
     Req: Send + 'static,
     Resp: Send + 'static,
-    F: Fn(ServerHandlerContext, ServerRequest<Req>, ServerResponseSink<Resp>) -> result::Result<()>
+    F: Fn(ServerRequest<Req>, ServerResponseSink<Resp>) -> result::Result<()>
         + Send
         + Sync
         + 'static,
 {
     fn handle(
         &self,
-        ctx: ServerHandlerContext,
         req: ServerRequest<Req>,
         resp: ServerResponseSink<Resp>,
     ) -> result::Result<()> {
-        (self.f)(ctx, req, resp)
+        (self.f)(req, resp)
     }
 }
 
 pub(crate) trait MethodHandlerDispatchUntyped {
     fn start_request(
         &self,
-        ctx: ServerHandlerContext,
         req: ServerRequestUntyped,
         resp: ServerResponseUntypedSink,
     ) -> result::Result<()>;
@@ -376,7 +328,6 @@ where
 {
     fn start_request(
         &self,
-        ctx: ServerHandlerContext,
         req: ServerRequestUntyped,
         resp: ServerResponseUntypedSink,
     ) -> result::Result<()> {
@@ -393,7 +344,7 @@ where
         };
 
         // TODO: catch unwind for better diag
-        self.method_handler.handle(ctx, req, resp)
+        self.method_handler.handle(req, resp)
         //        let resp = catch_unwind(AssertUnwindSafe(|| {
         //
         //        }));

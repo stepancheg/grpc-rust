@@ -14,13 +14,13 @@ use tokio::runtime::Handle;
 
 /// An object passed to server handlers.
 pub struct ServerHandlerContext {
-    pub ctx: httpbis::ServerHandlerContext,
+    pub handle: Handle,
 }
 
 impl ServerHandlerContext {
     /// Tokio event loop handle (can be used to spawn a future for example).
     pub fn loop_remote(&self) -> Handle {
-        self.ctx.loop_remote()
+        self.handle.clone()
     }
 
     /// Spawn a future, ignore result.

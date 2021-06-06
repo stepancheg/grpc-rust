@@ -5,6 +5,8 @@ use futures::future::TryFutureExt;
 use futures::stream::Stream;
 
 use httpbis::Headers;
+use httpbis::StreamAfterHeadersBox;
+use httpbis::TryFutureBox;
 
 use bytes::Bytes;
 
@@ -22,7 +24,6 @@ use crate::resp::*;
 use crate::stream_item::*;
 use futures::task::Context;
 use httpbis::DataOrTrailers;
-use httpbis::HttpStreamAfterHeaders;
 use std::pin::Pin;
 use std::task::Poll;
 
@@ -48,8 +49,10 @@ fn init_headers_to_metadata(headers: Headers) -> result::Result<Metadata> {
     Ok(Metadata::from_headers(headers)?)
 }
 
-pub fn http_response_to_grpc_frames(response: httpbis::Response) -> StreamingResponse<Bytes> {
-    StreamingResponse::new(response.0.map_err(|e| crate::Error::from(e)).and_then(
+pub fn http_response_to_grpc_frames(
+    response: TryFutureBox<(Headers, StreamAfterHeadersBox)>,
+) -> StreamingResponse<Bytes> {
+    StreamingResponse::new(response.map_err(|e| crate::Error::from(e)).and_then(
         |(headers, rem)| async {
             let metadata = init_headers_to_metadata(headers)?;
             let frames: GrpcStreamWithTrailingMetadata<Bytes> = GrpcStreamWithTrailingMetadata::new(
@@ -61,13 +64,13 @@ pub fn http_response_to_grpc_frames(response: httpbis::Response) -> StreamingRes
 }
 
 struct GrpcFrameFromHttpFramesStreamResponse {
-    http_stream_stream: HttpStreamAfterHeaders,
+    http_stream_stream: StreamAfterHeadersBox,
     buf: GrpcFrameParser,
     parsed_frames: VecDeque<Bytes>,
 }
 
 impl GrpcFrameFromHttpFramesStreamResponse {
-    pub fn new(http_stream_stream: HttpStreamAfterHeaders) -> Self {
+    pub fn new(http_stream_stream: StreamAfterHeadersBox) -> Self {
         GrpcFrameFromHttpFramesStreamResponse {
             http_stream_stream,
             buf: GrpcFrameParser::default(),
