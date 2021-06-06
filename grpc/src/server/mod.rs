@@ -185,10 +185,7 @@ impl httpbis::ServerHandler for GrpcServerHandler {
             common: SinkCommonUntyped { http: resp },
         };
 
-        let context = ServerHandlerContext {
-            ctx: context,
-            metadata,
-        };
+        let context = ServerHandlerContext { ctx: context };
 
         // TODO: catch unwind
         self.service_definition

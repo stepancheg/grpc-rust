@@ -140,6 +140,12 @@ pub(crate) struct ServerRequestUntyped<'a> {
 }
 
 impl<'a> ServerRequestUntyped<'a> {
+    pub fn metadata(&self) -> crate::Result<Metadata> {
+        // TODO: take, not clone
+        // TODO: do not unwrap
+        Ok(Metadata::from_headers(self.req.headers.clone())?)
+    }
+
     pub fn register_stream_handler<F, H, R>(self, handler: F) -> R
     where
         H: ServerRequestStreamHandlerUntyped,
@@ -168,10 +174,8 @@ pub struct ServerRequest<'a, M: 'static> {
 
 impl<'a, M: Send + 'static> ServerRequest<'a, M> {
     /// Get request metadata.
-    pub fn metadata(&self) -> Metadata {
-        // TODO: take, not clone
-        // TODO: do not unwrap
-        Metadata::from_headers(self.req.req.headers.clone()).unwrap()
+    pub fn metadata(&self) -> crate::Result<Metadata> {
+        self.req.metadata()
     }
 
     /// Register server stream handler.

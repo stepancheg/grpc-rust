@@ -165,7 +165,7 @@ impl TestService for TestServerImpl {
         req: ServerRequest<StreamingOutputCallRequest>,
         mut resp: ServerResponseSink<StreamingOutputCallResponse>,
     ) -> grpc::Result<()> {
-        let metadata = req.metadata();
+        let metadata = req.metadata()?;
         debug!("sending custom metadata");
         resp.send_metadata(echo_custom_metadata(&metadata))?;
         let mut req = req.into_stream();

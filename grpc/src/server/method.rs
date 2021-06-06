@@ -19,6 +19,7 @@ use crate::server::req_handler::ServerRequestUntyped;
 use crate::server::req_single::ServerRequestSingle;
 use crate::server::resp_sink::ServerResponseSink;
 use crate::server::resp_sink_untyped::ServerResponseUntypedSink;
+use crate::Metadata;
 use crate::ServerResponseUnarySink;
 use std::marker;
 
@@ -184,6 +185,7 @@ where
                 + 'static,
         {
             ctx: ServerHandlerContext,
+            metadata: Metadata,
             f: Arc<F>,
             resp: ServerResponseSink<Resp>,
             _marker: marker::PhantomData<Req>,
@@ -207,17 +209,19 @@ where
                     ctx,
                     f,
                     resp,
+                    metadata,
                     _marker,
                 } = self.take().unwrap();
-                let metadata = ctx.metadata.clone();
                 let req = ServerRequestSingle { metadata, message };
                 let resp = ServerResponseUnarySink { sink: resp };
                 f(ctx, req, resp)
             }
         }
 
+        let metadata = req.metadata()?;
         req.register_unary_handler(Some(HandlerImpl {
             ctx,
+            metadata,
             f: self.f.clone(),
             resp,
             _marker: marker::PhantomData,
@@ -284,6 +288,7 @@ where
                 + 'static,
         {
             ctx: ServerHandlerContext,
+            metadata: Metadata,
             f: Arc<F>,
             resp: ServerResponseSink<Resp>,
             _marker: marker::PhantomData<Req>,
@@ -306,10 +311,10 @@ where
                 let HandlerImpl {
                     ctx,
                     f,
+                    metadata,
                     resp,
                     _marker,
                 } = self.take().unwrap();
-                let metadata = ctx.metadata.clone();
                 let req = ServerRequestSingle {
                     metadata,
                     message: req,
@@ -318,8 +323,10 @@ where
             }
         }
 
+        let metadata = req.metadata()?;
         req.register_unary_handler(Some(HandlerImpl {
             ctx,
+            metadata,
             f: self.f.clone(),
             resp,
             _marker: marker::PhantomData,

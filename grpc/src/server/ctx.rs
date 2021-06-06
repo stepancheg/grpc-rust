@@ -15,8 +15,6 @@ use tokio::runtime::Handle;
 /// An object passed to server handlers.
 pub struct ServerHandlerContext {
     pub ctx: httpbis::ServerHandlerContext,
-    // TODO: move to request
-    pub metadata: Metadata,
 }
 
 impl ServerHandlerContext {
