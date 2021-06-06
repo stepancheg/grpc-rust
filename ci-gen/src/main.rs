@@ -1,16 +1,14 @@
 use gh_actions_gen::actions::cargo_cache;
 use gh_actions_gen::actions::cargo_doc;
-use gh_actions_gen::actions::cargo_test;
 use gh_actions_gen::actions::checkout_sources;
 use gh_actions_gen::actions::rust_install_toolchain;
 use gh_actions_gen::actions::RustToolchain;
 use gh_actions_gen::ghwf::Env;
 use gh_actions_gen::ghwf::Job;
 use gh_actions_gen::ghwf::Step;
-use gh_actions_gen::rustfmt::rustfmt_check_job;
 use gh_actions_gen::super_linter::super_linter_job;
 
-fn steps(os: Os, channel: RustToolchain) -> Vec<Step> {
+fn steps(_os: Os, channel: RustToolchain) -> Vec<Step> {
     let mut steps = Vec::new();
     steps.push(checkout_sources());
     steps.push(rust_install_toolchain(channel));

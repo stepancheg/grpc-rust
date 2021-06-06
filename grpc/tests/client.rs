@@ -26,7 +26,7 @@ fn server_is_not_running() {
                 )
                 .join_metadata_result(),
         );
-        assert!(result.is_err(), result);
+        assert!(result.is_err(), "{:?}", result);
     }
 }
 
@@ -49,6 +49,6 @@ fn server_is_not_running_unix() {
                 )
                 .join_metadata_result(),
         );
-        assert!(result.is_err(), result);
+        assert!(result.is_err(), "{:?}", result);
     }
 }
