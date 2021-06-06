@@ -135,7 +135,7 @@ jobs:
         run: "./ci/install-protobuf.sh"
         shell: bash
       - name: install protobuf-codegen
-        run: cargo install protobuf-codegen --version=2.23
+        run: cargo install protobuf-codegen --version=2.23.0
         shell: bash
       - name: gen
         run: grpc-compiler/test-protoc-plugin/gen.sh

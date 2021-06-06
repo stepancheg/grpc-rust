@@ -73,7 +73,7 @@ fn test_protoc_plugin_job() -> Job {
     steps.push(install_protobuf_step());
     steps.push(Step::run(
         "install protobuf-codegen",
-        "cargo install protobuf-codegen --version=2.23",
+        "cargo install protobuf-codegen --version=2.23.0",
     ));
     steps.push(Step::run("gen", "grpc-compiler/test-protoc-plugin/gen.sh"));
     steps.push(Step::run(
