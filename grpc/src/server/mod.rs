@@ -1,4 +1,3 @@
-pub(crate) mod ctx;
 pub(crate) mod method;
 pub(crate) mod req_handler;
 pub(crate) mod req_handler_unary;
@@ -19,7 +18,6 @@ use crate::common::sink::SinkCommonUntyped;
 use crate::proto::grpc_status::GrpcStatus;
 use crate::proto::headers::grpc_error_message;
 use crate::result;
-use crate::server::ctx::ServerHandlerContext;
 use crate::server::method::ServerMethod;
 use crate::server::req_handler::ServerRequestUntyped;
 use crate::server::resp_sink_untyped::ServerResponseUntypedSink;
@@ -46,7 +44,6 @@ impl ServerServiceDefinition {
     pub(crate) fn handle_method(
         &self,
         name: &str,
-        ctx: ServerHandlerContext,
         req: ServerRequestUntyped,
         mut resp: ServerResponseUntypedSink,
     ) -> result::Result<()> {
@@ -179,13 +176,8 @@ impl httpbis::ServerHandler for GrpcServerHandler {
 
         let resp = ServerResponseUntypedSink::Headers(resp);
 
-        let context = ServerHandlerContext {
-            handle: req.req.loop_handle(),
-        };
-
         // TODO: catch unwind
-        self.service_definition
-            .handle_method(&path, context, req, resp)?;
+        self.service_definition.handle_method(&path, req, resp)?;
 
         Ok(())
     }

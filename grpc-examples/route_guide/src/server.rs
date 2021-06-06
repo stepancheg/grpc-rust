@@ -8,7 +8,6 @@ use crate::route_guide_grpc::RouteGuide;
 use futures::stream::StreamExt;
 
 use grpc::Metadata;
-use grpc::ServerHandlerContext;
 use grpc::ServerRequest;
 use grpc::ServerRequestSingle;
 use grpc::ServerResponseSink;

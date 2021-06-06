@@ -48,7 +48,6 @@ pub use client::ClientConf;
 pub use client_stub::ClientStub;
 pub use client_stub::ClientStubExt;
 
-pub use server::ctx::ServerHandlerContext;
 pub use server::req_handler::ServerRequest;
 pub use server::req_single::ServerRequestSingle;
 pub use server::req_stream::ServerRequestStream;
