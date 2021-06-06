@@ -1,4 +1,6 @@
 {
+    # Heading style
+    "MD003": false,
     # Line length
     "MD013": false,
     # Headings should be surrounded by blank lines

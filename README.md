@@ -4,7 +4,7 @@ grpc-rust
 <!-- https://travis-ci.org/stepancheg/rust-protobuf.png -->
 [![Build Status](https://img.shields.io/travis/stepancheg/grpc-rust.svg)](https://travis-ci.org/stepancheg/grpc-rust)
 [![License](https://img.shields.io/crates/l/grpc.svg)](https://github.com/stepancheg/grpc-rust/blob/master/LICENSE.txt)
-[![crates.io](https://img.shields.io/crates/v/grpc.svg)](https://crates.io/crates/grpc) 
+[![crates.io](https://img.shields.io/crates/v/grpc.svg)](https://crates.io/crates/grpc)
 
 Rust implementation of [gRPC](http://www.grpc.io/) protocol, under development.
 
@@ -17,7 +17,7 @@ It basically works, but not suitable for production use.
 See `grpc-examples/src/bin/greeter_{client,server}.rs`. It can be tested
 for example with [go client](https://github.com/grpc/grpc-go/tree/master/examples/helloworld):
 
-```
+```shell
 # start greeter server implemented in rust
 $ cargo run --bin greeter_server
 
@@ -56,7 +56,7 @@ Have a look at readme in
 
 [Readme](https://github.com/stepancheg/grpc-rust/tree/master/grpc-compiler)
 
-### Use generated protos in your project:
+### Use generated protos in your project
 
 In Cargo.toml:
 
