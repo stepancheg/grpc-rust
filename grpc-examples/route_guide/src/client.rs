@@ -42,8 +42,8 @@ async fn print_features(client: &RouteGuideClient, rect: Rectangle) {
 fn random_point() -> Point {
     let mut rng = thread_rng();
     let mut point = Point::new();
-    point.latitude = rng.gen_range(-90, 90) * 10_000_000;
-    point.longitude = rng.gen_range(-180, 180) * 10_000_000;
+    point.latitude = rng.gen_range(-90..90) * 10_000_000;
+    point.longitude = rng.gen_range(-180..180) * 10_000_000;
     point
 }
 
@@ -51,7 +51,7 @@ fn random_point() -> Point {
 async fn run_record_route(client: &RouteGuideClient) {
     // Create a random number of random points
     let mut rng = thread_rng();
-    let point_count = rng.gen_range(2, 102); // Traverse at least two points
+    let point_count = rng.gen_range(2..102); // Traverse at least two points
 
     println!("Traversing {} points.", point_count);
 
