@@ -16,10 +16,10 @@ log-ndc         = "0.3"
 futures         = "0.3.1"
 tokio = { version = "1.2.0", features = ["io-util", "net", "time", "rt"] }
 #httpbis         = "~0.9"
-httpbis         = { git = "https://github.com/stepancheg/rust-http2", rev = "87019df1f7cb264524be81bb5164d155d7196c31" }
+httpbis         = { git = "https://github.com/stepancheg/rust-http2", rev = "04410b1a07f937d94e075c813d05a68022f0c7c8" }
 #httpbis         = { path = "../../rust-http2/httpbis" }
-tls-api         = "0.5.0"
-tls-api-stub    = "0.5.0"
+tls-api         = "0.6.0"
+tls-api-stub    = "0.6.0"
 bytes           = "1.0.1"
 base64          = "0.13"
 

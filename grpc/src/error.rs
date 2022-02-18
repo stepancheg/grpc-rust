@@ -87,6 +87,6 @@ impl From<metadata::MetadataDecodeError> for Error {
 
 impl From<Error> for httpbis::Error {
     fn from(err: Error) -> httpbis::Error {
-        httpbis::Error::StdError(Box::new(err))
+        httpbis::Error::User(format!("gRPC error: {}", err))
     }
 }
