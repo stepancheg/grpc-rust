@@ -22,7 +22,7 @@ httpbis         = { git = "https://github.com/stepancheg/rust-http2", rev = "870
 tls-api         = "0.5.0"
 tls-api-stub    = "0.5.0"
 bytes           = "1.0.1"
-base64          = "0.9"
+base64          = "0.13"
 
 [dev-dependencies]
 log-ndc-env-logger = "~0.2"
