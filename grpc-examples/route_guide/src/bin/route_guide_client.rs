@@ -7,7 +7,7 @@ use grpc_examples_route_guide::route_guide_grpc::RouteGuideClient;
 use grpc_examples_route_guide::DEFAULT_PORT;
 
 fn main() {
-    env_logger::init().unwrap();
+    env_logger::init();
 
     let client =
         RouteGuideClient::new_plain("127.0.0.1", DEFAULT_PORT, ClientConf::new()).expect("client");

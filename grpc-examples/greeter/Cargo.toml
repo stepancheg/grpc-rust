@@ -23,7 +23,7 @@ tls-api-native-tls = "0.5.0"
 #httpbis         = "~0.9"
 httpbis         = { git = "https://github.com/stepancheg/rust-http2", rev = "87019df1f7cb264524be81bb5164d155d7196c31" }
 #httpbis         = { path = "../../../rust-http2/httpbis" }
-env_logger      = "~0.5"
+env_logger      = "~0.9"
 
 [build-dependencies]
 protoc-rust-grpc = { path = "../../protoc-rust-grpc" }
