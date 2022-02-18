@@ -17,7 +17,7 @@ futures         = "0.3.1"
 tokio = { version = "1.2.0", features = ["io-util", "net", "time", "rt"] }
 tokio-util = { version = "0.6.3", features = ["io"] }
 #httpbis         = "~0.9"
-httpbis         = { git = "https://github.com/stepancheg/rust-http2" }
+httpbis         = { git = "https://github.com/stepancheg/rust-http2", rev = "87019df1f7cb264524be81bb5164d155d7196c31" }
 #httpbis         = { path = "../../rust-http2/httpbis" }
 tls-api         = "0.5.0"
 tls-api-stub    = "0.5.0"
