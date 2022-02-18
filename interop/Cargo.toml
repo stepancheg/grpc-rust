@@ -15,7 +15,7 @@ path = "../grpc-protobuf"
 [dependencies]
 bytes = "1.0.1"
 log             = "0.4.*"
-env_logger      = "~0.5"
+env_logger      = "~0.9"
 protobuf        = "2.23"
 futures         = "0.3.*"
 tls-api         = "0.5.0"
