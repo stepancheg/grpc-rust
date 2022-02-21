@@ -21,7 +21,6 @@ pub fn buf_eq<B1: Buf, B2: Buf>(mut b1: B1, mut b2: B2) -> bool {
 #[cfg(test)]
 mod test {
     use super::*;
-    use bytes::buf::Chain;
 
     #[test]
     fn test() {
