@@ -175,7 +175,7 @@ impl<'a> ClientBuilder<'a> {
 
 /// gRPC client implementation.
 /// Used by generated code.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Client {
     client: ::std::sync::Arc<httpbis::Client>,
     host: String,
