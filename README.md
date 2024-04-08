@@ -1,6 +1,15 @@
 grpc-rust
 =========
 
+# The project is dead; long live the new project
+
+gRPC team is [developing shiny new gRPC implementation in Rust](https://groups.google.com/g/grpc-io/c/ExbWWLaGHjI/m/TJssglLiBgAJ),
+`grpc` crate name is transferred to them.
+
+This code is no longer maintained.
+
+# Original README.md
+
 <!-- https://travis-ci.org/stepancheg/rust-protobuf.png -->
 [![Build Status](https://img.shields.io/travis/stepancheg/grpc-rust.svg)](https://travis-ci.org/stepancheg/grpc-rust)
 [![License](https://img.shields.io/crates/l/grpc.svg)](https://github.com/stepancheg/grpc-rust/blob/master/LICENSE.txt)
